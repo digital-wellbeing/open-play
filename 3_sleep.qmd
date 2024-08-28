@@ -21,7 +21,7 @@ bibliography: references.bib
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
-p_load(tidyverse, lme4, marginaleffects, glmmTMB, mice, ordinal, modelsummary, lubridate)
+p_load(tidyverse, lme4, marginaleffects, glmmTMB, mice, ordinal, modelsummary, lubridate, mctq)
 
 studyStartDate <- as_datetime("2024-05-01 00:00:00")
 
@@ -39,23 +39,10 @@ data.intake <- readRDS("data-synthetic/synIntake.rds")
 data.nin <- readRDS("data-synthetic/synNintendo.rds")
 data.xbox <- readRDS("data-synthetic/synXbox.rds")
 data.steam <- readRDS("data-synthetic/synSteam.rds")
-data.android <- readRDS("data-synthetic/synAndroid.rds")
-data.ios <- readRDS("data-synthetic/syniOS.rds")
+# data.android <- readRDS("data-synthetic/synAndroid.rds")
+# data.ios <- readRDS("data-synthetic/syniOS.rds")
 
 ```
-
-
-<!-- ```{r setup, eval=FALSE} -->
-<!-- library(tidyverse) -->
-<!-- library(lme4) -->
-<!-- # load data-synthetic\panel_balanced.rds -->
-<!-- panel_balanced <- readRDS("data-synthetic/panel_balanced.rds") # TODO: Panel is missing  -->
-<!-- diary_balanced <- readRDS("data-synthetic/diary_balanced.rds") -->
-<!-- xbox_balanced <- readRDS("data-synthetic/xbox_balanced.rds") -->
-<!-- steam_balanced <- readRDS("data-synthetic/steam_balanced.rds") -->
-<!-- nin_balanced <- readRDS("data-synthetic/nintendo_balanced.rds") -->
-<!-- ``` -->
-
 
 ```{r}
 #| label: preprocess data
@@ -97,7 +84,6 @@ data.gaming <- data.gaming %>%
 # Example data frame
 data.gaming <- data.gaming %>%
   mutate(
-    days_since_start = as.numeric(difftime(sessionStart, studyStartDate, units = "days")),
     wave = case_when(
       day >= 0 & day <= 28 ~ 2,
       day >= 29 & day <= 56 ~ 4,
@@ -197,7 +183,7 @@ data.gaming.latenight.h1a <- data.gaming.latenight.h1a %>%
 
 # Fit the model with rescaled covariates
 model.h1a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + isWeekend,
+              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1|gender),
               data = data.gaming.latenight.h1a)
 
 # Summarize the model using modelsummary
@@ -286,7 +272,7 @@ data.gaming.latenight.h1b <- data.gaming.latenight.h1b %>%
 library(lme4)
 # Fit the model
 model.h1b <- lmer(total_hours_sleep ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + isWeekend, data = data.gaming.latenight.h1b )
+              age_scaled + bmi_scaled + SES_index_scaled + region + (1 | gender) + isWeekend, data = data.gaming.latenight.h1b )
 # Summarize the model using modelsummary
 library(modelsummary)
 
@@ -416,7 +402,7 @@ data.gaming.latenight.h1c <- data.gaming.latenight.h1c %>%
 library(lme4)
 # Fit the model
 model.h1c <- lmer(wemwbs_total ~ biweekly_avg_minutes_played + (1 + biweekly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + isWeekend, data = data.gaming.latenight.h1c )
+              age_scaled + bmi_scaled + SES_index_scaled + region + (1 | gender) + isWeekend, data = data.gaming.latenight.h1c )
 # Summarize the model using modelsummary
 library(modelsummary)
 
@@ -446,7 +432,6 @@ data.gaming <- data.gaming %>%
 # Example data frame
 data.gaming <- data.gaming %>%
   mutate(
-    days_since_start = as.numeric(difftime(sessionStart, studyStartDate, units = "days")),
     wave = case_when(
       day >= 0 & day <= 28 ~ 2,
       day >= 29 & day <= 56 ~ 4,
@@ -544,7 +529,7 @@ data.gaming.latenight.h1d <- data.gaming.latenight.h1d %>%
 library(lme4)
 # Fit the model
 model.h1d <- lmer(eps_total ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + isWeekend, data = data.gaming.latenight.h1d )
+              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1 | gender), data = data.gaming.latenight.h1d )
 # Summarize the model using modelsummary
 library(modelsummary)
 
@@ -698,7 +683,7 @@ data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>% left_join(data.panel.
 
 # Fit the model with rescaled covariates
 model.h1a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played*msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + isWeekend,
+              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1|gender),
               data = data.gaming.latenight.h2a)
 
 # Summarize the model using modelsummary
@@ -711,7 +696,8 @@ modelsummary(
   statistic = NULL)
 ```
 
-## H2b: The negative association between late-night gaming and sleep duration is more pronounced among evening chronotypes.
+## H2b: The negative association between late-night gaming and sleep duration is more pronounced among evening chronotypes. 
+
 ```{r h2b}
 data.panel <- readRDS("data-synthetic/synPanel.rds")
 
@@ -788,7 +774,7 @@ data.gaming.latenight.h2b <- data.gaming.latenight.h2b %>% left_join(data.panel.
 library(lme4)
 # Fit the model
 model.h2b <- lmer(total_hours_sleep ~ monthly_avg_minutes_played*msf_sc_numeric  + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + isWeekend, data = data.gaming.latenight.h2b )
+              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1 | gender), data = data.gaming.latenight.h2b )
 # Summarize the model using modelsummary
 library(modelsummary)
 
@@ -921,7 +907,7 @@ data.gaming.latenight.h2c <- data.gaming.latenight.h2c %>% left_join(data.panel.
 library(lme4)
 # Fit the model
 model.h2c <- lmer(wemwbs_total ~ biweekly_avg_minutes_played*msf_sc_numeric   + (1 + biweekly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + isWeekend, data = data.gaming.latenight.h2c )
+              age_scaled + bmi_scaled + SES_index_scaled  + isWeekend + region + (1 | gender) , data = data.gaming.latenight.h2c )
 # Summarize the model using modelsummary
 library(modelsummary)
 
@@ -951,7 +937,6 @@ data.gaming <- data.gaming %>%
 # Example data frame
 data.gaming <- data.gaming %>%
   mutate(
-    days_since_start = as.numeric(difftime(sessionStart, studyStartDate, units = "days")),
     wave = case_when(
       day >= 0 & day <= 28 ~ 2,
       day >= 29 & day <= 56 ~ 4,
@@ -1052,7 +1037,7 @@ data.gaming.latenight.h2d <- data.gaming.latenight.h2d %>% left_join(data.panel.
 library(lme4)
 # Fit the model
 model.h2d <- lmer(eps_total ~ monthly_avg_minutes_played*msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + isWeekend, data = data.gaming.latenight.h2d )
+              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1 | gender), data = data.gaming.latenight.h2d )
 # Summarize the model using modelsummary
 library(modelsummary)
 
