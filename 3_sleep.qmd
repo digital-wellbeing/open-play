@@ -611,7 +611,7 @@ data.panel.custom.chrono <- data.panel.custom %>%
 
 ## H2a: The negative association between late-night gaming and sleep quality is more pronounced among evening chronotypes.
 
-```{r h2a}
+```{r h2a, eval=FALSE}
 # select psqi_6 from panel_balanced and left_join to data.gaming.latenight by PID and wave
 data.gaming.latenight.h2a <- data.panel %>% select(pid, wave, psqi_6) %>% filter (wave %in% c(2,4,6)) %>%
   left_join(data.gaming.latenight, by = c("pid", "wave"))
@@ -681,19 +681,43 @@ data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>%
 # left join data.panel.custom.chrono to data.gaming.latenight.h2a by pid
 data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>% left_join(data.panel.custom.chrono, by = "pid")
 
-# Fit the model with rescaled covariates
-model.h1a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played*msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1|gender),
-              data = data.gaming.latenight.h2a)
-
-# Summarize the model using modelsummary
+library(ordinal)
 library(modelsummary)
 
-modelsummary(
-  list(`Model H2a` = model.h2a),
-  fmt = 2,
-  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
+# Define a function to fit the model and catch errors
+fit_clmm_model <- function() {
+  tryCatch({
+    model.h2a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played*msf_sc_numeric + 
+                      (1 + monthly_avg_minutes_played | pid) +
+                      age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + 
+                      (1 | gender),
+                      data = data.gaming.latenight.h2a)
+    
+    # Return the model if it fits successfully
+    return(model.h2a)
+  }, error = function(e) {
+    # Handle the error: print a message and return NULL
+    message("Error: Model failed to converge. Please check the model specification.")
+    return(NULL)
+  })
+}
+
+# Fit the model
+model.h2a <- fit_clmm_model()
+
+# Check if the model was successfully fitted
+if (!is.null(model.h2a)) {
+  # Summarize the model using modelsummary
+  modelsummary(
+    list(`Model H2a` = model.h2a),
+    fmt = 2,
+    estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+    statistic = NULL
+  )
+} else {
+  # Print a message if the model did not fit
+  message("Model summary was not generated due to convergence issues.")
+}
 ```
 
 ## H2b: The negative association between late-night gaming and sleep duration is more pronounced among evening chronotypes. 
@@ -783,6 +807,7 @@ modelsummary(
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
   statistic = NULL)
+
 ```
 
 ## H2c: The negative association between late-night gaming and well-being is more pronounced among evening chronotypes.
