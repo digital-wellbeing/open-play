@@ -9,5 +9,6 @@ data-synthetic/
 /.quarto/
 .Renviron
 raw/
-mynotes.txt
-3_sleep.rmarkdown
+/mynotes.txt
+/3_sleep.rmarkdown
+/3_sleep_files
