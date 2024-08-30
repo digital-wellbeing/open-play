@@ -6,10 +6,10 @@ output: html_document
 ::: {.callout-note}
 This file is intended for internal use---compilation requires access to the original data files and the Qualtrics API.
 
-For external users, most relevant will be the synthetic data files and codebook that this file generates. We've nonetheless included this simulation code in case readers want to understand how the synthetic data was created. 
-:::
+For external users, the most relevant will be the synthetic data files and codebook that this file generates. We've nonetheless included this simulation code in case readers want to understand how the synthetic data was created. 
 
-# Generate Synthetic Data
+To render the remaining files without the generation of simulated data, run `quarto render --profile external` from the root directory.
+:::
 
 ## Preamble
 
@@ -17,6 +17,10 @@ First, set options and load some libraries we'll need.
 
 ```{r}
 #| label: opts
+<<<<<<< HEAD
+#| code-summary: "Show code (options)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 knitr::opts_chunk$set(
   echo = knitr::is_html_output(),
@@ -30,17 +34,25 @@ set.seed(8675309)
 
 ```{r}
 #| label: load-libraries
+<<<<<<< HEAD
+#| code-summary: "Show code (load libraries)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
 p_load(
-  tidyverse, jsonlite, qualtRics, sjlabelled, hms, openxlsx
+  tidyverse, jsonlite, qualtRics, sjlabelled, hms, openxlsx, scales
 )
 ```
 
 ```{r}
 #| label: custom-functions
+<<<<<<< HEAD
+#| code-summary: "Show code (custom functions)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # Function to generate a random time in hh:mm format
 randomTime <- function(n) {
@@ -80,6 +92,10 @@ Some files are available publicly online; others are private and only on OneDriv
 ```{r}
 #| label: load-data
 #| output: false
+<<<<<<< HEAD
+#| code-summary: "Show code (load data)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # some files are available online
 if (!file.exists("data/survey.csv.gz")) {
@@ -145,6 +161,7 @@ Set up basic parameters of the data simulation.
 
 ```{r}
 #| label: sim-parameters
+#| code-summary: "Show code (simulation parameters)"
 
 set.seed(8675309)
 n <- 2000
@@ -170,7 +187,13 @@ Participant platforms don't match the responses in the `platforms_X` intake item
 ```{r}
 #| label: sim-intake
 #| output: false
+<<<<<<< HEAD
+#| code-summary: "Show code (simulate intake)"
 
+
+=======
+
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 synIntake <- tibble(
   pid = as.character(1:n),
   region = rep(c("US", "UK"), n / 2)
@@ -238,6 +261,10 @@ Next, we want to simulate some play behavior. We assume that each player has a f
 
 ```{r}
 #| label: sim-playhistory
+<<<<<<< HEAD
+#| code-summary: "Show code (simulate play history)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 synPlayHistory <- synIntake |>
   crossing(day = 1:studyDays) |>
@@ -266,6 +293,10 @@ Here, we simulate the properties of participant dropout. We assume that particip
 
 ```{r}
 #| label: sim-dropout
+<<<<<<< HEAD
+#| code-summary: "Show code (simulate dropout)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 dropout <- expand.grid(pid = 1:n, day = 1:studyDays) |>
   # first define the various time components of the study
@@ -304,6 +335,10 @@ First we quickly generate a list of unique genres, which we will later randomly 
 
 ```{r}
 #| label: sim-genres
+<<<<<<< HEAD
+#| code-summary: "Show code (simulate genres)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # We pull from the genres present in the Nintendo metadata (which were in turn pulled from IGDB)
 uniqueGenres <- datMeta |>
@@ -320,16 +355,18 @@ Next, we simulate the session-level data based on the play behavior, starting wi
 
 ```{r}
 #| label: sim-nintendo
+#| code-summary: "Show code (simulate Nintendo data)"
 
 synNintendo <- synPlayHistory |>
   filter(numSessionsNintendo > 0) |>
   mutate(session = list(1:numSessionsNintendo)) |>
   unnest(session) |>
   mutate(
-    titleID = sample(datNintendo$titleID, n(), replace = TRUE), ,
+    titleID = sample(datNintendo$titleID, n(), replace = TRUE),
     sessionStart = date + seconds(runif(n(), 0, 86400)),
     duration = sample(datNintendo$duration, n(), replace = TRUE),
-    genre = replicate(n(), assignGenres(uniqueGenres))
+    sessionEnd = sessionStart + minutes(as.integer(duration)),
+    genre = replicate(n(), assignGenres(uniqueGenres)),
   ) |>
   select(-(playsSwitch:numHoursWithSteamPlay)) |>
   mutate(platform = "Nintendo")
@@ -344,6 +381,7 @@ We take a similar approach for the Xbox data. However, instead of bootstrapping,
 
 ```{r}
 #| label: sim-xbox
+#| code-summary: "Show code (simulate Xbox data)"
 
 xboxGames <- read_csv("https://github.com/ItsLogic/Xbox-TitleIDs/raw/main/IDs.csv")[1:300, ]
 
@@ -355,6 +393,7 @@ synXbox <- synPlayHistory |>
     titleID = sample(xboxGames$`Game Title`, n(), replace = TRUE),
     sessionStart = date + seconds(runif(n(), 0, 86400)),
     duration = round(rgamma(n(), shape = 2, rate = 1) * 60, 2),
+    sessionEnd = sessionStart + minutes(as.integer(duration)),
     genre = replicate(n(), assignGenres(uniqueGenres))
   ) |>
   select(-(playsSwitch:numHoursWithSteamPlay)) |>
@@ -373,6 +412,7 @@ We also randomly assign genres to each game, as we did for Nintendo and Xbox.
 
 ```{r}
 #| label: sim-steam
+#| code-summary: "Show code (simulate Steam data)"
 
 # note that the code structure of the steam sim is a little different, as it derives from a different process (using LLMs to generate user personas)
 steam <- read_csv(Sys.getenv("steamDataPath")) |>
@@ -391,6 +431,12 @@ synSteam <- synPlayHistory |>
   unnest(cols = c(sampled_row)) |>
   # clean up
   select(pid, day, date, hour = time, everything(), -(playsSwitch:numHoursWithSteamPlay), -ID, -played) |>
+
+  # add some columns to match the format of the other datasets
+  mutate(
+    sessionStart = as.POSIXct(paste(date, hour), format = "%Y-%m-%d %H"), 
+    sessionEnd = sessionStart+minutes(as.integer(minutes))
+  ) |> 
   arrange(as.integer(pid), day, date, hour) |>
   mutate(platform = "Steam")
 
@@ -403,6 +449,10 @@ iOS data consists of weekly screen time data for the below categories (pre-defin
 
 ```{r}
 #| label: sim-ios
+<<<<<<< HEAD
+#| code-summary: "Show code (simulate iOS data)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 appCategories <- c(
   "Entertainment", "Social", "Information & Reading", "Games", "Productivity & Finance", "Travel", "Other",
@@ -440,6 +490,10 @@ Last, we simulate android data, bootstrapping from a sample ActivityWatch output
 
 ```{r}
 #| label: sim-android
+<<<<<<< HEAD
+#| code-summary: "Show code (simulate Android data)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # Extract and normalize the 'events' data - app sessions - which are found in the 'aw-watcher-android-test' bucket
 androidEvents <- datAndroid$buckets$`aw-watcher-android-test`$events |>
@@ -459,8 +513,10 @@ synAndroid <- expand.grid(
   unnest(session) |>
   mutate(
     app = sample(androidEvents$data.app, n(), replace = TRUE), ,
-    sessionStart = as_hms(sample(ymd_hms(androidEvents$timestamp), n(), replace = TRUE)),
+    sessionStart = sample(ymd_hms(androidEvents$timestamp), n(), replace = TRUE),
+    sessionStart = as.period(as_hms(sessionStart)),
     duration = sample(androidEvents$duration, n(), replace = TRUE),
+    sessionEnd = sessionStart + minutes(as.integer(duration)),
   ) |>
   # for simplicity at the simulation stage, we simply random assign categories to each app, matching the iOS categories
   # in the full paper, we will map apps to categories using the google play store API
@@ -483,6 +539,7 @@ We'll want to add missingness and dropout to both the panel and diary data, whic
 
 ```{r}
 #| label: sim-panel-data
+#| code-summary: "Show code (simulate panel data)"
 
 synPanel <- expand.grid(pid = as.character(1:n), wave = 1:panelWaves) |>
   # add random completion time between 12pm and 12pm the following day
@@ -492,6 +549,12 @@ synPanel <- expand.grid(pid = as.character(1:n), wave = 1:panelWaves) |>
   ) |>
   # bootstrap each column from the non-NA values in the original data
   cbind(map_dfc(datPanel, ~ rep(sample(.[!is.na(.)], length(.), replace = TRUE), length.out = n * panelWaves))) |>
+
+  # Special transformation needs to be done to `psqi_4#1_1_1` and `psqi_4#1_1_2` columns to move values in normal range.
+  mutate(
+    `psqi_4#1_1_1` = rescale(`psqi_4#1_1_1`, to = c(0, 12), na.rm = TRUE),
+    `psqi_4#1_1_2` = rescale(`psqi_4#1_1_2`, to = c(0, 60), na.rm = TRUE)
+  ) |> 
   # certain measures are only administered at certain waves, set these to 0 for
   # the other waves
   mutate(across(starts_with(c("BFI", "trojan", "mctq")), ~ ifelse(wave != 1, NA, .))) |>
@@ -507,19 +570,6 @@ synPanel <- expand.grid(pid = as.character(1:n), wave = 1:panelWaves) |>
   arrange(as.numeric(pid), wave) |>
   copy_labels(datPanel)
 
-# added by Tamas
-# Special transformation needs to be done to `psqi_4#1_1_1` and `psqi_4#1_1_2` columns to move values in normal range.
-
-# Calculate the minimum and maximum values of the column
-min_val <- min(synPanel$`psqi_4#1_1_1`, na.rm = TRUE)
-max_val <- max(synPanel$`psqi_4#1_1_1`, na.rm = TRUE)
-# Rescale the values to be between 0 and 12
-synPanel$`psqi_4#1_1_1` <- (synPanel$`psqi_4#1_1_1` - min_val) / (max_val - min_val) * 12
-# Calculate the minimum and maximum values of the column
-min_val <- min(synPanel$`psqi_4#1_1_2`, na.rm = TRUE)
-max_val <- max(synPanel$`psqi_4#1_1_2`, na.rm = TRUE)
-# Rescale the values to be between 0 and 12
-synPanel$`psqi_4#1_1_2` <- (synPanel$`psqi_4#1_1_2` - min_val) / (max_val - min_val) * 60
 ```
 
 <details>
@@ -538,6 +588,7 @@ glimpse(synPanel)
 
 ```{r}
 #| label: sim-diary-data
+#| code-summary: "Show code (simulate diary data)"
 
 synDiary <- expand.grid(pid = synIntake$pid[synIntake$region == "US"], day = 1:diaryWaves) |>
   mutate(
@@ -583,6 +634,20 @@ Generate `codebook.xlsx`.
 
 ```{r}
 #| label: generate-codebook
+<<<<<<< HEAD
+#| code-summary: "Show code (generate codebook"
+
+metaInfo <- tribble(
+  ~Tab, ~`Data File`, ~Content,
+  "Intake", "data-synthetic/synIntake.csv.gz", "Data on participant demographics and gaming habits",
+  "Panel", "data-synthetic/synPanel.csv.gz", "Wellbeing, sleep and time use data from the panel survey",
+  "Diary", "data-synthetic/synDiary.csv.gz", "Daily diary data on gaming, wellbeing, and sleep",
+  "Nintendo", "data-synthetic/synNintendo.csv.gz", "Telemetry data (session-level) from the Nintendo Switch",
+  "Xbox", "data-synthetic/synXbox.csv.gz", "Telemetry data (session-level) from Xbox devices",
+  "Steam", "data-synthetic/synSteam.csv.gz", "Telemetry data (total playtime in 1 hour blocks) from Steam",
+  "iOS", "data-synthetic/syniOS.csv.gz", "Screen time data from iOS devices, pulled from screenshots of the Screen time app",
+  "Android", "data-synthetic/synAndroid.csv.gz", "App usage data from Android devices, pulled from ActivityWatch"
+=======
 
 metaInfo <- tribble(
   ~Tab, ~`Data File`, ~Content,
@@ -594,6 +659,7 @@ metaInfo <- tribble(
   "Steam", "data-synthetic/synSteam.csv", "Telemetry data (total playtime in 1 hour blocks) from Steam",
   "iOS", "data-synthetic/syniOS.csv", "Screen time data from iOS devices, pulled from screenshots of the Screen time app",
   "Android", "data-synthetic/synAndroid.csv", "App usage data from Android devices, pulled from ActivityWatch"
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 )
 
 intakeCodebook <- synIntake |>
@@ -816,10 +882,19 @@ Save the data to `data-synthetic`, for use in devising analysis scripts for e.g.
 
 ```{r}
 #| label: save-data
-
-library(readr)
+#| code-summary: "Show code (save data)"
 
 # Export as CSV
+<<<<<<< HEAD
+write_csv(synIntake, "data-synthetic/synIntake.csv.gz")
+write_csv(synDiary, "data-synthetic/synDiary.csv.gz")
+write_csv(synPanel, "data-synthetic/synPanel.csv.gz")
+write_csv(synXbox, "data-synthetic/synXbox.csv.gz")
+write_csv(synNintendo, "data-synthetic/synNintendo.csv.gz")
+write_csv(synAndroid, "data-synthetic/synAndroid.csv.gz")
+write_csv(synSteam, "data-synthetic/synSteam.csv.gz")
+write_csv(syniOS, "data-synthetic/syniOS.csv.gz")
+=======
 write_csv(synIntake, "data-synthetic/synIntake.csv")
 write_csv(synDiary, "data-synthetic/synDiary.csv")
 write_csv(synPanel, "data-synthetic/synPanel.csv")
@@ -828,14 +903,5 @@ write_csv(synNintendo, "data-synthetic/synNintendo.csv")
 write_csv(synAndroid, "data-synthetic/synAndroid.csv")
 write_csv(synSteam, "data-synthetic/synSteam.csv")
 write_csv(syniOS, "data-synthetic/syniOS.csv")
-
-# Export as RDS
-saveRDS(synIntake, "data-synthetic/synIntake.rds")
-saveRDS(synDiary, "data-synthetic/synDiary.rds")
-saveRDS(synPanel, "data-synthetic/synPanel.rds")
-saveRDS(synXbox, "data-synthetic/synXbox.rds")
-saveRDS(synNintendo, "data-synthetic/synNintendo.rds")
-saveRDS(synAndroid, "data-synthetic/synAndroid.rds")
-saveRDS(synSteam, "data-synthetic/synSteam.rds")
-saveRDS(syniOS, "data-synthetic/syniOS.rds")
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 ```

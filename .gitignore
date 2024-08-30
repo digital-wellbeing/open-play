@@ -5,7 +5,10 @@
 .DS_Store
 
 data/
+<<<<<<< HEAD
+=======
 data-synthetic/
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 outputs/
 /.quarto/
 .Renviron

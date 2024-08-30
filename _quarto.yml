@@ -1,0 +1,34 @@
+project:
+  type: book
+  render:
+    - index.qmd
+    - 0_generateSyntheticData.qmd
+    - 1_preprocess.qmd
+    - 2_basicNeeds.qmd
+    - 3_sleep.qmd
+  output-dir: docs
+book:
+  title: "Psychological Wellbeing, Sleep, and Video Gaming: Analyses of Comprehensive Digital Traces"
+  author: "Digital Wellbeing Lab"
+  chapters:
+    - index.qmd
+    - 0_generateSyntheticData.qmd
+    - 1_preprocess.qmd
+    - 2_basicNeeds.qmd
+    - 3_sleep.qmd
+toc: true
+editor_options:
+  chunk_output_type: console
+execute:
+  warning: false
+page-layout: full
+format:
+  html:
+    code-fold: true
+    code-summary: "Show the code"
+    theme: cosmo
+bibliography: references.bib
+publish:
+  gh-pages:
+    branch: main
+    folder: docs

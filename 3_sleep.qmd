@@ -13,7 +13,7 @@ format:
 bibliography: references.bib
 ---
 
-# Study 2: Gaming and Sleep 
+TODO: document this all
 
 ```{r}
 #| label: load-libraries
@@ -21,7 +21,7 @@ bibliography: references.bib
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
-p_load(tidyverse, lme4, marginaleffects, glmmTMB, mice, ordinal, modelsummary, lubridate, mctq)
+p_load(tidyverse, lme4, marginaleffects, glmmTMB, mice, ordinal, modelsummary, lubridate, data.table)
 
 studyStartDate <- as_datetime("2024-05-01 00:00:00")
 
@@ -30,455 +30,58 @@ studyStartDate <- as_datetime("2024-05-01 00:00:00")
 ```{r}
 #| label: load-data
 
-# data.diary <- read_csv("data-synthetic/synDiaryClean.csv") # requires that the preprocessing script has been run
-# data.diary <- readRDS("data-synthetic/synDiaryClean.rds") # requires that the preprocessing script has been run
+# don't use read_csv for the synPanelClean! no idea why but it guesses column
+# type wrong, leading to a lot of NA imports
 
-data.panel <- readRDS("data-synthetic/synPanel.rds")
-data.intake <- readRDS("data-synthetic/synIntake.rds")
-
-data.nin <- readRDS("data-synthetic/synNintendo.rds")
-data.xbox <- readRDS("data-synthetic/synXbox.rds")
-data.steam <- readRDS("data-synthetic/synSteam.rds")
-# data.android <- readRDS("data-synthetic/synAndroid.rds")
-# data.ios <- readRDS("data-synthetic/syniOS.rds")
-
-```
-
-```{r}
-#| label: preprocess data
-
-data.nin.custom <- data.nin %>%
-  mutate(sessionEnd = sessionStart + minutes(as.integer(duration)))
-
-data.steam.custom <- data.steam %>%
-  mutate(sessionStart = as.POSIXct(paste(date, hour), format = "%Y-%m-%d %H"), 
-         sessionEnd = sessionStart+minutes(as.integer(minutes)))
-
-data.xbox.custom <- data.xbox %>%
-  mutate(sessionEnd = sessionStart + minutes(as.integer(duration)))
-
-# going to ignore iOS for this study due to lack of temporal resolution
-
-# data.android.custom <- data.android %>% filter(category == "Games") %>%
-#   mutate(time = sessionStart, sessionStart = ymd_hms(paste(date, sessionStart)), sessionEnd = sessionStart+minutes(as.integer(duration))) %>% mutate(platform="Android")
-
-
-```
-
-```{r}
-#| label: construct and test calculate_latenight_minutes
-
-library(lubridate)
-library(dplyr)
-
-calculate_latenight_minutes <- function(start_time, end_time, latenight_onset = "23:00", latenight_offset = "06:00") {
-  
-  if (as.numeric(difftime(end_time, start_time, units = "days")) > 1) {
-    return(NA)  # Return NA if the times are more than 1 day apart
-  }
-  
-  # check if end_time and start_time are on the same day or not and store in a logical
-  same_day <- as_date(start_time) == as_date(end_time)
-  
-  if(!same_day){
-    # Parse evening_time and morning_time
-  latenight_onset <- hms(paste0(latenight_onset, ":00"))
-  latenight_offset <- hms(paste0(latenight_offset, ":00"))
-  
-  # Function to create a datetime for the latenight boundary
-  create_boundary <- function(base_time, boundary_time) {
-    result <- update(base_time, hour = hour(boundary_time), minute = minute(boundary_time), second = second(boundary_time))
-    if (boundary_time < latenight_onset && hms(format(base_time, "%H:%M:%S")) >= latenight_onset) {
-      result <- result + days(1)
-    }
-    result
-  }
-  
-  # Create latenight start and end times
-  latenight_start <- create_boundary(start_time, latenight_onset)
-  latenight_end <- create_boundary(start_time, latenight_offset)
-  
-  # Adjust if latenight_end is before latenight_start (crosses midnight)
-  if (latenight_end <= latenight_start) {
-    latenight_end <- latenight_end + days(1)
-  }
-  
-  # Calculate total latenight minutes
-  total_minutes <- 0
-  current_start <- start_time
-  while (current_start < end_time) {
-    current_latenight_start <- max(current_start, latenight_start)
-    current_latenight_end <- min(end_time, latenight_end)
-    
-    if (current_latenight_start < current_latenight_end) {
-      total_minutes <- total_minutes + as.numeric(difftime(current_latenight_end, current_latenight_start, units = "mins"))
-    }
-    
-    current_start <- latenight_end
-    latenight_start <- latenight_start + days(1)
-    latenight_end <- latenight_end + days(1)
-  }
-  }else{
-    # Define the evening_time (midnight) and morning_time as POSIXct objects
-    # Example: Define evening_time and morning_time as hh:mm strings
-
-    # Convert the hh:mm strings to full datetime objects, using today's date
-    evening_time_updated <- update(start_time, hours = 0, minutes = 0, seconds = 0)
-    
-    # Split morning_time into hours and minutes
-    hh_mm <- strsplit(latenight_offset, ":")[[1]]
-    hh <- as.numeric(hh_mm[1])
-    mm <- as.numeric(hh_mm[2])
-    
-    # Update start_time to have the time set to morning_time
-    morning_time_updated <- update(start_time, hours = hh, minutes = mm, seconds = 0)
-    
-    # Create the interval for the late-night period (00:00 to 06:00)
-    latenight_interval <- interval(evening_time_updated, morning_time_updated)
-    
-    # Create the interval for the given session
-    session_interval <- interval(start_time, end_time)
-    
-    # Find the intersection of the two intervals
-    intersection <- intersect(latenight_interval, session_interval)
-    
-    # Calculate the duration of the intersection in minutes
-    if (!is.na(intersection)) {
-      total_minutes <- as.numeric(as.duration(intersection), "minutes")
-    } else {
-      total_minutes <- 0
-    }
-  }
-  
-  return(total_minutes)
-}
-
-# Test 1: Session entirely within the latenight period
-start_time1 <- ymd_hms("2024-08-28 23:30:00")
-end_time1 <- ymd_hms("2024-08-29 01:30:00")
-print(calculate_latenight_minutes(start_time1, end_time1))  # Expected: 120 
-
-# Test 2: Session partially overlapping with the latenight period (starts before latenight)
-start_time2 <- ymd_hms("2024-08-28 22:30:00")
-end_time2 <- ymd_hms("2024-08-29 00:30:00")
-print(calculate_latenight_minutes(start_time2, end_time2))  # Expected: 90
-
-# Test 3: Session partially overlapping with the latenight period (ends after latenight)
-start_time3 <- ymd_hms("2024-08-29 05:30:00")
-end_time3 <- ymd_hms("2024-08-29 07:00:00")
-print(calculate_latenight_minutes(start_time3, end_time3))  # Expected: 30
-
-# Test 4: Session not overlapping with the latenight period
-start_time4 <- ymd_hms("2024-08-28 10:00:00")
-end_time4 <- ymd_hms("2024-08-28 12:00:00")
-print(calculate_latenight_minutes(start_time4, end_time4))  # Expected: 0
-
-# Test 5: Session spanning two days
-start_time5 <- ymd_hms("2024-08-28 22:00:00")
-end_time5 <- ymd_hms("2024-08-29 07:00:00")
-print(calculate_latenight_minutes(start_time5, end_time5))  # Expected: 420
-
-# Test 6: Session partially overlapping with the latenight period (ends after latenight)
-start_time6 <- ymd_hms("2024-08-29 01:00:00")
-end_time6 <- ymd_hms("2024-08-29 07:00:00")
-print(calculate_latenight_minutes(start_time6, end_time6))  # Expected: 300
-
-# Test 7: Session spanning multiple days
-start_time7 <- ymd_hms("2024-08-23 01:00:00")
-end_time7 <- ymd_hms("2024-08-29 07:00:00")
-print(calculate_latenight_minutes(start_time7, end_time7))  # Expected: NA
-
-```
-
-```{r}
-#| label: merge data pt1
-#| tags: [slow]
-#| cache: true
-
-library(data.table)
-library(lubridate)
-library(future.apply)
-library(progressr)
-library(parallel)
-
-# merge xbox_balanced and steam_balanced and nin_balanced using bind_rows 
-data.gaming <- bind_rows(data.xbox.custom, data.steam.custom, data.nin.custom)
-# calculate minutes_played for data.gaming using sessionEnd and sessionStart
-data.gaming <- data.gaming %>%
-  mutate(minutes_played = as.numeric(difftime(sessionEnd, sessionStart, units = "mins")))
-
-# Convert data frame to data.table
-setDT(data.gaming)
-
-# Set up parallel processing using multiple cores
-plan(multisession, workers=parallel::detectCores() - 1)  # You can specify the number of workers as plan(multisession, workers = n)
-
-# Time the parallel operation with a progress bar
-system.time({
-  with_progress({
-    p <- progressor(steps = nrow(data.gaming))
-    
-    data.gaming[, latenight_gaming_minutes := future_mapply(
-      function(start_time, end_time) {
-        p()  # Update progress bar
-        calculate_latenight_minutes(start_time, end_time)
-      },
-      sessionStart, sessionEnd, SIMPLIFY = TRUE
-    )]
-  })
-  
-  # Filter out rows with NA values
-  data.gaming <- data.gaming[!is.na(latenight_gaming_minutes)]
-})
-
-# Reset to sequential processing
-plan(sequential)
-# Convert data.gaming back to data.frame
-data.gaming <- as.data.frame(data.gaming)
-```
-
-
-```{r}
-#| label: merge data pt2
-
-# Example usage: Apply the function to calculate latenight minutes with flexible evening and morning hours
-# data.gaming <- data.gaming %>%
-#   rowwise() %>%
-#   mutate(latenight_gaming_minutes = calculate_latenight_minutes(sessionStart, sessionEnd)) %>%  filter(!is.na(latenight_gaming_minutes)) %>% ungroup()
-
-
-# create an isWeekend variable for data.gaming if the sessionStart is on a Friday or Saturday
-data.gaming <- data.gaming %>%
-  mutate(isWeekend = ifelse(weekdays(sessionStart) %in% c("Friday", "Saturday"), 1, 0))
-
-# assign each session to a wave based on the date, if the date is within 4 weeks of the start of the study, it is wave 2, if it is between 4 weeks and 8 weeks it is wave 4, if it is between 8 weeks and 12 weeks it is wave 6
-# Example data frame
-data.gaming <- data.gaming %>%
+data.panel <- fread("data-synthetic/synPanelClean.csv.gz") |> # requires that the preprocessing script has been run
+  left_join(read_csv("data-synthetic/synIntakeClean.csv.gz"), by = "pid") |> 
+  select(pid, wave, region, psqi_6, starts_with(c("mctq", "eps", "psqi")), total_hours_sleep, wemwbs, 
+         age_scaled, bmi_scaled, SES_index_scaled, msf_sc_numeric, gender) |> 
   mutate(
-    wave = case_when(
+    psqi_6_ord = factor(psqi_6, ordered = TRUE),
+    pid = as.character(pid)
+  )
+
+data.nin <- read_csv("data-synthetic/synNintendo.csv.gz")
+data.xbox <- read_csv("data-synthetic/synXbox.csv.gz")
+data.steam <- read_csv("data-synthetic/synSteam.csv.gz")
+data.android <- read_csv("data-synthetic/synAndroid.csv.gz")
+data.ios <- read_csv("data-synthetic/syniOS.csv.gz")
+
+```
+
+```{r}
+#| label: merge data
+
+# merge xbox_balanced and steam_balanced and nin_balanced 
+data.gaming <- bind_rows(data.xbox, data.steam, data.nin) |> 
+
+  # calculate minutes_played for data.gaming using sessionEnd and sessionStart
+  # create a binary variable for data.gaming called latenight if the sessionStart is between 23:00 and 06:00
+  # create an isWeekend variable for data.gaming if the sessionStart is on a Saturday, Sunday or Friday
+  mutate(
+    minutes_played = as.numeric(difftime(sessionEnd, sessionStart, units = "mins")),
+    latenight = ifelse(hour(sessionStart) >= 23 | hour(sessionStart) < 6, 1, 0),
+    isWeekend = ifelse(weekdays(sessionStart) %in% c("Friday", "Saturday"), 1, 0),
+    
+    # calculate late night using lubridate::interval objects
+    # TODO: update to ensure that test case 6 (sessions starting after midnight the following day) are captured
+    interval_gaming = interval(sessionStart, sessionEnd),
+    interval_latenight = interval(date + hours(23), date + hours(30)), # gets the 11pm to 6am following day interval from date
+    latenightMinutes = as.numeric(intersect(interval_gaming, interval_latenight))/60 # calculate overlap in minutes
+  ) |> 
+
+  # assign each session to a wave based on the date, if the date is within 4
+  # weeks of the start of the study, it is wave 2, if it is between 4 weeks and
+  # 8 weeks it is wave 4, if it is between 8 weeks and 12 weeks it is wave 6
+  mutate(
+    days_since_start = as.numeric(difftime(sessionStart, studyStartDate, units = "days")),
+    month = case_when(
       day >= 0 & day <= 28 ~ 2,
       day >= 29 & day <= 56 ~ 4,
       day >= 57 & day <= 84 ~ 6,
       TRUE ~ NA_real_
-    )
-  )  %>% filter(!is.na(wave))
-
-# group gaming by PID, wave and latenight and calculate daily average minutes_played
-data.gaming.latenight <- data.gaming %>%
-  group_by(pid, wave, isWeekend) %>%
-  summarise(monthly_avg_minutes_played = sum(latenight_gaming_minutes)/28) %>% filter(monthly_avg_minutes_played  > 0) %>% ungroup()
-
-# TODO: make sure psqi_4#1_1_* have reasonable values in panel_balanced
-
-# Calculate the minimum and maximum values of the column
-# min_val <- min(panel_balanced$`psqi_4#1_1_1`, na.rm = TRUE)
-# max_val <- max(panel_balanced$`psqi_4#1_1_1`, na.rm = TRUE)
-# # Rescale the values to be between 0 and 12
-# panel_balanced$`psqi_4#1_1_1` <- (panel_balanced$`psqi_4#1_1_1` - min_val) / (max_val - min_val) * 12
-# # Calculate the minimum and maximum values of the column
-# min_val <- min(panel_balanced$`psqi_4#1_1_2`, na.rm = TRUE)
-# max_val <- max(panel_balanced$`psqi_4#1_1_2`, na.rm = TRUE)
-# # Rescale the values to be between 0 and 12
-# panel_balanced$`psqi_4#1_1_2` <- (panel_balanced$`psqi_4#1_1_2` - min_val) / (max_val - min_val) * 60
-```
-
-# H1
-
-## H1a: Late-night gaming is associated with poorer sleep quality.
-```{r}
-#| label: h1a
-
-# select psqi_6 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h1a <- data.panel %>% select(pid, wave, psqi_6) %>% filter (wave %in% c(2,4,6)) %>%
-  left_join(data.gaming.latenight, by = c("pid", "wave"))
-# replace NA with 0 in monthly_avg_minutes_played
-data.gaming.latenight.h1a <- data.gaming.latenight.h1a %>% mutate(monthly_avg_minutes_played = replace_na(monthly_avg_minutes_played, 0))
-
-# left join data.intake to data.gaming.latenight.h1a by pid
-data.gaming.latenight.h1a <- data.gaming.latenight.h1a %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
-
-# Construct SES
-data.gaming.latenight.h1a <- data.gaming.latenight.h1a %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
     ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
-  
-# For psqi_6 1 means Very good, 2 means Fairly good, 3 means Fairly bad, 4 means Very bad
-
-data.gaming.latenight.h1a  <- data.gaming.latenight.h1a %>%
-  mutate(
-    psqi_6_ord = factor(psqi_6, ordered = TRUE),  # Convert psqi_6 to an ordered factor
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
-
-# Rescale the covariates
-data.gaming.latenight.h1a <- data.gaming.latenight.h1a %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
-
-# Fit the model with rescaled covariates
-model.h1a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1|gender),
-              data = data.gaming.latenight.h1a)
-
-# Summarize the model using modelsummary
-library(modelsummary)
-
-modelsummary(
-  list(`Model H1a` = model.h1a),
-  fmt = 2,
-  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
-```
-
-
-## H1b: Late-night gaming is associated with shorter sleep duration.
-
-```{r}
-#| label: h1b
-
-
-data.panel <- readRDS("data-synthetic/synPanel.rds")
-
-# Convert and compute
-data.panel.custom <- data.panel %>% filter(wave %in% c(2,4,6)) %>%
-  mutate(
-    psqi_4_1_1_1_hours = as.numeric(`psqi_4#1_1_1`), # Convert hours to numeric
-    psqi_4_1_1_2_hours = as.numeric(`psqi_4#1_1_2`) / 60, # Convert minutes to numeric hours
-    total_hours_sleep = psqi_4_1_1_1_hours + psqi_4_1_1_2_hours, # Compute total hours of sleep
-  )
-# select psqi_comp3 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h1b <- data.panel.custom %>% select(pid, wave, total_hours_sleep) %>% left_join(data.gaming.latenight, by = c("pid", "wave")) %>% mutate(monthly_avg_minutes_played = replace_na(monthly_avg_minutes_played, 0))
-
-# left join data.intake to data.gaming.latenight.h1a by pid
-data.gaming.latenight.h1b <- data.gaming.latenight.h1b %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
-
-# Construct SES
-data.gaming.latenight.h1b <- data.gaming.latenight.h1b %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
-
-data.gaming.latenight.h1b  <- data.gaming.latenight.h1b %>%
-  mutate(
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
-
-# Rescale the covariates
-data.gaming.latenight.h1b <- data.gaming.latenight.h1b %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
-
-library(lme4)
-# Fit the model
-model.h1b <- lmer(total_hours_sleep ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + region + (1 | gender) + isWeekend, data = data.gaming.latenight.h1b )
-# Summarize the model using modelsummary
-library(modelsummary)
-
-modelsummary(
-  list(`Model H1b` = model.h1b),
-  fmt = 2,
-  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
-```
-
-## H1c: Late-night gaming is associated with lower well-being.
-
-```{r}
-#| label: h1c
-
-# # merge xbox_balanced and steam_balanced and nin_balanced using bind_rows 
-# data.gaming <- bind_rows(data.xbox.custom, data.steam.custom, data.nin.custom)
-# # calculate minutes_played for data.gaming using sessionEnd and sessionStart
-# data.gaming <- data.gaming %>%
-#   mutate(minutes_played = as.numeric(difftime(sessionEnd, sessionStart, units = "mins")))
-# # create a binary variable for data.gaming called latenight if the sessionStart is between 23:00 and 06:00
-# data.gaming <- data.gaming %>%
-#   mutate(latenight = ifelse(hour(sessionStart) >= 23 | hour(sessionStart) < 6, 1, 0))
-# # create an isWeekend variable for data.gaming if the sessionStart is on a Saturday, Sunday or Friday
-# data.gaming <- data.gaming %>%
-#   mutate(isWeekend = ifelse(weekdays(sessionStart) %in% c("Friday", "Saturday"), 1, 0))
-# assign each session to a wave based on the date, if the date is within 4 weeks of the start of the study, it is wave 2, if it is between 4 weeks and 8 weeks it is wave 4, if it is between 8 weeks and 12 weeks it is wave 6
-# Example data frame
-data.gaming.h1c <- data.gaming %>%
-  mutate(
     # Define biweekly waves (14-day intervals) that end at day 84
     wave = case_when(
       day >= 0 & day <= 14 ~ 1,
@@ -488,774 +91,211 @@ data.gaming.h1c <- data.gaming %>%
       day >= 57 & day <= 70 ~ 5,
       day >= 71 & day <= 84 ~ 6,
       TRUE ~ NA_real_  # Assign NA for days beyond 84
-    )
-  ) %>%
-  filter(!is.na(wave))
+    ),
+    pid = as.character(pid)
+  ) 
 
 # group gaming by PID, wave and latenight and calculate daily average minutes_played
-data.gaming.latenight.h1c <- data.gaming.h1c %>%
-  group_by(pid, wave, isWeekend) %>% summarise(biweekly_avg_minutes_played = sum(minutes_played)/14) %>% filter(biweekly_avg_minutes_played  > 0) %>% ungroup()
+gamingMonthly <- data.gaming |> 
+  group_by(pid, month, isWeekend) %>%
+  summarise(
+    monthly_avg_minutes_played = sum(latenightMinutes)/28,
+  ) |> 
+  left_join(data.panel |> select(-msf_sc_numeric) |> filter(wave %in% c(2, 4, 6)), 
+            by = c("pid","month" = "wave")) |> 
+  left_join(data.panel |> select(pid, msf_sc_numeric) |> filter(!is.na(msf_sc_numeric)), 
+            by = c("pid")) |> # hacky way to make sure chronotype (measured in wave 1 only) doesn't get lost 
+  mutate(monthly_avg_minutes_played = replace_na(monthly_avg_minutes_played, 0)) |> 
+  ungroup() |>
+  arrange(as.integer(pid), month)
+
+# group gaming by PID, wave and latenight and calculate daily average minutes_played
+gamingBiweekly <- data.gaming |> 
+  group_by(pid, wave, isWeekend) |> 
+  summarise(
+    biweekly_avg_minutes_played = sum(latenightMinutes)/14,
+  ) |> 
+  left_join(data.panel |> select(-msf_sc_numeric), by = c("pid", "wave")) |> 
+  left_join(data.panel |> select(pid, msf_sc_numeric) |> filter(!is.na(msf_sc_numeric)), 
+            by = c("pid")) |> # hacky way to make sure chronotype (measured in wave 1 only) doesn't get lost 
+  mutate(biweekly_avg_minutes_played = replace_na(biweekly_avg_minutes_played, 0)) |> 
+  ungroup() |> 
+  arrange(as.integer(pid), wave) |> 
+  select(pid, wave, msf_sc_numeric, everything())
+
+```
 
 
-# Create a mapping of the string values to their numeric equivalents
-value_mapping <- c(
-  "1 - None of the time" = 1,
-  "2 - Rarely" = 2,
-  "3 - Some of the time" = 3,
-  "4 - Often" = 4,
-  "5 - All of the time" = 5
+## H1a: Late-night gaming is associated with poorer sleep quality.
+
+Multilevel ordinal regression whereby monthly average minutes played predicts sleep quality (PSQI), controlling for age, BMI, SES index, region, and whether playtime falls on a weekend, with a random intercept and slope for participants.
+
+```{r}
+#| label: h1a
+#| code-summary: "Fit H1a model"
+
+# For psqi_6 1 means Very good, 2 means Fairly good, 3 means Fairly bad, 4 means Very bad
+
+# Fit the model with rescaled covariates
+model.h1a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend,
+                  data = gamingMonthly)
+
+modelsummary(
+  list(`Model H1a` = model.h1a),
+  fmt = 2,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
 )
-# Identify all columns whose names start with 'wemwbs'
-wemwbs_columns <- c("wemwbs_1", "wemwbs_2", "wemwbs_3", "wemwbs_4", "wemwbs_5", "wemwbs_6", "wemwbs_7")
-# Apply the mapping to these columns
-data.panel.custom <- data.panel %>% ungroup() %>%
-  mutate(across(all_of(wemwbs_columns), ~ as.numeric(value_mapping[.])))
-# calculate a wemwbs_total score for panel_balanced
-data.panel.custom <-  data.panel.custom %>%
-  ungroup() %>%
-  mutate(wemwbs_total = rowSums(select(., all_of(wemwbs_columns)))) 
-# select psqi_comp3 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h1c <- data.panel.custom %>% select(pid, wave, wemwbs_total) %>%
-  left_join(data.gaming.latenight.h1c, by = c("pid", "wave"))
+```
 
-# left join data.intake to data.gaming.latenight.h1a by pid
-data.gaming.latenight.h1c <- data.gaming.latenight.h1c %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
 
-# Construct SES
-data.gaming.latenight.h1c <- data.gaming.latenight.h1c %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
+## H1b: Late-night gaming is associated with shorter sleep duration.
 
-data.gaming.latenight.h1c  <- data.gaming.latenight.h1c %>%
-  mutate(
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
+Multilevel linear regression whereby monthly average minutes played predicts total hours of sleep (PSQI), controlling for age, BMI, SES index, region, gender, and whether playtime falls on a weekend, with a random intercept and slope for participants and a random intercept for gender.
 
-# Rescale the covariates
-data.gaming.latenight.h1c <- data.gaming.latenight.h1c %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
+```{r}
+#| label: h1b
+#| code-summary: "Fit H1b model"
 
-library(lme4)
 # Fit the model
-model.h1c <- lmer(wemwbs_total ~ biweekly_avg_minutes_played + (1 + biweekly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + region + (1 | gender) + isWeekend, data = data.gaming.latenight.h1c )
+model.h1b <- lmer(total_hours_sleep ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + region + isWeekend, 
+                  data = gamingMonthly)
+
 # Summarize the model using modelsummary
-library(modelsummary)
+modelsummary(
+  list(`Model H1b` = model.h1b),
+  fmt = 2,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
+```
+
+## H1c: Late-night gaming is associated with lower well-being.
+
+Multilevel linear regression whereby monthly average minutes played predicts daytime sleepiness (Epworth Sleepiness Scale), controlling for age, BMI, SES index, region, gender, and whether playtime falls on a weekend, with a random intercept and slope for participants and a random intercept for gender.
+
+```{r}
+#| label: h1c
+#| code-summary: "Fit H1c model"
+
+model.h1c <- lmer(wemwbs ~ biweekly_avg_minutes_played + (1 + biweekly_avg_minutes_played | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + region + isWeekend, 
+                  data = gamingBiweekly)
 
 modelsummary(
   list(`Model H1c` = model.h1c),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
+  statistic = NULL
+)
 
 ```
 
 ## H1d: Late-night gaming is associated with higher daytime sleepiness.
 
+Multilevel linear regression whereby biweekly average minutes played predicts well-being (WEMWBS), controlling for age, BMI, SES index, region, gender, and whether playtime falls on a weekend, with a random intercept and slope for participants and a random intercept for gender.
+
 ```{r}
 #| label: h1d
+#| code-summary: "Fit H1d model"
 
-# # merge xbox_balanced and steam_balanced and nin_balanced using bind_rows 
-# data.gaming <- bind_rows(data.xbox.custom, data.steam.custom, data.nin.custom)
-# # calculate minutes_played for data.gaming using sessionEnd and sessionStart
-# data.gaming <- data.gaming %>%
-#   mutate(minutes_played = as.numeric(difftime(sessionEnd, sessionStart, units = "mins")))
-# # create a binary variable for data.gaming called latenight if the sessionStart is between 23:00 and 06:00
-# data.gaming <- data.gaming %>%
-#   mutate(latenight = ifelse(hour(sessionStart) >= 23 | hour(sessionStart) < 6, 1, 0))
-# # create an isWeekend variable for data.gaming if the sessionStart is on a Saturday, Sunday or Friday
-# data.gaming <- data.gaming %>%
-#   mutate(isWeekend = ifelse(weekdays(sessionStart) %in% c("Friday", "Saturday"), 1, 0))
-# # assign each session to a wave based on the date, if the date is within 4 weeks of the start of the study, it is wave 2, if it is between 4 weeks and 8 weeks it is wave 4, if it is between 8 weeks and 12 weeks it is wave 6
-# # Example data frame
-
-data.gaming.h1d <- data.gaming %>%
-  mutate(
-    wave = case_when(
-      day >= 0 & day <= 28 ~ 2,
-      day >= 29 & day <= 56 ~ 4,
-      day >= 57 & day <= 84 ~ 6,
-      TRUE ~ NA_real_
-    )
-  )  %>% filter(!is.na(wave))
-
-# group gaming by PID, wave and latenight and calculate daily average minutes_played
-data.gaming.latenight <- data.gaming.h1d %>%
-  group_by(pid, wave, isWeekend) %>%
-  summarise(monthly_avg_minutes_played = sum(latenight_gaming_minutes)/28) %>% filter(monthly_avg_minutes_played  > 0) %>% ungroup()
-
-
-# Create a mapping of the string values to their numeric equivalents
-value_mapping <- c(
-  "No chance of dozing" = 0,
-  "Slight chance of dozing" = 1,
-  "Moderate chance of dozing" = 2,
-  "High chance of dozing" = 3
-)
-# Identify all columns whose names start with 'wemwbs'
-eps_columns <- grep("^eps", names(data.panel), value = TRUE)
-# Apply the mapping to these columns
-data.panel.custom <- data.panel %>% ungroup() %>%
-  mutate(across(all_of(eps_columns), ~ as.numeric(value_mapping[.])))
-
-# calculate a eps_total score for panel_balanced
-data.panel.custom <- data.panel.custom %>% ungroup() %>%
-  mutate(eps_total = rowSums(select(data.panel.custom, eps_columns)))
-# select psqi_comp3 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h1d <- data.panel.custom %>% select(pid, wave, eps_total) %>% filter (wave %in% c(2,4,6)) %>%
-  left_join(data.gaming.latenight, by = c("pid", "wave"))
-
-# replace NA with 0 in monthly_avg_minutes_played
-data.gaming.latenight.h1d <- data.gaming.latenight.h1d %>% mutate(monthly_avg_minutes_played = replace_na(monthly_avg_minutes_played, 0))
-
-# left join data.intake to data.gaming.latenight.h1a by pid
-data.gaming.latenight.h1d <- data.gaming.latenight.h1d %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
-
-# Construct SES
-data.gaming.latenight.h1d <- data.gaming.latenight.h1d %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
-
-data.gaming.latenight.h1d  <- data.gaming.latenight.h1d %>%
-  mutate(
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
-
-# Rescale the covariates
-data.gaming.latenight.h1d <- data.gaming.latenight.h1d %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
-
-library(lme4)
 # Fit the model
-model.h1d <- lmer(eps_total ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1 | gender), data = data.gaming.latenight.h1d )
-# Summarize the model using modelsummary
-library(modelsummary)
+model.h1d <- lmer(epsTotal ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + region + isWeekend, 
+                  data = gamingMonthly)
 
+# Summarize the model using modelsummary
 modelsummary(
   list(`Model H1d` = model.h1d),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
+  statistic = NULL
+)
 ```
 
+## H2
 
-# H2
+### H2a: The negative association between late-night gaming and sleep quality is more pronounced among evening chronotypes.
+
+Multilevel ordinal regression whereby the interaction between monthly average minutes played and chronotype (MSFsc: mid-sleep on free days corrected for sleep debt on weekdays; MCTQ) predicts sleep quality (PSQI), controlling for age, BMI, SES index, region, and whether playtime falls on a weekend, with a random intercept and slope for participants.
 
 ```{r}
-#| label: derive chronotype
-
-# rename mctq_1 to work  and turn it into a logical variable where 1 is 1 and 2 is 0, other is NA
-data.panel.custom <- data.panel%>% mutate(work = ifelse(mctq_1 == 1, 1, ifelse(mctq_1 == 2, 0, NA)))
-# rename mctq_2 to "wd" 
-data.panel.custom <- data.panel.custom %>% rename(wd = mctq_2_1, bt_w = mctq_3_1, sprep_w = mctq_3_3, slat_w = mctq_3_4, se_w = mctq_3_5, si_w = mctq_3_6)
-
-# convert Yes/No in mctq_4_1 to logical
-data.panel.custom <- data.panel.custom %>% mutate(alarm_w = ifelse(mctq_4_1 == "Yes", 1, ifelse(mctq_4_1 == "No", 0, NA)))
-# convert  Yes/No in mctq_5_1 to logical and name it wake_before_w
-data.panel.custom <- data.panel.custom %>% mutate(wake_before_w = ifelse(mctq_5_1 == "Yes", 1, ifelse(mctq_5_1 == "No", 0, NA)))
-
-data.panel.custom <- data.panel.custom %>% rename(bt_f = mctq_6_1, sprep_f = mctq_6_3, slat_f = mctq_6_4, se_f = mctq_6_5, si_f = mctq_6_6)
-
-# convert Yes/No in mctq_7_1 to logical
-data.panel.custom <- data.panel.custom %>% mutate(alarm_f = ifelse(mctq_7_1 == "Yes", 1, ifelse(mctq_7_1 == "No", 0, NA)))
-
-data.panel.custom <- data.panel.custom %>% mutate(reasons_f = ifelse(mctq_7_2 == "Yes", 1, ifelse(mctq_7_2 == "No", 0, NA)))
-
-# rename mctq_8_1 to "reasons_why_f"
-data.panel.custom <- data.panel.custom %>% rename(reasons_why_f = mctq_8_1)
-
-data.panel.custom <- data.panel.custom %>% dplyr::mutate(
-  dplyr::across("wd", as.integer),
-  dplyr::across(dplyr::matches("^work$|^alarm_|^wake_|^reasons_f$"),
-                as.logical),
-  dplyr::across(dplyr::matches("^bt_|^sprep_|^se_"), hms::parse_hm),
-  dplyr::across(dplyr::matches("^slat_|^si_"),
-                ~ lubridate::dminutes(as.numeric(.x)))
-  )
-
-# filter for participants who have completed the MCTQ
-data.panel.custom <- data.panel.custom %>% filter(!is.na(work))
-
-# Calc Sleep onset
-data.panel.custom$so_w <- mctq::so(data.panel.custom$sprep_w, data.panel.custom$slat_w)
-data.panel.custom$so_f <- mctq::so(data.panel.custom$sprep_f, data.panel.custom$slat_f)
-
-# Calc Sleep duration
-data.panel.custom$sd_w <- mctq::sdu(data.panel.custom$so_w, data.panel.custom$se_w)
-data.panel.custom$sd_f <- mctq::sdu(data.panel.custom$so_f, data.panel.custom$se_f)
-
-# Calc Midsleep time
-data.panel.custom$msw <- mctq::msl(data.panel.custom$so_w, data.panel.custom$sd_w)
-data.panel.custom$msf <- mctq::msl(data.panel.custom$so_f, data.panel.custom$sd_f)
-
-# Calc Weekly sleep duration
-data.panel.custom$sd_week <- mctq::sd_week(data.panel.custom$sd_w, data.panel.custom$sd_f, data.panel.custom$wd)
-
-# Chronotype
-# Chronotype or sleep-corrected local time of mid-sleep on work-free days
-# msf_sc() allows you to compute the chronotype, or corrected local time of mid-sleep on work-free days. It takes five arguments: msf (local time of mid-sleep on work-free days), sd_w (sleep duration on workdays), sd_f (sleep duration on work-free days), sd_week(average weekly sleep duration), and alarm_f (a logical object indicating if the respondent uses an alarm clock to wake up on work-free days).
-# 
-# If sd_f is less or equal than sd_w, the output must be msf. Else, it must return msf minus the difference between sd_f and sd_week divided by 2. msf_sc can only be computed if alarm_f is equal to FALSE (the function will return NA when alarm_f == TRUE).
-# 
-# msf_sc applies a correction to msf, removing an estimation of the effect from accumulated sleep debt on workdays that usually is compensated on work-free days. See ?msf_sc to learn more.
-
-data.panel.custom$msf_sc <- mctq::msf_sc(data.panel.custom$msf, data.panel.custom$sd_w, data.panel.custom$sd_f, data.panel.custom$sd_week, 
-                      data.panel.custom$alarm_f)
-
-data.panel.custom.chrono <- data.panel.custom %>%
-  mutate(msf_sc_numeric = as.numeric(msf_sc) / 3600) %>% select(pid,msf_sc_numeric, msf_sc)  %>% filter(!is.na(msf_sc_numeric))
-```
-
-
-## H2a: The negative association between late-night gaming and sleep quality is more pronounced among evening chronotypes.
-
-```{r h2a, eval=FALSE}
 #| label: h2a
+#| code-summary: "Fit H2a model"
 
+# Fit the model with rescaled covariates
+model.h2a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played * msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend,
+                  data = gamingMonthly)
 
-# select psqi_6 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h2a <- data.panel %>% select(pid, wave, psqi_6) %>% filter (wave %in% c(2,4,6)) %>%
-  left_join(data.gaming.latenight, by = c("pid", "wave"))
-# replace NA with 0 in monthly_avg_minutes_played
-data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>% mutate(monthly_avg_minutes_played = replace_na(monthly_avg_minutes_played, 0))
-
-# left join data.intake to data.gaming.latenight.h2a by pid
-data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
-
-# Construct SES
-data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
-  
-# For psqi_6 1 means Very good, 2 means Fairly good, 3 means Fairly bad, 4 means Very bad
-
-data.gaming.latenight.h2a  <- data.gaming.latenight.h2a %>%
-  mutate(
-    psqi_6_ord = factor(psqi_6, ordered = TRUE),  # Convert psqi_6 to an ordered factor
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
-
-# Rescale the covariates
-data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
-
-# left join data.panel.custom.chrono to data.gaming.latenight.h2a by pid
-data.gaming.latenight.h2a <- data.gaming.latenight.h2a %>% left_join(data.panel.custom.chrono, by = "pid")
-
-library(ordinal)
-library(modelsummary)
-
-# Define a function to fit the model and catch errors
-fit_clmm_model <- function() {
-  tryCatch({
-    model.h2a <- clmm(psqi_6_ord ~ monthly_avg_minutes_played*msf_sc_numeric + 
-                      (1 + monthly_avg_minutes_played | pid) +
-                      age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + 
-                      (1 | gender),
-                      data = data.gaming.latenight.h2a)
-    
-    # Return the model if it fits successfully
-    return(model.h2a)
-  }, error = function(e) {
-    # Handle the error: print a message and return NULL
-    message("Error: Model failed to converge. Please check the model specification.")
-    return(NULL)
-  })
-}
-
-# Fit the model
-model.h2a <- fit_clmm_model()
-
-# Check if the model was successfully fitted
-if (!is.null(model.h2a)) {
-  # Summarize the model using modelsummary
-  modelsummary(
-    list(`Model H2a` = model.h2a),
-    fmt = 2,
-    estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-    statistic = NULL
-  )
-} else {
-  # Print a message if the model did not fit
-  message("Model summary was not generated due to convergence issues.")
-}
+modelsummary(
+  list(`Model H2a` = model.h2a),
+  fmt = 2,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
 ```
 
 ## H2b: The negative association between late-night gaming and sleep duration is more pronounced among evening chronotypes. 
 
 ```{r}
 #| label: h2b
+#| code-summary: "Fit H2b model"
 
-
-data.panel <- readRDS("data-synthetic/synPanel.rds")
-
-# Convert and compute
-data.panel.custom <- data.panel %>% filter(wave %in% c(2,4,6)) %>%
-  mutate(
-    psqi_4_1_1_1_hours = as.numeric(`psqi_4#1_1_1`), # Convert hours to numeric
-    psqi_4_1_1_2_hours = as.numeric(`psqi_4#1_1_2`) / 60, # Convert minutes to numeric hours
-    total_hours_sleep = psqi_4_1_1_1_hours + psqi_4_1_1_2_hours, # Compute total hours of sleep
-  )
-# select psqi_comp3 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h2b <- data.panel.custom %>% select(pid, wave, total_hours_sleep) %>% left_join(data.gaming.latenight, by = c("pid", "wave")) %>% mutate(monthly_avg_minutes_played = replace_na(monthly_avg_minutes_played, 0))
-
-# left join data.intake to data.gaming.latenight.h1a by pid
-data.gaming.latenight.h2b <- data.gaming.latenight.h2b %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
-
-# Construct SES
-data.gaming.latenight.h2b <- data.gaming.latenight.h2b %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
-
-data.gaming.latenight.h2b  <- data.gaming.latenight.h2b %>%
-  mutate(
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
-
-# Rescale the covariates
-data.gaming.latenight.h2b <- data.gaming.latenight.h2b %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
-
-# left join data.panel.custom.chrono to data.gaming.latenight.h2b by pid
-data.gaming.latenight.h2b <- data.gaming.latenight.h2b %>% left_join(data.panel.custom.chrono, by = "pid")
-
-library(lme4)
 # Fit the model
-model.h2b <- lmer(total_hours_sleep ~ monthly_avg_minutes_played*msf_sc_numeric  + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1 | gender), data = data.gaming.latenight.h2b )
-# Summarize the model using modelsummary
-library(modelsummary)
+model.h2b <- lmer(total_hours_sleep ~ monthly_avg_minutes_played * msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend + (1 | gender), 
+                  data = gamingMonthly)
 
+# Summarize the model using modelsummary
 modelsummary(
   list(`Model H2b` = model.h2b),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
   statistic = NULL)
+)
 
 ```
 
-## H2c: The negative association between late-night gaming and well-being is more pronounced among evening chronotypes.
+### H2c: The negative association between late-night gaming and well-being is more pronounced among evening chronotypes.
+
+Multilevel linear regression whereby the interaction between monthly average minutes played and chronotype (MSFsc; MCTQ) predicts daytime sleepiness (Epworth Sleepiness Scale), controlling for age, BMI, SES index, region, gender, and whether playtime falls on a weekend, with a random intercept and slope for participants and a random intercept for gender.
 
 ```{r}
 #| label: h2c
+#| code-summary: "Fit H2c model"
 
-# # merge xbox_balanced and steam_balanced and nin_balanced using bind_rows 
-# data.gaming <- bind_rows(data.xbox.custom, data.steam.custom, data.nin.custom)
-# # calculate minutes_played for data.gaming using sessionEnd and sessionStart
-# data.gaming <- data.gaming %>%
-#   mutate(minutes_played = as.numeric(difftime(sessionEnd, sessionStart, units = "mins")))
-# # create a binary variable for data.gaming called latenight if the sessionStart is between 23:00 and 06:00
-# data.gaming <- data.gaming %>%
-#   mutate(latenight = ifelse(hour(sessionStart) >= 23 | hour(sessionStart) < 6, 1, 0))
-# # create an isWeekend variable for data.gaming if the sessionStart is on a Saturday, Sunday or Friday
-# data.gaming <- data.gaming %>%
-#   mutate(isWeekend = ifelse(weekdays(sessionStart) %in% c("Friday", "Saturday"), 1, 0))
-# # assign each session to a wave based on the date, if the date is within 4 weeks of the start of the study, it is wave 2, if it is between 4 weeks and 8 weeks it is wave 4, if it is between 8 weeks and 12 weeks it is wave 6
-# Example data frame
-data.gaming.h2c <- data.gaming %>%
-  mutate(
-    # Define biweekly waves (14-day intervals) that end at day 84
-    wave = case_when(
-      day >= 0 & day <= 14 ~ 1,
-      day >= 15 & day <= 28 ~ 2,
-      day >= 29 & day <= 42 ~ 3,
-      day >= 43 & day <= 56 ~ 4,
-      day >= 57 & day <= 70 ~ 5,
-      day >= 71 & day <= 84 ~ 6,
-      TRUE ~ NA_real_  # Assign NA for days beyond 84
-    )
-  ) %>%
-  filter(!is.na(wave))
-
-# group gaming by PID, wave and latenight and calculate daily average minutes_played
-data.gaming.latenight.h2c <- data.gaming.h2c %>%
-  group_by(pid, wave, isWeekend) %>% summarise(biweekly_avg_minutes_played = sum(minutes_played)/14) %>% filter(biweekly_avg_minutes_played  > 0) %>% ungroup()
-
-
-# Create a mapping of the string values to their numeric equivalents
-value_mapping <- c(
-  "1 - None of the time" = 1,
-  "2 - Rarely" = 2,
-  "3 - Some of the time" = 3,
-  "4 - Often" = 4,
-  "5 - All of the time" = 5
-)
-# Identify all columns whose names start with 'wemwbs'
-wemwbs_columns <- c("wemwbs_1", "wemwbs_2", "wemwbs_3", "wemwbs_4", "wemwbs_5", "wemwbs_6", "wemwbs_7")
-# Apply the mapping to these columns
-data.panel.custom <- data.panel %>% ungroup() %>%
-  mutate(across(all_of(wemwbs_columns), ~ as.numeric(value_mapping[.])))
-# calculate a wemwbs_total score for panel_balanced
-data.panel.custom <-  data.panel.custom %>%
-  ungroup() %>%
-  mutate(wemwbs_total = rowSums(select(., all_of(wemwbs_columns)))) 
-# select psqi_comp3 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h2c <- data.panel.custom %>% select(pid, wave, wemwbs_total) %>%
-  left_join(data.gaming.latenight.h2c, by = c("pid", "wave"))
-
-# left join data.intake to data.gaming.latenight.h1a by pid
-data.gaming.latenight.h2c <- data.gaming.latenight.h2c %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
-
-# Construct SES
-data.gaming.latenight.h2c <- data.gaming.latenight.h2c %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
-
-data.gaming.latenight.h2c  <- data.gaming.latenight.h2c %>%
-  mutate(
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
-
-# Rescale the covariates
-data.gaming.latenight.h2c <- data.gaming.latenight.h2c %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
-
-# left join data.panel.custom.chrono to data.gaming.latenight.h2c by pid
-data.gaming.latenight.h2c <- data.gaming.latenight.h2c %>% left_join(data.panel.custom.chrono, by = "pid")
-
-library(lme4)
 # Fit the model
-model.h2c <- lmer(wemwbs_total ~ biweekly_avg_minutes_played*msf_sc_numeric   + (1 + biweekly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled  + isWeekend + region + (1 | gender) , data = data.gaming.latenight.h2c )
-# Summarize the model using modelsummary
-library(modelsummary)
-
+model.h2c <- lmer(wemwbs ~ biweekly_avg_minutes_played * msf_sc_numeric + (1 | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend + (1 | gender), 
+                  data = gamingBiweekly)
 modelsummary(
   list(`Model h2c` = model.h2c),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
+  statistic = NULL
+)
 
 ```
 
-## H2d: The negative association between late-night gaming and daytime sleepiness is more pronounced among evening chronotypes.
+### H2d: The negative association between late-night gaming and daytime sleepiness is more pronounced among evening chronotypes.
+
+Multilevel linear regression whereby the interaction between biweekly average minutes played and chronotype (MSFsc; MCTQ) predicts well-being (WEMWBS), controlling for age, BMI, SES index, region, gender, and whether playtime falls on a weekend, with a random intercept for participants and a random intercept for gender.
 
 ```{r}
 #| label: h2d
+#| code-summary: "Fit H2d model"
 
-# # merge xbox_balanced and steam_balanced and nin_balanced using bind_rows 
-# data.gaming <- bind_rows(data.xbox.custom, data.steam.custom, data.nin.custom)
-# # calculate minutes_played for data.gaming using sessionEnd and sessionStart
-# data.gaming <- data.gaming %>%
-#   mutate(minutes_played = as.numeric(difftime(sessionEnd, sessionStart, units = "mins")))
-# # create a binary variable for data.gaming called latenight if the sessionStart is between 23:00 and 06:00
-# data.gaming <- data.gaming %>%
-#   mutate(latenight = ifelse(hour(sessionStart) >= 23 | hour(sessionStart) < 6, 1, 0))
-# # create an isWeekend variable for data.gaming if the sessionStart is on a Saturday, Sunday or Friday
-# data.gaming <- data.gaming %>%
-#   mutate(isWeekend = ifelse(weekdays(sessionStart) %in% c("Friday", "Saturday"), 1, 0))
-# assign each session to a wave based on the date, if the date is within 4 weeks of the start of the study, it is wave 2, if it is between 4 weeks and 8 weeks it is wave 4, if it is between 8 weeks and 12 weeks it is wave 6
-# Example data frame
-data.gaming.h2d <- data.gaming %>%
-  mutate(
-    wave = case_when(
-      day >= 0 & day <= 28 ~ 2,
-      day >= 29 & day <= 56 ~ 4,
-      day >= 57 & day <= 84 ~ 6,
-      TRUE ~ NA_real_
-    )
-  )  %>% filter(!is.na(wave))
-
-# group gaming by PID, wave and latenight and calculate daily average minutes_played
-data.gaming.latenight <- data.gaming.h2d %>%
-  group_by(pid, wave, isWeekend) %>%
-  summarise(monthly_avg_minutes_played = sum(latenight_gaming_minutes)/28) %>% filter(monthly_avg_minutes_played  > 0) %>% ungroup()
-
-
-# Create a mapping of the string values to their numeric equivalents
-value_mapping <- c(
-  "No chance of dozing" = 0,
-  "Slight chance of dozing" = 1,
-  "Moderate chance of dozing" = 2,
-  "High chance of dozing" = 3
-)
-# Identify all columns whose names start with 'wemwbs'
-eps_columns <- grep("^eps", names(data.panel), value = TRUE)
-# Apply the mapping to these columns
-data.panel.custom <- data.panel %>% ungroup() %>%
-  mutate(across(all_of(eps_columns), ~ as.numeric(value_mapping[.])))
-
-# calculate a eps_total score for panel_balanced
-data.panel.custom <- data.panel.custom %>% ungroup() %>%
-  mutate(eps_total = rowSums(select(data.panel.custom, eps_columns)))
-# select psqi_comp3 from panel_balanced and left_join to data.gaming.latenight by PID and wave
-data.gaming.latenight.h2d <- data.panel.custom %>% select(pid, wave, eps_total) %>% filter (wave %in% c(2,4,6)) %>%
-  left_join(data.gaming.latenight, by = c("pid", "wave"))
-
-# replace NA with 0 in monthly_avg_minutes_played
-data.gaming.latenight.h2d <- data.gaming.latenight.h2d %>% mutate(monthly_avg_minutes_played = replace_na(monthly_avg_minutes_played, 0))
-
-# left join data.intake to data.gaming.latenight.h1a by pid
-data.gaming.latenight.h2d <- data.gaming.latenight.h2d %>% 
-  left_join(data.intake, by = "pid") %>% # turn gender into a factor
-    # Turn gender into a factor
-  mutate(gender = factor(gender),
-         
-         # Calculate total height in inches
-         total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
-         
-         # Calculate BMI using the formula
-         bmi = (weight / (total_inches^2)) * 703)
-
-# Construct SES
-data.gaming.latenight.h2d <- data.gaming.latenight.h2d %>%
-  mutate(
-    # Assigning scores to employment categories
-    empScore = case_when(
-      employment == "Full-Time" ~ 5,
-      employment == "Part-Time" ~ 4,
-      employment == "Due to start a new job within the next month" ~ 3,
-      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
-      employment == "Unemployed (and job seeking)" ~ 1,
-      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Assigning scores to education levels
-    eduScore = case_when(
-      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
-      eduLevel == "University Bachelors Degree" ~ 6,
-      eduLevel == "Some University but no degree" ~ 5,
-      eduLevel == "Vocational or Similar" ~ 4,
-      eduLevel == "Completed Secondary School" ~ 3,
-      eduLevel == "Some Secondary" ~ 2,
-      eduLevel == "Completed Primary School" ~ 1,
-      eduLevel == "Some Primary" ~ 1,
-      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
-      TRUE ~ NA_real_  # Handle any other cases
-    ),
-    
-    # Combining the scores into a SES index
-    SES_index = empScore + eduScore
-  )
-
-data.gaming.latenight.h2d  <- data.gaming.latenight.h2d %>%
-  mutate(
-    pid = as.factor(pid)  # Convert pid to a factor
-  )
-
-# Rescale the covariates
-data.gaming.latenight.h2d <- data.gaming.latenight.h2d %>%
-  mutate(
-    age_scaled = scale(age, center = TRUE, scale = TRUE),
-    bmi_scaled = scale(bmi, center = TRUE, scale = TRUE),
-    SES_index_scaled = scale(SES_index, center = TRUE, scale = TRUE)
-  )
-
-# left join data.panel.custom.chrono to data.gaming.latenight.h2d by pid
-data.gaming.latenight.h2d <- data.gaming.latenight.h2d %>% left_join(data.panel.custom.chrono, by = "pid")
-
-library(lme4)
-# Fit the model
-model.h2d <- lmer(eps_total ~ monthly_avg_minutes_played*msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
-              age_scaled + bmi_scaled + SES_index_scaled + isWeekend + region + (1 | gender), data = data.gaming.latenight.h2d )
-# Summarize the model using modelsummary
-library(modelsummary)
-
+model.h2d <- lmer(epsTotal ~ monthly_avg_minutes_played * msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
+                    age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend + (1 | gender), 
+                  data = gamingMonthly)
+                  
 modelsummary(
   list(`Model H2d` = model.h2d),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
+  statistic = NULL
+)
 ```

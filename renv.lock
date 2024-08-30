@@ -3,12 +3,55 @@
     "Version": "4.4.1",
     "Repositories": [
       {
+        "Name": "BioCsoft",
+        "URL": "https://bioconductor.org/packages/3.19/bioc"
+      },
+      {
+        "Name": "BioCann",
+        "URL": "https://bioconductor.org/packages/3.19/data/annotation"
+      },
+      {
+        "Name": "BioCexp",
+        "URL": "https://bioconductor.org/packages/3.19/data/experiment"
+      },
+      {
+        "Name": "BioCworkflows",
+        "URL": "https://bioconductor.org/packages/3.19/workflows"
+      },
+      {
+        "Name": "BioCbooks",
+        "URL": "https://bioconductor.org/packages/3.19/books"
+      },
+      {
         "Name": "CRAN",
         "URL": "https://packagemanager.posit.co/cran/latest"
       }
     ]
   },
+  "Bioconductor": {
+    "Version": "3.19"
+  },
   "Packages": {
+    "BiocManager": {
+      "Package": "BiocManager",
+      "Version": "1.30.24",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "utils"
+      ],
+      "Hash": "dcb7fa4b65120de23d3496b94cc0d1da"
+    },
+    "BiocVersion": {
+      "Package": "BiocVersion",
+      "Version": "3.19.1",
+      "Source": "Bioconductor",
+      "Repository": "Bioconductor 3.19",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "b892e27fc9659a4c8f8787d34c37b8b2"
+    },
     "DBI": {
       "Package": "DBI",
       "Version": "1.2.3",
@@ -155,6 +198,22 @@
         "R"
       ],
       "Hash": "543776ae6848fde2f48ff3816d0628bc"
+    },
+    "bayestestR": {
+      "Package": "bayestestR",
+      "Version": "0.14.0",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "datawizard",
+        "graphics",
+        "insight",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "71e7da5d38487173de67a1f0d763ceef"
     },
     "bit": {
       "Package": "bit",
@@ -1332,6 +1391,23 @@
       ],
       "Hash": "ff81d0015a8b37d206b7fbaf8c888578"
     },
+    "mctq": {
+      "Package": "mctq",
+      "Version": "0.3.2",
+      "Source": "Bioconductor",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "checkmate",
+        "cli",
+        "dplyr",
+        "ggplot2",
+        "hms",
+        "lifecycle",
+        "lubridate"
+      ],
+      "Hash": "8b5b58633f31bf9f5eb4a6ee3ff9d38d"
+    },
     "memoise": {
       "Package": "memoise",
       "Version": "2.0.1",
@@ -1441,6 +1517,26 @@
         "vctrs"
       ],
       "Hash": "4f50122dc256b1b6996a4703fecea821"
+    },
+    "modelsummary": {
+      "Package": "modelsummary",
+      "Version": "2.1.1",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "checkmate",
+        "data.table",
+        "generics",
+        "glue",
+        "insight",
+        "methods",
+        "parameters",
+        "performance",
+        "tables",
+        "tinytable"
+      ],
+      "Hash": "6f1176965cb534c9ee6c2898a902921b"
     },
     "munsell": {
       "Package": "munsell",
@@ -1594,6 +1690,23 @@
       ],
       "Hash": "6e8b139c1904f5e9e14c69db64453bbe"
     },
+    "parameters": {
+      "Package": "parameters",
+      "Version": "0.22.1",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "bayestestR",
+        "datawizard",
+        "graphics",
+        "insight",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "d54adeaf90f744bd8a342a46153a3fe5"
+    },
     "pdftools": {
       "Package": "pdftools",
       "Version": "3.4.0",
@@ -1604,6 +1717,21 @@
         "qpdf"
       ],
       "Hash": "9f04cfdc668ad1149d865a2996ac2045"
+    },
+    "performance": {
+      "Package": "performance",
+      "Version": "0.12.2",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "bayestestR",
+        "datawizard",
+        "insight",
+        "stats",
+        "utils"
+      ],
+      "Hash": "6d0d9762077b82869a0ea9b17787b01e"
     },
     "pillar": {
       "Package": "pillar",
@@ -2224,6 +2352,20 @@
       ],
       "Hash": "213b6b8ed5afbf934843e6c3b090d418"
     },
+    "tables": {
+      "Package": "tables",
+      "Version": "0.9.28",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "htmltools",
+        "knitr",
+        "stats",
+        "utils"
+      ],
+      "Hash": "10ff380f6d1d37faf6084523b45f1083"
+    },
     "tesseract": {
       "Package": "tesseract",
       "Version": "5.2.1",
@@ -2380,6 +2522,17 @@
         "cpp11"
       ],
       "Hash": "c5f3c201b931cd6474d17d8700ccb1c8"
+    },
+    "tinytable": {
+      "Package": "tinytable",
+      "Version": "0.4.0",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "methods"
+      ],
+      "Hash": "fb44b5c5e35e171b0129b22e7cb35949"
     },
     "tinytex": {
       "Package": "tinytex",
