@@ -1,5 +1,7 @@
 # Relationships Between Health and Logged Video Game Play Across Platforms
 
+🟢️ The output from this repo can be viewed at [https://digital-wellbeing.github.io/platform-study-rr/](https://digital-wellbeing.github.io/platform-study-rr/). 🟢️
+
 This repo documents the data and analysis code for our project on the relationship between video game play and wellbeing. It has four main components:
 - generating simulated data to illustrate our preregistered analyses
 - documenting the data and creating a codebook
@@ -9,7 +11,6 @@ This repo documents the data and analysis code for our project on the relationsh
 To reproduce the project in its entirety, run `quarto render --profile internal` (for lab members), or `quarto render --profile external` (for non-lab members). More details are provided below. 
 
 Data files are saved as .csv.gz for space efficiency. These can either be unzipped and opened in a spreadsheet program, or read directly into R using `readr::read_csv()` or Python using `pandas.read_csv()`.
-
 
 ## Scripts
 

@@ -6,6 +6,7 @@ project:
     - 1_preprocess.qmd
     - 2_basicNeeds.qmd
     - 3_sleep.qmd
+    - 4_genres.qmd
   output-dir: docs
 book:
   title: "Psychological Wellbeing, Sleep, and Video Gaming: Analyses of Comprehensive Digital Traces"
@@ -16,6 +17,7 @@ book:
     - 1_preprocess.qmd
     - 2_basicNeeds.qmd
     - 3_sleep.qmd
+    - 4_genres.qmd
 toc: true
 editor_options:
   chunk_output_type: console

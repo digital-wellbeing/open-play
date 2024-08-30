@@ -170,6 +170,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
  <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Study 2: Gaming and Sleep</span></span></a>
   </div>
 </li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./4_genres.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Study 3: Genres and wellbeing</span></span></a>
+  </div>
+</li>
     </ul>
     </div>
 </nav>
@@ -256,12 +262,11 @@ Note
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>Hm. Something weird is happening here - there’s a small but consistent negative relationship between gameNS_cw and globalNS, even though these variables have nothing to do with each other. I suspect this is a data issue, but I’m not sure what’s going on.</p>
+<p>There’s a flukey result here wherein gameNS_cw and globalNS are negatively related, even though these variables have nothing to do with each other in the sim. We weren’t able to diagnose yet whether this is simulation problem or a bug elsewhere, but will continue investigating prior to the collection of human data and update accordingly.</p>
 </div>
 </div>
 <p>Experiences of gaming feed into and co-constitute experiences of life as a whole—experiences with games are one (greater or lesser) element of lives in general. Thus, H6 in BANG predicts: <em>Greater in-game need satisfaction is associated with greater global need satisfaction</em>.</p>
-<p>We model this with a multilevel within-between linear regression whereby game-level need satisfaction (within- and between-centered; <code>gameNS_cw</code> and <code>gameNS_cb</code>) predicts deviation from a person’s typical globalNS (<code>globalNS</code>, with a random intercept).</p>
-<p>This model, in contrast to the others, has some covariates in it, mostly as a reminder to myself to figure out whether these warrant including or not.</p>
+<p>We model this with a multilevel within-between linear regression whereby game-level need satisfaction (within- and between-centered; <code>gameNS_cw</code> and <code>gameNS_cb</code>) predicts deviation from a person’s typical globalNS (<code>globalNS</code>, with a random intercept and slope), and an AR(1) autocorrelation term.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Show the code (H1 model)</summary>

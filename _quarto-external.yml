@@ -5,6 +5,7 @@ project:
     - 1_preprocess.qmd
     - 2_basicNeeds.qmd
     - 3_sleep.qmd
+    - 4_genres.qmd
   output-dir: outputs
 book:
   title: "Relationships Between Health and Logged Video Game Play Across Platforms"
@@ -14,6 +15,7 @@ book:
     - 1_preprocess.qmd
     - 2_basicNeeds.qmd
     - 3_sleep.qmd
+    - 4_genres.qmd
 toc: true
 editor_options:
   chunk_output_type: console

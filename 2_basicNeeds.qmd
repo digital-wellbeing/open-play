@@ -46,14 +46,12 @@ dat <- diary |>
 ## H1. Greater in-game need satisfaction is associated with greater global need satisfaction (H6 in BANG)
 
 ::: {.callout-note}
-Hm. Something weird is happening here - there's a small but consistent negative relationship between gameNS_cw and globalNS, even though these variables have nothing to do with each other. I suspect this is a data issue, but I'm not sure what's going on.
+There's a flukey result here wherein gameNS_cw and globalNS are negatively related, even though these variables have nothing to do with each other in the sim. We weren't able to diagnose yet whether this is simulation problem or a bug elsewhere, but will continue investigating prior to the collection of human data and update accordingly. 
 :::
 
 Experiences of gaming feed into and co-constitute experiences of life as a whole---experiences with games are one (greater or lesser) element of lives in general. Thus, H6 in BANG predicts: *Greater in-game need satisfaction is associated with greater global need satisfaction*.
 
-We model this with a multilevel within-between linear regression whereby game-level need satisfaction (within- and between-centered; `gameNS_cw` and `gameNS_cb`) predicts deviation from a person's typical globalNS (`globalNS`, with a random intercept).  
-
-This model, in contrast to the others, has some covariates in it, mostly as a reminder to myself to figure out whether these warrant including or not. 
+We model this with a multilevel within-between linear regression whereby game-level need satisfaction (within- and between-centered; `gameNS_cw` and `gameNS_cb`) predicts deviation from a person's typical globalNS (`globalNS`, with a random intercept and slope), and an AR(1) autocorrelation term.  
 
 ```{r}
 #| label: h1-model
