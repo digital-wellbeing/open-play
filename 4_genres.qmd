@@ -34,36 +34,36 @@ set.seed(8675309)
 
 if (!require("pacman")) install.packages("pacman"); library(pacman)
 
-p_load(tidyverse, dplyr, lme4, marginaleffects, interactions)
+p_load(knitr, tidyverse, dplyr, lme4, marginaleffects, interactions)
 
 # not sure if marginaleffects is needed and what it does
 ```
 
-# Load data
+## Load data
 
 ```{r}
 #| label: load-data
 
-pan <- read_csv("data-synthetic/synPanel.csv")
+pan <- read_csv("data-synthetic/synPanelClean.csv.gz")
 
 # the below has been run in the preprocessing script
 
 # diary <- read_csv("data-synthetic/synDiaryClean.csv").      # has been run in basic needs script
- intake <- read_csv("data-synthetic/synIntake.csv")
- nin <- read_csv("data-synthetic/synNintendo.csv") |> 
+ intake <- read_csv("data-synthetic/synIntake.csv.gz")
+ nin <- read_csv("data-synthetic/synNintendo.csv.gz") |> 
    mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
- xbox <- read_csv("data-synthetic/synXbox.csv") |> 
+ xbox <- read_csv("data-synthetic/synXbox.csv.gz") |> 
    mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
- steam <- read_csv("data-synthetic/synSteam.csv") |> 
+ steam <- read_csv("data-synthetic/synSteam.csv.gz") |> 
    mutate(sessionStart = date + hours(hour))
 
 ```
 
-# recode genre data
+## recode genre data
 
 xbox and nintendo have rpugly 4000 unique genres, which is too many to work with. We will recode these into a smaller number of genres by seperating the primary genres from the sub genres.
 
-# seperate the genres into primary and secondary genres
+## seperate the genres into primary and secondary genres
 
 ```{r}
 steam <- steam |>
@@ -78,7 +78,7 @@ nin <- nin |>
 
 ```
 
-# check how many genres there are
+## check how many genres there are
 
 steam has 5 genres, xbox has 19 genres, and nintendo has 19 genres.
 
@@ -110,7 +110,7 @@ print(
     -   "puzzle" and " card & board game"
     -   "fighting" and "beat 'em up"
 
-# recode steam data
+## recode steam data
 
 In contrast to Xbox and Nintendo data, Steam data is not session-level; rather, it is a total amount of time spent playing each game during the previous hour. So to calculate how much time each player spent playing each genre each day and create a variable for how many sessions, we need to recode the data to match the format of the other two datasets.
 
@@ -130,7 +130,7 @@ print(head(steam))
 ## to do
 - potential upgrade for this is to add the session together if the hours are next to each other and the game title is the same (can't be done now because of how the titles are generated.
 
-# append data
+## append data
 
 ```{r}
 #| label: Get all unique column names across the three datasets
@@ -170,145 +170,385 @@ xbox <- xbox |>
 telemetry <- bind_rows(nin, xbox, steam)
 ```
 
-# Save data
+## Save data
 
 ```{r}
 #| label: save-data
 
-write_csv(telemetry, "data-synthetic/telemetry.csv")
+write_csv(telemetry, "data-synthetic/telemetry.csv.gz")
 
 ```
 
 
+
+
+# Analysis Panel Data
+
+Panel data is analyzed using a multilevel model to account for the nested structure of the data, where repeated measurements (6 bi-weekly waves) are nested within participants. In this analysis, we examine the relationship between playtime spent on different game genres and well-being. We hypothesize that the relationship between playtime and well-being varies by genre.
+
+within-person analysis, on with 6 bi-weekly measurement waves where wellbeing is measured for the last 2 weeks. So playtime needs to be aggregated over the 2 week time period and the proportion of total playtime spend on each genre needs to be calculated. 
+
+## Load data
 ```{r}
-# recode steam data to match to xbox and nin
+#| label: load-data2
 
-# Calculate total duration and number of sessions per player per day per genre
-steam_aggregated <- steam %>%
-  group_by(pid, date, genre1) %>%           # Group by player ID, date, and genre
-  summarise(
-    total_duration = sum(minutes, na.rm = TRUE),  # Sum total minutes played
-    num_sessions = n()                            # Count the number of sessions (rows)
-  ) %>%
-  ungroup()                                      
-
-# View the result
-print(steam_aggregated)
-```
-
-# Clean Panel
-
-Here we want to: - recode the panel data to numeric values - calculate mean scores of relevant variables - calculate within- and between-person centered variables - recode the displaced activity data into categories (randomly assigned, for now) - calculate some variables based on the telemetry
-
-```{r}
-# write code to glimpse synPanel
-glimpse(synPanel)
-
-
-#calculate variables
-
-#wellbeing
-#life satisfaction
-#depressive symptoms
+panel_data <- read_csv("data-synthetic/synPanelClean.csv.gz")
+telemetry_data <- read_csv("data-synthetic/telemetry.csv.gz")
 
 ```
 
-# Analysis
+## Recode panel data
+Recode panel data to include the start and end dates for each wave.
 
 ```{r}
-#| label: load-data
+#| label: define the waves
 
-diary <- read_csv("data-synthetic/synDiaryClean.csv") # requires that the preprocessing script has been run
-intake <- read_csv("data-synthetic/synIntake.csv")
-nin <- read_csv("data-synthetic/synNintendo.csv")
-xbox <- read_csv("data-synthetic/synXbox.csv")
-steam <- read_csv("data-synthetic/synXbox.csv")
+# check if date is in Date format
+telemetry_data$date <- as.Date(telemetry_data$date)
 
-```
-
-```{r}
-#| label: merge data
-
-your_data <- panel |> 
-  left_join(intake |> select(pid, age, gender, eduLevel, employment), 
-            by = "pid") |> 
-  mutate(pid = as.character(pid)) |>
-  
-  # this is needed otherwise nlme and marginaleffects don't play nicely
+# Define the start and end dates for each wave in the panel data
+panel_data <- panel_data |>
   mutate(
-    gender = factor(gender),
-    eduLevel = factor(eduLevel),
-    employment = factor(employment),
-    day = factor(day)
+    start_date = case_when(
+      wave == 1 ~ as.Date("2024-05-01"),
+      wave == 2 ~ as.Date("2024-05-15"),
+      wave == 3 ~ as.Date("2024-05-29"),
+      wave == 4 ~ as.Date("2024-06-12"),
+      wave == 5 ~ as.Date("2024-06-26"),
+      wave == 6 ~ as.Date("2024-07-10")
+    ),
+    end_date = start_date + 13  # Each wave covers a 14-day period
   )
 
 ```
 
-## H1. There is no relationship between playtime and wellbeing
-
-This Basic Random Intercept Model allows the relationship between playtime and well-being to vary across players (random intercept) but assumes the effect of playtime is the same for all genres.
-
-```{r}
-#| label: h1-model
-h1model1 <- lmer(wellbeing ~ playtime + genre + (1 | pid), data = your_data)
-
-summary(h1model1)
-```
-
-This Random Slope Model allows the relationship between playtime and well-being to vary across players (random intercept) and genres (random slope).
+## Recode genres
+There are still too many unique genre values in the genre1 column. We will group genres into broader categories to reduce the number of categories for analysis.
 
 ```{r}
-#| label: h1-model2
-h1model2 <- lmer(wellbeing ~ playtime + genre + (playtime | pid), data = your_data)
+#| label: check unique genres 
 
-summary(h1model2)
+# Count the number of unique values in the genre1 column
+unique_genres <- telemetry_data |>
+  summarise(n_unique_genres = n_distinct(genre1))
+
+# View the result
+print(unique_genres)
+
+# Display the distinct genres in the genre1 column
+distinct_genres <- telemetry_data |>
+  distinct(genre1)
+
+# View the distinct genres
+print(distinct_genres, n = Inf)
 ```
 
-## H2. genre moderates the relationship between playtime and wellbeing
+Group genres into broader categories to reduce the number of categories for analysis
+```{r}
+#| label: group genres
 
-This Cross-Level Interaction Model explores whether the effect of playtime on well-being differs by genre.
+telemetry_data <- telemetry_data |>
+  mutate(
+    genre_grouped = case_when(
+      genre1 %in% c("Action", "Adventure") ~ "Action/Adventure",
+      genre1 %in% c("Hack and slash/Beat 'em up", "Fighting") ~ "Fighting",
+      genre1 %in% c("Shooter") ~ "Shooter",
+      genre1 %in% c("Real Time Strategy (RTS)", "Strategy", "Turn-based strategy (TBS)", "Tactical") ~ "Strategy",
+      genre1 %in% c("Role-playing (RPG)") ~ "RPG",
+      genre1 %in% c("MOBA") ~ "MOBA",
+      genre1 %in% c("Puzzle", "Casual", "Card & Board Game") ~ "Casual/Puzzle",
+      genre1 %in% c("Sport","Simulator", "Racing") ~ "Simulation/Sports/Racing",
+      genre1 %in% c("Platform", "Arcade") ~ "Platform/Arcade",
+      genre1 %in% c("Indie", "Music", "Visual Novel") ~ "Indie/Other",
+      TRUE ~ "Other"  # This catches any genres not listed above
+    )
+  )
+
+# TO DO: maybe take away categories like "indie" etc and take the second or third category
+```
+
+## Recode telemetry data
+Aggregate playtime by genre within each wave for each participant.
 
 ```{r}
-h2model1 <- lmer(wellbeing ~ playtime * genre + (playtime | pid), data = your_data)
+#| label: aggregate playtime
 
-summary(h2model1)
+aggregated_playtime <- telemetry_data |>
+  mutate(wave = case_when(
+    date >= as.Date("2024-05-01") & date <= as.Date("2024-05-14") ~ 1,
+    date >= as.Date("2024-05-15") & date <= as.Date("2024-05-28") ~ 2,
+    date >= as.Date("2024-05-29") & date <= as.Date("2024-06-11") ~ 3,
+    date >= as.Date("2024-06-12") & date <= as.Date("2024-06-25") ~ 4,
+    date >= as.Date("2024-06-26") & date <= as.Date("2024-07-09") ~ 5,
+    date >= as.Date("2024-07-10") & date <= as.Date("2024-07-23") ~ 6
+  )) |>
+  group_by(pid, wave, genre_grouped) |>
+  summarise(total_time = sum(duration, na.rm = TRUE)) |>
+  ungroup()
 ```
 
-## Model diagnostics
+Calculate the total playtime across all genres per wave for each participant
 
 ```{r}
-# Plot residuals
-plot(model3)
+#| label: calculate total playtime
 
-# Check random effects
-ranef(model3)
-
-# Assess model fit
-AIC(model1, model2, model3)
+total_playtime_per_wave <- aggregated_playtime |>
+  group_by(pid, wave) |>
+  summarise(total_time_all_genres = sum(total_time, na.rm = TRUE)) |>
+  ungroup()
 ```
 
-## Interpretation
-
-```         
-•   Fixed Effects: The interaction term (e.g., playtime:genre) will indicate how much the effect of playtime on well-being varies by genre.
-•   Random Effects: The variance components for player_id will indicate how much the baseline well-being and the relationship between playtime and well-being vary across players.
-```
-
-##visualization
+Calculate the proportion of time spent on each genre relative to the total playtime across all genres for each participant in each wave
 
 ```{r}
+#| label: calculate proportion time
 
-# Plot interaction
-interact_plot(model3, pred = playtime, modx = genre, plot.points = TRUE)
+aggregated_playtime <- aggregated_playtime |>
+  left_join(total_playtime_per_wave, by = c("pid", "wave")) |>
+  mutate(proportion_time = total_time / total_time_all_genres)
+```
+
+## Merge data
+Merge the aggregated playtime data with the well-being panel data
+
+```{r}
+#| label: merge data
+
+panel_combined_data <- panel_data |>
+  left_join(aggregated_playtime, by = c("pid", "wave"))
+```
+
+
+# H2. The overall effect of playtime on wellbeing
+Fit a REWB model of playtime and WB.
+```{r}
+panel_data_playtime <- panel_data |>
+  left_join(
+    total_playtime_per_wave, by = c("pid", "wave")
+    ) 
+panel_data_playtime <- panel_data_playtime |> 
+  bind_cols(
+    datawizard::demean(panel_data_playtime, select = "total_time_all_genres", by = "pid") 
+  )
+h2_total_time <- lmer(
+  wemwbs ~ total_time_all_genres_within + 
+  total_time_all_genres_between + 
+  (1 + total_time_all_genres_within | pid), 
+  data = panel_data_playtime
+  )
+
+summary(h2_total_time)
+```
+# H3. genre moderates the relationship between playtime and wellbeing
+
+Organize genre playtime in wide format.
+```{r}
+#| label: wide-format
+panel_genre_wide <- panel_combined_data |> 
+  filter(!is.na(genre_grouped)) |> 
+  select(wave, wemwbs, total_time, total_time_all_genres, genre_grouped, pid)  |> 
+  mutate(
+    genre_grouped = gsub("/", "_", tolower(genre_grouped))
+  ) |> 
+  pivot_wider(
+    names_from = genre_grouped,
+    names_prefix = "genre_",
+    values_from = total_time,
+    values_fill = 0
+  )
+# get the variable names
+genre_vars <- panel_genre_wide |> 
+  select(starts_with("genre_")) |> 
+  colnames()
+# demean
+panel_genre_wide <- panel_genre_wide |> 
+  bind_cols(
+    datawizard::demean(panel_genre_wide, select = genre_vars, by = "pid")
+  ) 
+
+head(panel_genre_wide)
+```
+
+Raw model
+```{r}
+## raw
+fit_h3_raw <- lmer(
+  paste("wemwbs ~", 
+    paste(genre_vars, collapse = "+"), 
+  "+ (1 | pid)"),
+  panel_genre_wide
+)
+summary(fit_h3_raw)
+```
+
+REWB model. Interpretations:
+
+- `genre_*_between`: "Group-level effect": People who play x + 1 units more of genre_* report higher/lower `wemwbs` scores
+- `genre_*_within`: "Within-person effect": During a period when people play x + 1 units more of genre_* they report higher/lower `wemwbs` scores
+
+```{r}
+# get the variable names
+genre_vars_demean <- panel_genre_wide |>
+  select(ends_with(c("_within", "_between"))) |>
+  colnames() |>
+  sort()
+
+## rewb
+fit_h3_rewb <- lmer(
+  paste(
+      "wemwbs ~", paste(genre_vars_demean, collapse = "+"),
+      "+ (1 | pid)"
+    ),
+  panel_genre_wide
+)
+summary(fit_h3_rewb)
 
 ```
 
-## reporting
+  - Not possible to model all `genre_*_within` as random. Unidentifiable model.
+  - **Inference**: can do six-billion pair-wise comparisons - fishing expedition.
 
-In your report, you should detail:
 
-```         
-•   The overall fixed effect estimates for playtime and genre.
-•   How much the relationship between playtime and well-being varies across players (random effects).
-•   The significance and effect size of the interaction between playtime and genre, if present.
+Ideally, the demeaned variables should be included as random slopes. However, this will likely lead to identifiability issues. Here we fit the model with random slopes, but without a correlation between slopes and intercepts.
+```{r}
+# get the variable names
+genre_within_wars <- panel_genre_wide |>
+  select(ends_with(c("_within"))) |>
+  colnames() |>
+  sort()
+
+# fit model
+fit_h3_rewb_re_slopes <- lmer(
+  paste(
+      "wemwbs ~", paste(genre_vars_demean, collapse = "+"),
+      "+ (1 +",
+      paste(genre_within_wars, collapse = "+"),
+      "|| pid)"
+    ),
+  panel_genre_wide
+)
+summary(fit_h3_rewb_re_slopes)
 ```
+
+Plot all estimates
+
+```{r}
+ests_fit_h3_rewb <- avg_comparisons(fit_h3_rewb) |> 
+  as.data.frame()
+
+ests_fit_h3_rewb |> 
+ggplot( 
+  aes(estimate, term)
+  ) +
+   geom_point() +
+   geom_linerange(
+    aes(ymin = conf.low, ymax = conf.high)
+    )
+```
+
+Jointly test the null that all genre effects are zero vs the alternative that at least one is non-zero. Testing between and within variables separately?
+```{r}
+hypotheses(fit_h3_rewb, joint = "_between")
+hypotheses(fit_h3_rewb, joint = "_within")
+```
+
+Pair-wise comparison of all *_between coefficients. (The table is only showing the first 10). We will run the same code for within-person genre effects.
+
+```{r}
+ests_pairwise <- hypotheses(fit_h3_rewb, "pairwise")
+between_vars <- panel_genre_wide |>
+  select(ends_with(c("_between"))) |>
+  colnames()
+
+# pick all *_between pairwise comparisons
+tests <- expand.grid(a = between_vars, b = between_vars) |> 
+  filter(a != b) |> 
+  mutate(c = paste(a, "-", b))
+
+# show 10 of the pairwise tests
+ests_pairwise |> 
+  filter(term %in% tests$c) |> 
+  head(10) |> 
+  kable()
+```
+
+We can also test if the coefficients are greater than a specific value, for example by comparing it to the point estimate from model X (effect of total playtime on WB). Although, this ignores the uncertainty in the reference value.
+
+```{r}
+# 0.4 is just a placeholder
+hypotheses(fit_h3_rewb, "b* = 0.4")
+```
+
+
+# Analysis Diary data (Daily trends in daily life satisfaction)
+
+## Load data
+
+```{r}
+#| label: Load the diary data
+
+diary_data <- read_csv("data-synthetic/synDiaryClean.csv.gz")
+```
+
+## Recode diary data
+Create a lagged version of the daily playtime data so that we can predict life satisfaction based on the previous day's playtime.
+
+```{r}
+#| label: create lagged playtime
+
+telemetry_data <- telemetry_data |>
+  group_by(pid, genre_grouped) |>
+  mutate(previous_day_duration = lag(duration, 1)) |>
+  ungroup()
+```
+
+Calculate the total playtime for each genre for each day
+
+```{r}
+#| label: calculate daily playtime per genre
+
+daily_playtime <- telemetry_data |>
+  group_by(pid, day, genre_grouped) |>
+  summarise(total_previous_day_duration = sum(previous_day_duration, na.rm = TRUE)) |>
+  ungroup()
+```
+
+## Merge data
+
+```{r}
+#| label: merge data-2
+diary_combined_data <- diary_data |>
+  left_join(daily_playtime, by = c("pid", "day"))
+```
+
+# H1. Previous day playtime is positivly with daily life satisfaction
+
+Predicting life satisfaction based on previous day's playtime 
+
+```{r}
+#| label: h1_model_diary
+
+h1_model_diary <- lmer(lifeSat_1 ~ total_previous_day_duration + (1 | pid), data = diary_combined_data)
+
+summary(h1_model_diary, correlation=TRUE)
+
+# Plot the predictions for the effect of total_previous_day_duration
+plot_predictions(h1_model_diary, condition = c("total_previous_day_duration"), vcov = TRUE)
+
+```
+
+# H2. Genre moderates the relationship between previous day playtime and daily life satisfaction
+
+Predicting life satisfaction based on previous day's playtime and how it varies by genre
+```{r}
+#| label: h2_model_diary
+
+h2_model_diary <- lmer(lifeSat_1 ~ total_previous_day_duration * genre_grouped + (1 | pid), data = diary_combined_data)
+
+summary(h2_model_diary, correlation=TRUE)
+
+# Plot the predictions for the interaction effect between total_previous_day_duration and genre1
+plot_predictions(h2_model_diary, condition = c("total_previous_day_duration", "genre_grouped"), vcov = TRUE)
+
+```
+
