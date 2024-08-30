@@ -184,7 +184,6 @@ model.h1c <- lmer(wemwbs ~ biweekly_avg_minutes_played + (1 + biweekly_avg_minut
                     age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + region + isWeekend, 
                   data = gamingBiweekly)
 
-
 modelsummary(
   list(`Model H1c` = model.h1c),
   fmt = 2,
@@ -206,8 +205,8 @@ Multilevel linear regression whereby biweekly average minutes played predicts we
 model.h1d <- lmer(epsTotal ~ monthly_avg_minutes_played + (1 + monthly_avg_minutes_played | pid) +
                     age_scaled + bmi_scaled + SES_index_scaled + (1 | gender) + region + isWeekend, 
                   data = gamingMonthly)
-# Summarize the model using modelsummary
 
+# Summarize the model using modelsummary
 modelsummary(
   list(`Model H1d` = model.h1d),
   fmt = 2,
@@ -215,7 +214,6 @@ modelsummary(
   statistic = NULL
 )
 ```
-
 
 ## H2
 
@@ -240,9 +238,7 @@ modelsummary(
 )
 ```
 
-### H2b: The negative association between late-night gaming and sleep duration is more pronounced among evening chronotypes.
-
-Multilevel linear regression whereby the interaction between monthly average minutes played and chronotype (MSFsc; MCTQ) predicts total hours of sleep, controlling for age, BMI, SES index, region, gender, and whether playtime falls on a weekend, with a random intercept and slope for participants and a random intercept for gender.
+## H2b: The negative association between late-night gaming and sleep duration is more pronounced among evening chronotypes. 
 
 ```{r}
 #| label: h2b
@@ -251,15 +247,16 @@ Multilevel linear regression whereby the interaction between monthly average min
 # Fit the model
 model.h2b <- lmer(total_hours_sleep ~ monthly_avg_minutes_played * msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
                     age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend + (1 | gender), 
-                  data = gamingMonthly |> filter(!is.na(msf_sc_numeric)))
+                  data = gamingMonthly)
 
 # Summarize the model using modelsummary
 modelsummary(
   list(`Model H2b` = model.h2b),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL
+  statistic = NULL)
 )
+
 ```
 
 ### H2c: The negative association between late-night gaming and well-being is more pronounced among evening chronotypes.
@@ -274,13 +271,13 @@ Multilevel linear regression whereby the interaction between monthly average min
 model.h2c <- lmer(wemwbs ~ biweekly_avg_minutes_played * msf_sc_numeric + (1 | pid) +
                     age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend + (1 | gender), 
                   data = gamingBiweekly)
-
 modelsummary(
   list(`Model h2c` = model.h2c),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
   statistic = NULL
 )
+
 ```
 
 ### H2d: The negative association between late-night gaming and daytime sleepiness is more pronounced among evening chronotypes.
@@ -294,7 +291,7 @@ Multilevel linear regression whereby the interaction between biweekly average mi
 model.h2d <- lmer(epsTotal ~ monthly_avg_minutes_played * msf_sc_numeric + (1 + monthly_avg_minutes_played | pid) +
                     age_scaled + bmi_scaled + SES_index_scaled + region + isWeekend + (1 | gender), 
                   data = gamingMonthly)
-
+                  
 modelsummary(
   list(`Model H2d` = model.h2d),
   fmt = 2,
