@@ -17,10 +17,7 @@ First, set options and load some libraries we'll need.
 
 ```{r}
 #| label: opts
-<<<<<<< HEAD
 #| code-summary: "Show code (options)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 knitr::opts_chunk$set(
   echo = knitr::is_html_output(),
@@ -34,10 +31,7 @@ set.seed(8675309)
 
 ```{r}
 #| label: load-libraries
-<<<<<<< HEAD
 #| code-summary: "Show code (load libraries)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
@@ -49,10 +43,7 @@ p_load(
 
 ```{r}
 #| label: custom-functions
-<<<<<<< HEAD
 #| code-summary: "Show code (custom functions)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # Function to generate a random time in hh:mm format
 randomTime <- function(n) {
@@ -92,10 +83,7 @@ Some files are available publicly online; others are private and only on OneDriv
 ```{r}
 #| label: load-data
 #| output: false
-<<<<<<< HEAD
 #| code-summary: "Show code (load data)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # some files are available online
 if (!file.exists("data/survey.csv.gz")) {
@@ -187,13 +175,9 @@ Participant platforms don't match the responses in the `platforms_X` intake item
 ```{r}
 #| label: sim-intake
 #| output: false
-<<<<<<< HEAD
 #| code-summary: "Show code (simulate intake)"
 
 
-=======
-
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 synIntake <- tibble(
   pid = as.character(1:n),
   region = rep(c("US", "UK"), n / 2)
@@ -261,10 +245,7 @@ Next, we want to simulate some play behavior. We assume that each player has a f
 
 ```{r}
 #| label: sim-playhistory
-<<<<<<< HEAD
 #| code-summary: "Show code (simulate play history)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 synPlayHistory <- synIntake |>
   crossing(day = 1:studyDays) |>
@@ -293,10 +274,7 @@ Here, we simulate the properties of participant dropout. We assume that particip
 
 ```{r}
 #| label: sim-dropout
-<<<<<<< HEAD
 #| code-summary: "Show code (simulate dropout)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 dropout <- expand.grid(pid = 1:n, day = 1:studyDays) |>
   # first define the various time components of the study
@@ -335,10 +313,7 @@ First we quickly generate a list of unique genres, which we will later randomly 
 
 ```{r}
 #| label: sim-genres
-<<<<<<< HEAD
 #| code-summary: "Show code (simulate genres)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # We pull from the genres present in the Nintendo metadata (which were in turn pulled from IGDB)
 uniqueGenres <- datMeta |>
@@ -449,10 +424,7 @@ iOS data consists of weekly screen time data for the below categories (pre-defin
 
 ```{r}
 #| label: sim-ios
-<<<<<<< HEAD
 #| code-summary: "Show code (simulate iOS data)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 appCategories <- c(
   "Entertainment", "Social", "Information & Reading", "Games", "Productivity & Finance", "Travel", "Other",
@@ -490,10 +462,7 @@ Last, we simulate android data, bootstrapping from a sample ActivityWatch output
 
 ```{r}
 #| label: sim-android
-<<<<<<< HEAD
 #| code-summary: "Show code (simulate Android data)"
-=======
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # Extract and normalize the 'events' data - app sessions - which are found in the 'aw-watcher-android-test' bucket
 androidEvents <- datAndroid$buckets$`aw-watcher-android-test`$events |>
@@ -634,7 +603,6 @@ Generate `codebook.xlsx`.
 
 ```{r}
 #| label: generate-codebook
-<<<<<<< HEAD
 #| code-summary: "Show code (generate codebook"
 
 metaInfo <- tribble(
@@ -647,19 +615,6 @@ metaInfo <- tribble(
   "Steam", "data-synthetic/synSteam.csv.gz", "Telemetry data (total playtime in 1 hour blocks) from Steam",
   "iOS", "data-synthetic/syniOS.csv.gz", "Screen time data from iOS devices, pulled from screenshots of the Screen time app",
   "Android", "data-synthetic/synAndroid.csv.gz", "App usage data from Android devices, pulled from ActivityWatch"
-=======
-
-metaInfo <- tribble(
-  ~Tab, ~`Data File`, ~Content,
-  "Intake", "data-synthetic/synIntake.csv", "Data on participant demographics and gaming habits",
-  "Panel", "data-synthetic/synPanel.csv", "Wellbeing, sleep and time use data from the panel survey",
-  "Diary", "data-synthetic/synDiary.csv", "Daily diary data on gaming, wellbeing, and sleep",
-  "Nintendo", "data-synthetic/synNintendo.csv", "Telemetry data (session-level) from the Nintendo Switch",
-  "Xbox", "data-synthetic/synXbox.csv", "Telemetry data (session-level) from Xbox devices",
-  "Steam", "data-synthetic/synSteam.csv", "Telemetry data (total playtime in 1 hour blocks) from Steam",
-  "iOS", "data-synthetic/syniOS.csv", "Screen time data from iOS devices, pulled from screenshots of the Screen time app",
-  "Android", "data-synthetic/synAndroid.csv", "App usage data from Android devices, pulled from ActivityWatch"
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 )
 
 intakeCodebook <- synIntake |>
@@ -884,8 +839,7 @@ Save the data to `data-synthetic`, for use in devising analysis scripts for e.g.
 #| label: save-data
 #| code-summary: "Show code (save data)"
 
-# Export as CSV
-<<<<<<< HEAD
+# Export as compressed CSV
 write_csv(synIntake, "data-synthetic/synIntake.csv.gz")
 write_csv(synDiary, "data-synthetic/synDiary.csv.gz")
 write_csv(synPanel, "data-synthetic/synPanel.csv.gz")
@@ -894,14 +848,5 @@ write_csv(synNintendo, "data-synthetic/synNintendo.csv.gz")
 write_csv(synAndroid, "data-synthetic/synAndroid.csv.gz")
 write_csv(synSteam, "data-synthetic/synSteam.csv.gz")
 write_csv(syniOS, "data-synthetic/syniOS.csv.gz")
-=======
-write_csv(synIntake, "data-synthetic/synIntake.csv")
-write_csv(synDiary, "data-synthetic/synDiary.csv")
-write_csv(synPanel, "data-synthetic/synPanel.csv")
-write_csv(synXbox, "data-synthetic/synXbox.csv")
-write_csv(synNintendo, "data-synthetic/synNintendo.csv")
-write_csv(synAndroid, "data-synthetic/synAndroid.csv")
-write_csv(synSteam, "data-synthetic/synSteam.csv")
-write_csv(syniOS, "data-synthetic/syniOS.csv")
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
+
 ```

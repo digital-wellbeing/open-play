@@ -254,7 +254,7 @@ modelsummary(
   list(`Model H2b` = model.h2b),
   fmt = 2,
   estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
-  statistic = NULL)
+  statistic = NULL
 )
 
 ```
