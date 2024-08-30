@@ -2,18 +2,29 @@
 
 This repo documents the data and analysis code for our project on the relationship between video game play and wellbeing. It has four main components:
 - generating simulated data to illustrate our preregistered analyses
+<<<<<<< HEAD
 - documenting the data and creating a codebook
+=======
+- documenting the data and creating a vodebook
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 - preprocessing the data for analysis 
 - data analysis for three outputs, structured to match our programmatic registered report. 
 
 To reproduce the project in its entirety, run `quarto render --profile internal` (for lab members), or `quarto render --profile external` (for non-lab members). More details are provided below. 
 
+<<<<<<< HEAD
 Data files are saved as .csv.gz for space efficiency. These can either be unzipped and opened in a spreadsheet program, or read directly into R using `readr::read_csv()` or Python using `pandas.read_csv()`.
 
 ## Scripts
 
 The first script generates a series of 8 simulated data tables, overviewed in `codebook.xlsx`. Generating the simulated  data is only possible by **internal** users, but the code is available in `0_generateSyntheticData.qmd`. The remaining scripts can be run by **external** users.
 
+=======
+## Scripts
+
+The first script generates a series of 8 simulated data tables, overviewed in `codebook.xlsx`. Generating the simulated  data is only possible by **internal** users, but the code is available in `0_generateSyntheticData.qmd`. The remaining scripts can be run by **external** users.
+
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 These data tables are generated in the following scripts:
 
 - In `0_generateSyntheticData.qmd`, we simulate a total of 8 data tables that will mimic the structure of the eventual
@@ -30,11 +41,19 @@ We then analyze these data in the following scripts:
 
 - `.Renviron` defines the path to key internal data files and API credentials.
 - `index.qmd` is the header file that stitches the other Quarto files together into book form. 
+<<<<<<< HEAD
 - `_quarto.yml` defines the order in which files are run and project-level variables for **internal** use 
+=======
+- `_quarto-internal.yml` defines the order in which files are run and project-level variables for **internal** use 
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 - `_quarto-external.yml` defines the order in which files are run and project-level variables for **external** use (same as `_quarto-internal.yml` with the exception of not running `0_generateSyntheticData.qmd`)
 
 ## Running
 
 - For **external use** (non-lab members), run `quarto render --profile external` in the Rstudio terminal to render all of the quarto files except 0_generateSyntheticData.qmd, which requires internal credentials. This command uses the specifications in `_quarto-external.yml` to render the files in the correct order (indicated by their number), and output them to `outputs/`.
 
+<<<<<<< HEAD
 - For **internal use**, run `quarto render` in the Rstudio terminal to render *all* quarto files. This command uses the specifications in `_quarto-internal.yml` to render the files in the correct order (indicated by their number), and output them to `docs/`. The files in `docs/` are hosted on GitHub pages here: [https://digital-wellbeing.github.io/platform-study-rr/](https://digital-wellbeing.github.io/platform-study-rr/).
+=======
+- For **internal use**, run `quarto render --profile internal` in the Rstudio terminal to render *all* quarto files. This command uses the specifications in `_quarto-internal.yml` to render the files in the correct order (indicated by their number), and output them to `docs/`. The files in `docs/` are hosted on GitHub pages here: [https://digital-wellbeing.github.io/platform-study-rr/](https://digital-wellbeing.github.io/platform-study-rr/).
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f

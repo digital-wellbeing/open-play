@@ -15,7 +15,10 @@ bibliography: references.bib
 
 ```{r}
 #| label: load-libraries
+<<<<<<< HEAD
 #| code-summary: "Show the code (libraries)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
@@ -25,6 +28,7 @@ p_load(tidyverse, lme4, marginaleffects, glmmTMB, mice)
 
 ```{r}
 #| label: load-data
+<<<<<<< HEAD
 #| code-summary: "Show the code (load data)"
 
 diary <- read_csv("data-synthetic/synDiaryClean.csv.gz") # requires that the preprocessing script has been run
@@ -32,11 +36,22 @@ intake <- read_csv("data-synthetic/synIntake.csv.gz")
 nin <- read_csv("data-synthetic/synNintendo.csv.gz")
 xbox <- read_csv("data-synthetic/synXbox.csv.gz")
 steam <- read_csv("data-synthetic/synXbox.csv.gz")
+=======
+
+diary <- read_csv("data-synthetic/synDiaryClean.csv") # requires that the preprocessing script has been run
+intake <- read_csv("data-synthetic/synIntake.csv")
+nin <- read_csv("data-synthetic/synNintendo.csv")
+xbox <- read_csv("data-synthetic/synXbox.csv")
+steam <- read_csv("data-synthetic/synXbox.csv")
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 ```
 
 ```{r}
 #| label: merge data
+<<<<<<< HEAD
 #| code-summary: "Show the code (merge data)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 dat <- diary |>
   left_join(intake |> select(pid, age, gender, eduLevel, employment),
@@ -52,6 +67,28 @@ dat <- diary |>
   )
 ```
 
+<<<<<<< HEAD
+=======
+```{r}
+#| label: multiple-imputation
+#| eval: false
+
+diaryWide <- diary |>
+  select(-date) |>
+  pivot_wider(
+    names_from = day,
+    values_from = -pid,
+    names_sep = "_w"
+  ) |>
+  select(-starts_with(c("day", "missing", "surveyCompletion", "sd", "timeUse", "displacedActivity", "playedLater")))
+
+quickpred(diaryWide)
+
+mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, seed = 8675309)
+mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, parallelseed = 8675309) # alternatively, try to parallelize
+```
+
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 ## H1. Greater in-game need satisfaction is associated with greater global need satisfaction (H6 in BANG)
 
@@ -67,7 +104,10 @@ This model, in contrast to the others, has some covariates in it, mostly as a re
 
 ```{r}
 #| label: h1-model
+<<<<<<< HEAD
 #| code-summary: "Show the code (H1 model)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 h1mod <- glmmTMB(globalNS ~ gameNS_cw + gameNS_cb + (1 + gameNS_cw | pid) + ar1(day + 0 | pid),
   data = dat
@@ -92,7 +132,10 @@ As before, we include an AR(1) term to account for the fact that likelihood of p
 
 ```{r}
 #| label: h2-model
+<<<<<<< HEAD
 #| code-summary: "Show the code (H2 model)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 h2mod <- glmmTMB(
   playedLaterAny ~ gameNS_cw + gameNS_cb + globalNF_cw + globalNF_cb +
@@ -118,7 +161,10 @@ We use a multilevel linear regression to determine whether displacing a core act
 
 ```{r}
 #| label: h3-model
+<<<<<<< HEAD
 #| code-summary: "Show the code (H3 model)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 table(dat$displacedCoreDomain)
 

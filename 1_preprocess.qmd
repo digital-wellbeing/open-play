@@ -24,7 +24,10 @@ All will be cleaned and tidied in due course!
 
 ```{r}
 #| label: opts
+<<<<<<< HEAD
 #| code-summary: "Show the code (options)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 knitr::opts_chunk$set(
   echo = knitr::is_html_output(),
@@ -38,7 +41,10 @@ set.seed(8675309)
 
 ```{r}
 #| label: load-libraries
+<<<<<<< HEAD
 #| code-summary: "Show the code (libraries)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
@@ -50,6 +56,7 @@ p_load(tidyverse, mctq, data.table)
 
 ```{r}
 #| label: load-data
+<<<<<<< HEAD
 #| code-summary: "Show the code (load data)"
 
 synDiary <- read_csv("data-synthetic/synDiary.csv.gz")
@@ -63,6 +70,20 @@ synNintendo <- read_csv("data-synthetic/synNintendo.csv.gz") |>
 synXbox <- read_csv("data-synthetic/synXbox.csv.gz") |>
   mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
 synSteam <- read_csv("data-synthetic/synSteam.csv.gz") |>
+=======
+
+synDiary <- read_csv("data-synthetic/synDiary.csv")
+
+# for unknown reasons, read_csv imports some columns incorrectly, so we use data.table::fread
+synPanel <- fread("data-synthetic/synPanel.csv") 
+synIntake <- read_csv("data-synthetic/synIntake.csv")
+
+nin <- read_csv("data-synthetic/synNintendo.csv") |>
+  mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
+xbox <- read_csv("data-synthetic/synXbox.csv") |>
+  mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
+steam <- read_csv("data-synthetic/synSteam.csv") |>
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
   mutate(sessionStart = date + hours(hour))
 ```
 
@@ -70,7 +91,10 @@ synSteam <- read_csv("data-synthetic/synSteam.csv.gz") |>
 
 ```{r}
 #| label: clean-intake
+<<<<<<< HEAD
 #| code-summary: "Show the code (clean intake)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 synIntakeClean <- synIntake |>
   # define socio-economic status (SES) index
@@ -130,7 +154,10 @@ Here we want to:
 
 ```{r}
 #| label: clean-diary-self-report
+<<<<<<< HEAD
 #| code-summary: "Show the code (clean diary)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 synDiaryClean <- synDiary |>
   mutate(
@@ -212,7 +239,10 @@ If sd_f is less or equal than sd_w, the output must be msf. Else, it must return
 
 ```{r}
 #| label: clean-panel-self-report
+<<<<<<< HEAD
 #| code-summary: "Show the code (clean panel)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 synPanelClean <- synPanel |>
   mutate(
@@ -348,7 +378,10 @@ synPanelClean <- synPanel |>
 
 ```{r}
 #| label: process-telemetry
+<<<<<<< HEAD
 #| code-summary: "Show the code (process telemetry)"
+=======
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 # TODO: make sure that sessions happening as late as 6 hours later are still included, even if this isn't on the same day
 
@@ -357,7 +390,11 @@ synPanelClean <- synPanel |>
 # after, we join these back together with a binary indicator of whether at least one session occurred
 
 nintendoOverlaps <- synDiaryClean %>%
+<<<<<<< HEAD
   left_join(synNintendo, by = c("pid", "day", "date")) |>
+=======
+  left_join(nin, by = c("pid", "day", "date")) |>
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
   filter(
     sessionEnd >= surveyCompletionTime | # Session ended after the survey time
       sessionStart <= surveyCompletionTime + days(1) # Session started before the end of the time window
@@ -366,7 +403,11 @@ nintendoOverlaps <- synDiaryClean %>%
   summarize(playedLaterNintendo = TRUE, .groups = "drop")
 
 xboxOverlaps <- synDiaryClean %>%
+<<<<<<< HEAD
   left_join(synXbox, by = c("pid", "day", "date")) |>
+=======
+  left_join(xbox, by = c("pid", "day", "date")) |>
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
   filter(
     sessionEnd >= surveyCompletionTime | # Session ended after the survey time
       sessionStart <= surveyCompletionTime + days(1) # Session started before the end of the time window
@@ -375,7 +416,11 @@ xboxOverlaps <- synDiaryClean %>%
   summarize(playedLaterXbox = TRUE, .groups = "drop")
 
 steamOverlaps <- synDiaryClean %>%
+<<<<<<< HEAD
   left_join(synSteam, by = c("pid", "day", "date")) |>
+=======
+  left_join(steam, by = c("pid", "day", "date")) |>
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
   filter(
     sessionStart <= surveyCompletionTime + days(1) # Session started before the end of the time window
   ) |>
@@ -407,6 +452,7 @@ synDiaryClean <- synDiaryClean |>
 
 ## Exclusion criteria
 
+<<<<<<< HEAD
 We will exclude any telemetry rows wherein players have logged more than 24 hours of playtime on one platform in any single day, or where sessions have taken place in the future, indicating a technical problem or manipulation of the system clock for in-game benefits.
 
 We will further include an attention check in the panel surveys whereby participants are given a random duplicated item from the need satisfaction and frustration measure. Responses where the two duplicate items differ by more than 1 scale point will be flagged for manual inspection of potential careless responding. 
@@ -466,10 +512,19 @@ mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, parallelseed = 8675309)
 ```
 
 
+=======
+```{r}
+#| label: exclusion-criteria
+
+# TODO: exclude crazy telemetry
+```
+
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 ## Save data
 
 ```{r}
 #| label: save-data
+<<<<<<< HEAD
 #| code-summary: "Show the code (save data)"
 
 write_csv(synIntakeClean, "data-synthetic/synIntakeClean.csv.gz")
@@ -478,4 +533,10 @@ write_csv(synPanelClean, "data-synthetic/synPanelClean.csv.gz")
 write_csv(synNintendoClean, "data-synthetic/synNintendoClean.csv.gz")
 write_csv(synXboxClean, "data-synthetic/synXboxClean.csv.gz")
 write_csv(synSteamClean, "data-synthetic/synSteamClean.csv.gz")
+=======
+
+write_csv(synIntakeClean, "data-synthetic/synIntakeClean.csv")
+write_csv(synDiaryClean, "data-synthetic/synDiaryClean.csv")
+write_csv(synPanelClean, "data-synthetic/synPanelClean.csv")
+>>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 ```

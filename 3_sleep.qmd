@@ -287,8 +287,6 @@ modelsummary(
 
 Multilevel linear regression whereby the interaction between biweekly average minutes played and chronotype (MSFsc; MCTQ) predicts well-being (WEMWBS), controlling for age, BMI, SES index, region, gender, and whether playtime falls on a weekend, with a random intercept for participants and a random intercept for gender.
 
-
-
 ```{r}
 #| label: h2d
 #| code-summary: "Fit H2d model"
