@@ -21,6 +21,9 @@ editor_options:
   chunk_output_type: console
 execute:
   warning: false
+  message: false
+  output: true
+  echo: true
 page-layout: full
 format:
   html:

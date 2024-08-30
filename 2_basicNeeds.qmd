@@ -1,16 +1,6 @@
 ---
 title: "Study 1: Gaming and Basic Needs"
 output: html_document
-editor_options: 
-  chunk_output_type: console
-execute: 
-  warning: false
-page-layout: full
-format:
-  html:
-    code-fold: true
-    code-summary: "Show the code"
-bibliography: references.bib
 ---
 
 ```{r}
@@ -36,8 +26,8 @@ steam <- read_csv("data-synthetic/synXbox.csv.gz")
 ```
 
 ```{r}
-#| label: merge data
-#| code-summary: "Show the code (merge data)"
+#| label: structure-data
+#| code-summary: "Show the code (structure data)"
 
 dat <- diary |>
   left_join(intake |> select(pid, age, gender, eduLevel, employment),
@@ -52,29 +42,6 @@ dat <- diary |>
     day = factor(day)
   )
 ```
-
-<<<<<<< HEAD
-=======
-```{r}
-#| label: multiple-imputation
-#| eval: false
-
-diaryWide <- diary |>
-  select(-date) |>
-  pivot_wider(
-    names_from = day,
-    values_from = -pid,
-    names_sep = "_w"
-  ) |>
-  select(-starts_with(c("day", "missing", "surveyCompletion", "sd", "timeUse", "displacedActivity", "playedLater")))
-
-quickpred(diaryWide)
-
-mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, seed = 8675309)
-mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, parallelseed = 8675309) # alternatively, try to parallelize
-```
-
->>>>>>> 9121dada5345018729f66e7cb486687c4378144f
 
 ## H1. Greater in-game need satisfaction is associated with greater global need satisfaction (H6 in BANG)
 

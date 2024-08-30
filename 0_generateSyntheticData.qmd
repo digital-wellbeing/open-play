@@ -11,23 +11,9 @@ For external users, the most relevant will be the synthetic data files and codeb
 To render the remaining files without the generation of simulated data, run `quarto render --profile external` from the root directory.
 :::
 
-## Preamble
+## Libraries
 
-First, set options and load some libraries we'll need.
-
-```{r}
-#| label: opts
-#| code-summary: "Show code (options)"
-
-knitr::opts_chunk$set(
-  echo = knitr::is_html_output(),
-  warning = FALSE,
-  message = FALSE,
-  output = TRUE
-)
-
-set.seed(8675309)
-```
+First, load some libraries we'll need.
 
 ```{r}
 #| label: load-libraries
@@ -39,7 +25,11 @@ library(pacman)
 p_load(
   tidyverse, jsonlite, qualtRics, sjlabelled, hms, openxlsx, scales
 )
+
+set.seed(8675309)
 ```
+
+These are some functions we'll need—to generate a random time in HH:MM format, to assign genres to games, and to sample from a zero-inflated gamma distribution.
 
 ```{r}
 #| label: custom-functions
@@ -72,7 +62,6 @@ sampleRowByID <- function(id, df, nRows) {
     slice_sample(n = nRows, replace = FALSE) # Randomly sample one row
 }
 ```
-
 
 Then, import the true data we need, from which we'll do some bootstrapping.
 

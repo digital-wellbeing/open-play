@@ -1,40 +1,9 @@
 ---
 title: "Preprocess Data"
 output: html_document
-editor_options: 
-  chunk_output_type: console
-execute: 
-  warning: false
-page-layout: full
-format:
-  html:
-    code-fold: true
-    code-summary: "Show the code"
-bibliography: references.bib
 ---
 
-
-::: {.callout-note}
-This is very much WIP - I'm adding in the preprocessing of measures/variables as and when we need them for particular models. 
-
-All will be cleaned and tidied in due course!
-:::
-
-## Preamble
-
-```{r}
-#| label: opts
-#| code-summary: "Show the code (options)"
-
-knitr::opts_chunk$set(
-  echo = knitr::is_html_output(),
-  warning = FALSE,
-  message = FALSE,
-  output = TRUE
-)
-
-set.seed(8675309)
-```
+## Libraries
 
 ```{r}
 #| label: load-libraries
@@ -44,6 +13,8 @@ if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
 p_load(tidyverse, mctq, data.table)
+
+set.seed(8675309)
 ```
 
 ## Load data
@@ -67,6 +38,13 @@ synSteam <- read_csv("data-synthetic/synSteam.csv.gz") |>
 ```
 
 ## Clean intake
+
+Here we want to:
+- define a socio-economic status (SES) index
+- calculate total height in inches
+- calculate BMI using the formula `(weight / (total_inches^2)) * 703`
+
+These will be used as covariates primarily in Study 3. 
 
 ```{r}
 #| label: clean-intake
@@ -121,6 +99,7 @@ synIntakeClean <- synIntake |>
 ## Clean diary
 
 Here we want to:
+
 - recode the diary data to numeric values
 - calculate mean scores of relevant variables
 - calculate within- and between-person centered variables
@@ -199,10 +178,6 @@ Here we want to:
 - calculate within- and between-person centered variables
 
 ### Chronotype
-
-::: {.callout-note}
-Some notes on Chronotype: 
-:::
 
 Chronotype or sleep-corrected local time of mid-sleep on work-free days msf_sc() allows you to compute the chronotype, or corrected local time of mid-sleep on work-free days. It takes five arguments: msf (local time of mid-sleep on work-free days), sd_w (sleep duration on workdays), sd_f (sleep duration on work-free days), sd_week(average weekly sleep duration), and alarm_f (a logical object indicating if the respondent uses an alarm clock to wake up on work-free days).
 
@@ -345,6 +320,11 @@ synPanelClean <- synPanel |>
 
 
 ## Process telemetry
+
+Here we:
+- join the survey data to each telemetry table
+- filter for only the sessions/rows that happened immediately after the survey was completed
+- join these back together with a binary indicator of whether at least one session occurred
 
 ```{r}
 #| label: process-telemetry

@@ -1,19 +1,7 @@
 ---
 title: "Study 2: Gaming and Sleep"
 output: html_document
-editor_options: 
-  chunk_output_type: console
-execute: 
-  warning: false
-page-layout: full
-format:
-  html:
-    code-fold: true
-    code-summary: "Show the code"
-bibliography: references.bib
 ---
-
-TODO: document this all
 
 ```{r}
 #| label: load-libraries
