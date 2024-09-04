@@ -3,16 +3,23 @@ title: "Study 3: Genres and wellbeing"
 output: html_document
 ---
 
-::: {.callout-note}
+::: callout-note
 TODOs:
 
-- include iOS and android data
-- have the steam genre data also come from the IGDB API (currently the simulated personas only play across 5 genres)
-- potential upgrade for this is to add the session together if the hours are next to each other and the game title is the same (can't be done now because of how the titles are generated.
+The following to-dos are suggestions for how to improve the analysis in this notebook after data collection:
+
+\- Include iOS and android data.
+
+\- Include UK data, and add region confounder.
+
+\- Get the steam genre data also from the IGDB API (currently the simulated personas only play across 5 genres).
+
+\- Potentially upgrade the data aggregation logic to merge Steam game sessions if they are consecutive and for the same game (can't be done now because of how the titles are always generated to be different).
+
+\- Add confounders age, gender, platform.
 :::
 
 ## Load libraries and data
-
 
 ```{r}
 #| label: load-libraries
@@ -21,7 +28,7 @@ TODOs:
 if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
-p_load(knitr, tidyverse, dplyr, lme4, marginaleffects, interactions, data.table)
+p_load(knitr, tidyverse, dplyr, lme4, marginaleffects, interactions, data.table, readr, datawizard, kableExtra, R.utils, modelsummary)
 
 set.seed(8675309)
 ```
@@ -53,16 +60,17 @@ androidRaw <- read_csv("data-synthetic/synAndroid.csv.gz")
 
 ```
 
-
 ## Merge data
 
 We also perform some simple preprocessing here:
-- We create a `start_date` and `end_date` column in the panel data to represent the start and end of each wave.
-- We separate the genre column in the Nintendo, Xbox, and Steam data into five separate columns.
-  - Xbox and Nintendo have roughly 4000 unique genres, which is too many to work with. We recode these into a smaller number of genres by separating the primary genres from the sub genres.
+
+\- We create a `start_date` and `end_date` column in the panel data to represent the start and end of each wave.
+
+\- We separate the genre column in the Nintendo, Xbox, and Steam data into five separate columns.
+
+\- Xbox and Nintendo have roughly 4000 unique genres, which is too many to work with. We recode these into a smaller number of genres by separating the primary genres from the sub genres.
 
 In contrast to Xbox and Nintendo data, Steam data is not session-level; rather, it is a total amount of time spent playing each game during the previous hour. So to calculate how much time each player spent playing each genre each day and create a variable for how many sessions, we need to recode the data to match the format of the other two datasets.
-
 
 ```{r}
 #| label: merge-data
@@ -110,29 +118,6 @@ telemetry <- bind_rows(nin, xbox, steam) |>
 
 ```
 
-Steam has 5 genres, Xbox has 19 genres, and Nintendo has 19 genres.
-
-```{r}
-#| label: genre-count
-
-print(
-  steam |>
-  count(genre1) |>
-  arrange(desc(n)))
-
-print(
-  xbox |>
-  count(genre1) |>
-  arrange(desc(n)))  
-
-print(
-  nin |>
-  count(genre1) |>
-  arrange(desc(n)))  
-
-```
-
-
 ## Aggregate telemetry data
 
 Aggregate playtime by genre within each wave for each participant, in wide format.
@@ -175,19 +160,15 @@ aggregated_playtime <- aggregated_playtime |>
   ) |> 
   left_join(panel, by = c("pid", "wave"))
 
-head(aggregated_playtime)
 ```
-
 
 ## Analysis
 
-Data is analyzed using a multilevel model to account for the nested structure of the data, where repeated measurements (6 bi-weekly waves) are nested within participants. In this analysis, we examine the relationship between playtime spent on different game genres and well-being. We hypothesize that the relationship between playtime and well-being varies by genre.
-
-within-person analysis, on with 6 bi-weekly measurement waves where wellbeing is measured for the last 2 weeks. So playtime needs to be aggregated over the 2 week time period and the proportion of total playtime spend on each genre needs to be calculated. 
+Data is analyzed using a multilevel model to account for the nested structure of the data, where repeated measurements (6 bi-weekly waves) are nested within participants. In this analysis, we examine the relationship between playtime and well-being, as well as how this relationship is moderated by genre. We test two hypotheses: H1. The overall effect of playtime on well-being H2. Genre moderates the relationship between playtime and well-being.
 
 ## H1. The overall effect of playtime on wellbeing
 
-Fit a REWB model of playtime and WB.
+To test the hypothesis that playtime is associated with well-being, we fit a random effects model with random intercepts and slopes for total playtime within and between genres. We then conduct an equivalence test to determine if the effect of playtime on well-being is within a predefined equivalence margin.
 
 ```{r}
 #| label: h1_model
@@ -198,8 +179,20 @@ h1_total_time <- lmer(
   data = aggregated_playtime
 )
 
-summary(h1_total_time)
+# Custom formatting function for scientific notation
+scientific_fmt <- function(x) {
+  formatC(x, format = "e", digits = 3)}  # Show numbers in scientific notation with 3 significant digits
+
+# Summarize the model using modelsummary
+modelsummary(
+  list(`Model H1` = h1_total_time),
+  fmt = scientific_fmt,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
 ```
+
+This equivalence test is a way to formally test if the within-person effect of total playtime is small enough to be considered equivalent to zero, within a predefined practical margin. If the test confirms equivalence, it strengthens the argument that the effect of playtime on the outcome is negligible or irrelevant.
 
 ### Equivalence test
 
@@ -211,8 +204,9 @@ hypotheses(h1_total_time, "total_time_all_genres_within = 0", equivalence = c(-.
 
 ```
 
+## H2. Genre moderates the relationship between playtime and wellbeing
 
-## H2. genre moderates the relationship between playtime and wellbeing
+To test the hypothesis that genre moderates the relationship between playtime and well-being, we fit a random effects model with random intercepts and slopes for each genre within and between genres. We then conduct pairwise comparisons to determine which genres have a significant effect on well-being.
 
 ### Raw model
 
@@ -227,15 +221,24 @@ fit_h2_raw <- lmer(
   "+ (1 | pid)"),
   aggregated_playtime
 )
-summary(fit_h2_raw)
+
+# Summarize the model using modelsummary
+modelsummary(
+  list(`Model H2` = fit_h2_raw),
+  fmt = scientific_fmt,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
 ```
 
 ### REWB model
 
+We fit a model with random slopes for each genre within and between genres. This model allows us to estimate the effect of each genre on well-being, while accounting for the nested structure of the data. We can then conduct pairwise comparisons to determine which genres have a significant effect on well-being.
+
 Interpretations:
 
-- `time_*_between`: "Group-level effect": People who play x + 1 units more of genre_* report higher/lower `wemwbs` scores
-- `time_*_within`: "Within-person effect": During a period when people play x + 1 units more of genre_* they report higher/lower `wemwbs` scores
+-   `time_*_between`: "Group-level effect": People who play x + 1 units more of genre\_\* report higher/lower `wemwbs` scores
+-   `time_*_within`: "Within-person effect": During a period when people play x + 1 units more of genre\_\* they report higher/lower `wemwbs` scores
 
 ```{r}
 #| label: h2_rewb_model
@@ -255,13 +258,20 @@ fit_h2_rewb <- lmer(
     ),
   aggregated_playtime
 )
-summary(fit_h2_rewb)
 
+# Summarize the model using modelsummary
+modelsummary(
+  list(`Model H2` = fit_h2_rewb),
+  fmt = scientific_fmt,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
 ```
 
-  - Not possible to model all `genre_*_within` as random. Unidentifiable model.
-  - **Inference**: can do six-billion pair-wise comparisons - fishing expedition.
-
+::: callout-note
+-   Not possible to model all `genre_*_within` as random. Unidentifiable model.
+-   **Inference**: can do six-billion pair-wise comparisons - fishing expedition.
+:::
 
 Ideally, the demeaned variables should be included as random slopes. However, this will likely lead to identifiability issues. Here we fit the model with random slopes, but without a correlation between slopes and intercepts.
 
@@ -287,9 +297,19 @@ fit_h2_rewb_re_slopes <- lmer(
   aggregated_playtime
 )
 summary(fit_h2_rewb_re_slopes)
+
+# Summarize the model using modelsummary
+modelsummary(
+  list(`Model H2` = fit_h2_rewb_re_slopes),
+  fmt = scientific_fmt,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
 ```
 
 ### Plot all estimates
+
+Here we plot the estimates for the genre effects on well-being, along with 95% confidence intervals.
 
 ```{r}
 #| label: plot-estimates
@@ -306,7 +326,10 @@ ggplot(aes(estimate, term)) +
   )
 ```
 
+### Joint hypotheses test
+
 Jointly test the null that all genre effects are zero vs the alternative that at least one is non-zero. Testing between and within variables separately?
+
 ```{r}
 #| label: joint-hypotheses
 #| code-summary: "Show code (joint hypotheses)"
@@ -315,7 +338,9 @@ hypotheses(fit_h2_rewb, joint = "_between")
 hypotheses(fit_h2_rewb, joint = "_within")
 ```
 
-Pair-wise comparison of all *_between coefficients. (The table is only showing the first 10). We will run the same code for within-person genre effects.
+### Pairwise tests
+
+Pair-wise comparison of all \*\_between coefficients. (The table is only showing the first 10). We will run the same code for within-person genre effects.
 
 ```{r}
 #| label: pairwise-tests
@@ -338,7 +363,9 @@ ests_pairwise |>
   kable()
 ```
 
-We can also test if the coefficients are greater than a specific value, for example by comparing it to the point estimate from model X (effect of total playtime on WB). Although, this ignores the uncertainty in the reference value.
+### Other tests
+
+We can also test if the coefficients are greater than a specific value, for example by comparing it to the point estimate from model H1 (effect of total playtime on WB). Although, this ignores the uncertainty in the reference value.
 
 ```{r}
 #| label: hypotheses
@@ -347,4 +374,3 @@ We can also test if the coefficients are greater than a specific value, for exam
 # 0.4 is just a placeholder
 hypotheses(fit_h2_rewb, "b* = 0.4")
 ```
-
