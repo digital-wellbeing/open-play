@@ -1,0 +1,396 @@
+---
+title: "Study 3: Genres and wellbeing"
+output: html_document
+---
+
+::: callout-note
+TODOs:
+
+The following to-dos are suggestions for how to improve the analysis in this notebook after data collection:
+
+\- Include iOS and android data.
+
+\- Potentially upgrade the data aggregation logic to merge Steam game sessions if they are consecutive and for the same game (can't be done now because of how the titles are always generated to be different).
+
+:::
+
+## Load libraries and data
+
+```{r}
+#| label: load-libraries
+#| code-summary: "Show code (load libraries)"
+
+if (!require("pacman")) install.packages("pacman")
+library(pacman)
+
+p_load(knitr, tidyverse, dplyr, lme4, marginaleffects, interactions, data.table, readr, datawizard, kableExtra, R.utils, modelsummary, 
+       multcomp, emmeans, car)
+
+set.seed(8675309)
+
+clean_string <- function(text) {
+  text <- tolower(text)
+  text <- gsub("[^a-z0-9 ]", "", text)
+  text <- gsub("[ /]+", "_", text)
+  text <- gsub("^_|_$", "", text)
+  return(text)
+}
+```
+
+```{r}
+#| label: load-data
+#| code-summary: "Show code (load data)"
+
+panel <- fread("data/data-synthetic-clean/synPanelClean.csv.gz") |> 
+  mutate(
+    start_date = case_when(
+      wave == 1 ~ as.Date("2024-05-01"),
+      wave == 2 ~ as.Date("2024-05-15"),
+      wave == 3 ~ as.Date("2024-05-29"),
+      wave == 4 ~ as.Date("2024-06-12"),
+      wave == 5 ~ as.Date("2024-06-26"),
+      wave == 6 ~ as.Date("2024-07-10")
+    ),
+    end_date = start_date + 13  # Each wave covers a 14-day period
+  )
+
+diary <- read_csv("data/data-synthetic-clean/synDiaryClean.csv.gz")
+intake <- read_csv("data/data-synthetic-clean/synIntakeClean.csv.gz")
+ninRaw <- read_csv("data/data-synthetic-clean/synNintendoClean.csv.gz")
+xboxRaw <- read_csv("data/data-synthetic-clean/synXboxClean.csv.gz") 
+steamRaw <- read_csv("data/data-synthetic-clean/synSteamClean.csv.gz")
+iOSRaw <- read_csv("data/data-synthetic-raw/syniOS.csv.gz")
+androidRaw <- read_csv("data/data-synthetic-raw/synAndroid.csv.gz")
+
+```
+
+## Merge data
+
+We also perform some simple preprocessing here:
+
+\- We create a `start_date` and `end_date` column in the panel data to represent the start and end of each wave.
+
+\- We separate the genre column in the Nintendo, Xbox, and Steam data into five separate columns.
+
+\- Xbox and Nintendo have roughly 4000 unique genres, which is too many to work with. We recode these into a smaller number of genres by separating the primary genres from the sub genres.
+
+In contrast to Xbox and Nintendo data, Steam data is not session-level; rather, it is a total amount of time spent playing each game during the previous hour. So to calculate how much time each player spent playing each genre each day and create a variable for how many sessions, we need to recode the data to match the format of the other two datasets.
+
+```{r}
+#| label: merge-data
+#| code-summary: "Show code (merge data)"
+
+nin <- ninRaw |> 
+  mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart) |> 
+  separate(genre, into = c("genre1", "genre2", "genre3", "genre4", "genre5"), sep = ",", fill = "right")
+
+xbox <- xboxRaw |> 
+  mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart) |> 
+  separate(genre, into = c("genre1", "genre2", "genre3", "genre4", "genre5"), sep = ",", fill = "right")
+
+steam <- steamRaw |>
+  rename(
+    duration = minutes,
+    titleID = Name,
+  ) |> 
+  mutate(sessionStart = date + hours(hour)) |> 
+  separate(genre, into = c("genre1", "genre2", "genre3", "genre4", "genre5"), sep = ",", fill = "right") |> 
+  group_by(pid, date) |>                    # Group by player ID and date
+  mutate(session = row_number()) |>         # Create a sequential session number
+  ungroup()       
+
+telemetry <- bind_rows(nin, xbox, steam) |> 
+  group_by(pid, genre1) |>
+  mutate(previous_day_duration = lag(duration, 1)) |>
+  ungroup()
+
+```
+
+## Aggregate telemetry data
+
+Aggregate playtime by genre within each wave for each participant, in wide format.
+
+```{r}
+#| label: aggregate playtime
+#| code-summary: "Show code (aggregate playtime)"
+
+aggregated_playtime <- telemetry |>
+  mutate(wave = case_when(
+    date >= as.Date("2024-05-01") & date <= as.Date("2024-05-14") ~ 1,
+    date >= as.Date("2024-05-15") & date <= as.Date("2024-05-28") ~ 2,
+    date >= as.Date("2024-05-29") & date <= as.Date("2024-06-11") ~ 3,
+    date >= as.Date("2024-06-12") & date <= as.Date("2024-06-25") ~ 4,
+    date >= as.Date("2024-06-26") & date <= as.Date("2024-07-09") ~ 5,
+    date >= as.Date("2024-07-10") & date <= as.Date("2024-07-23") ~ 6
+  )) %>%
+  mutate(across(starts_with("genre"), ~clean_string(.))) |> 
+  group_by(pid, wave, genre1) |>
+  filter(duration < 720) |> 
+  summarise(time = sum(duration/14/60, na.rm = TRUE), .groups = "drop") |> # Calculate total time per genre as hours per day 
+  pivot_wider(
+    names_from = genre1, 
+    values_from = time, 
+    values_fill = 0, # Fill missing values with 0
+    names_prefix = "time_"
+  ) %>%
+  mutate(
+    total_time_all_genres = rowSums(dplyr::select(., starts_with("time_")), na.rm = TRUE), # Calculate total time as hours per day 
+    across(starts_with("time_"), ~ . / total_time_all_genres, .names = "prop_{.col}"), # Calculate proportion of time for each genre
+  )
+
+# get the variable names
+genre_vars <- aggregated_playtime |> 
+  dplyr::select(starts_with("time_")) |> 
+  colnames()
+
+# demean
+aggregated_playtime <- aggregated_playtime |> 
+  bind_cols(
+    datawizard::demean(aggregated_playtime, select = c(genre_vars, "total_time_all_genres"), by = "pid")
+  ) |> 
+  left_join(panel, by = c("pid", "wave"))
+
+```
+
+## Analysis
+
+Data is analyzed using a multilevel model to account for the nested structure of the data, where repeated measurements (6 bi-weekly waves) are nested within participants. In this analysis, we examine the relationship between playtime and well-being, as well as how this relationship is moderated by genre. We test two hypotheses: H1. The overall effect of playtime on well-being H2. Genre moderates the relationship between playtime and well-being.
+
+## H1. The overall effect of playtime on wellbeing
+
+To test the hypothesis that playtime is associated with well-being, we fit a random effects model with random intercepts and slopes for total playtime within and between genres. We then conduct an equivalence test to determine if the effect of playtime on well-being is within a predefined equivalence margin.
+
+```{r}
+#| label: h1_model
+#| code-summary: "Show code (h1_model)"
+
+h1_total_time <- lmer(
+  wemwbs ~ total_time_all_genres_within + total_time_all_genres_between + (1 + total_time_all_genres_within | pid), 
+  data = aggregated_playtime
+)
+
+# Custom formatting function for scientific notation
+scientific_fmt <- function(x) {
+  formatC(x, format = "e", digits = 3)}  # Show numbers in scientific notation with 3 significant digits
+
+# Summarize the model using modelsummary
+modelsummary(
+  list(`Model H1` = h1_total_time),
+  fmt = scientific_fmt,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
+```
+
+This equivalence test is a way to formally test if the within-person effect of total playtime is small enough to be considered equivalent to zero, within a predefined practical margin. If the test confirms equivalence, it strengthens the argument that the effect of playtime on the outcome is negligible or irrelevant.
+
+### Equivalence test
+
+```{r}
+#| label: h1_equivalence
+#| code-summary: "Show code (h1_equivalence)"
+
+hypotheses(h1_total_time, "total_time_all_genres_within = 0", equivalence = c(-.06, .06))
+
+```
+
+## H2/H3. At least one genre's playtime predicts wellbeing
+
+Multilevel within-between linear regression whereby playtime per genre (within- and between-centered) during the previous 2 weeks predicts wellbeing (WEMWBS), with a random intercept and random slopes for within-person variables. Due to identifiability issues with the high number of coefficients, we will fix the correlation between random intercept and random slope to 0. 
+
+### REWB model
+
+For H2 and H3, we fit a single model with random slopes for each genre within and between genres. This model allows us to estimate the effect of each genre on well-being, while accounting for the nested structure of the data. We can then conduct pairwise comparisons to determine which genres have a significant effect on well-being.
+
+Interpretations:
+
+-   `time_*_between`: "Group-level effect": People who play x + 1 units more of genre\_\* report higher/lower `wemwbs` scores
+-   `time_*_within`: "Within-person effect": During a period when people play x + 1 units more of genre\_\* they report higher/lower `wemwbs` scores
+
+```{r}
+#| label: h2_rewb_model
+#| code-summary: "Show code (h2_rewb_model)"
+
+# get the variable names
+genre_within_vars <- aggregated_playtime |>
+  dplyr::select(ends_with(c("_within"))) |>
+  dplyr::select(-total_time_all_genres_within) |> 
+  colnames() |>
+  sort()
+
+genre_between_vars <- aggregated_playtime |>
+  dplyr::select(ends_with(c("_between"))) |>
+  dplyr::select(-total_time_all_genres_between) |> 
+  colnames() |>
+  sort()
+
+genre_vars_demean <- c(genre_within_vars, genre_between_vars)
+
+## rewb
+fit_h2_rewb <- lmer(
+  paste(
+      "wemwbs ~", paste(genre_vars_demean, collapse = "+"),
+      "+ (1 | pid)"
+    ),
+  aggregated_playtime
+)
+
+# Summarize the model using modelsummary
+modelsummary(
+  list(`Model H2` = fit_h2_rewb),
+  fmt = scientific_fmt,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
+```
+
+::: callout-note
+-   Not possible to model all `genre_*_within` as random. Unidentifiable model.
+:::
+
+Ideally, the demeaned variables should be included as random slopes. However, this will likely lead to identifiability issues. This code shows how we can fit a model with random slopes, but without a correlation between slopes and intercepts; as this takes a long time to run, we do not execute it here. 
+
+```{r}
+#| label: h2_rewb_re_slopes
+#| code-summary: "Show code (h2_rewb_re_slopes)"
+#| eval: false
+
+# fit model
+fit_h2_rewb_re_slopes <- lmer(
+  paste(
+      "wemwbs ~", paste(genre_vars_demean, collapse = "+"),
+      "+ (1 +",
+      paste(genre_within_vars, collapse = "+"),
+      "|| pid)"
+    ),
+  aggregated_playtime
+)
+
+# Summarize the model using modelsummary
+modelsummary(
+  list(`Model H2` = fit_h2_rewb_re_slopes),
+  fmt = scientific_fmt,
+  estimate  = "{estimate} [{conf.low}, {conf.high}]{stars}", 
+  statistic = NULL
+)
+```
+
+### H2: Biweekly playtime in one or more of the 23 IGDB game genres is associated with individual changes in general mental wellbeing (H2a, "within-person") and with wellbeing differences between participants (H2b, "between-person").
+
+For both H2 and H3, we will conduct a joint Wald test on the coefficients in the above model. A joint test simultaneously assesses multiple related hypotheses, allowing us to determine whether the playtime effects for any of the 23 genres differ significantly from zero (H2) and from each other (H3). The joint test the estimated coefficients and their covariance matrix to determine if a set of parameters jointly equals specified value; this test follows the chi-squared distribution (Wald, 1943). The error rate is controlled in a similar manner as would be achieved by correcting the alpha level for all 23 surrogate hypotheses (García-Pérez, 2023). 
+
+For H2, we will test whether any genre's playtime is associated with changes in mental wellbeing by evaluating if at least one genre-specific coefficient is different from zero. we assess the probability of the data given the null that the genre coefficients as a group are not statistically different than 0 vs the alternative that at least one is non-zero. 
+
+
+```{r}
+#| label: joint-hypotheses-h2
+#| code-summary: "Show code (joint hypotheses H2)"
+
+# test against null of all coefficients being 0 
+hypotheses(fit_h2_rewb, joint = "_between", hypothesis = 0)
+hypotheses(fit_h2_rewb, joint = "_within", hypothesis = 0)
+```
+
+
+### H3. At least one genre predicts playtime 
+
+```{r}
+#| label: joint-hypotheses-h3
+#| code-summary: "Show code (joint hypotheses H3)"
+
+# test against null of all coefficients being equal
+linearHypothesis(fit_h2_rewb, paste0(genre_within_vars[1], " = ", genre_within_vars[2:length(genre_within_vars)]))
+linearHypothesis(fit_h2_rewb, paste0(genre_between_vars[1], " = ", genre_between_vars[2:length(genre_between_vars)]))
+```
+
+### Plot all estimates
+
+Here we plot the estimates for the genre effects on well-being, along with both uncorrected (95%) confidence intervals, and the corrected confidence intervals from `multcomp::glht`.
+
+The confidence intervals are particularly wide because there is no true covariation in the data, and the model is trying to estimate the effect of each genre on well-being while accounting for the nested structure of the data. We anticipate smaller CIs in the true data. 
+
+```{r}
+#| label: plot-estimates
+#| code-summary: "Show code (plot estimates)"
+
+corrected_cis <- confint(multcomp::glht(fit_h2_rewb, linfct = paste0(genre_within_vars, " = -.06")),
+                         adjusted(type = .)) |> 
+  tidy()
+
+tests <- tidy(fit_h2_rewb, conf.int = TRUE) |> 
+  filter(grepl("within", term)) |> 
+  rename(conf.low.uncorrected = conf.low, conf.high.uncorrected = conf.high) |>
+  left_join(corrected_cis, by = c("term" = "contrast"))
+
+# we can also calculate CIs for marginal effects; for mean+1 contrasts these are functionally identical in our models.
+# ests_fit_h2_rewb <- avg_comparisons(fit_h2_rewb) |>
+#   as.data.frame()
+
+tests |> 
+  ggplot(aes(estimate.x, term)) +
+  geom_linerange(
+    aes(xmin = conf.low, xmax = conf.high),
+    linewidth = .5
+  ) +
+  geom_linerange(
+    aes(xmin = conf.low.uncorrected, xmax = conf.high.uncorrected),
+    linewidth = 1
+  ) +
+  geom_point() +
+  geom_vline(xintercept = -.06, linetype = "dashed") +
+  geom_vline(xintercept = .06, linetype = "dashed")
+
+```
+
+
+## Precision Analysis
+
+In the above examples, we use the simulated data, which mirrors the structure of the true data, but lacks control over the distribution and relationships between the particular variables used in this study. To provide rough indications of the estimated precision of our tests, here we simulate a dataset with a known relationship between playtime and wellbeing, and then fit the models as above.
+
+We arbitrarily assume that the effect of an hour of daily play in each genre on wellbeing varies from -.2 to .2, consisting of both a within-person and between-person component; this would produce a roughly null relationship on average but significant for particular genres. We specify a within-person SD for the WEMWBS of .7 based on prior literature [@BallouEtAl2024Registered]. The distribution of playtime is realistic based on the parameters in 0_generateSyntheticData.qmd; although the distribution of genres is more even than likely in the true dataset. 
+
+```{r}
+#| label: precision-analysis
+#| code-summary: "Show the code (precision analysis)"
+
+genre_coefs <- runif(length(genre_vars), -.2, .2)
+names(genre_coefs) <- genre_vars
+
+sim_h3 <- aggregated_playtime |> 
+  dplyr::select(pid, wave, contains("time"), wemwbs) %>%
+  group_by(pid) |>
+  mutate(
+    random_intercept = rnorm(n(), mean = 0, sd = .6),
+    random_slope = rnorm(n(), mean = 0, sd = .2)
+  ) |> 
+  ungroup() |> 
+  mutate(wemwbs_mean = rowSums(across(time_action:time_indie, ~ .x * (random_slope + genre_coefs[[cur_column()]]))),
+         wemwbs = rnorm(n(), mean = random_intercept + wemwbs_mean, sd = .7))
+
+h1_total_time <- lmer(
+  wemwbs ~ total_time_all_genres_within + total_time_all_genres_between + (1 + total_time_all_genres_within | pid), 
+  data = sim_h3
+)
+summary(h1_total_time)
+
+
+# fit model
+fit_h2_rewb_sim <- lmer(
+  paste(
+      "wemwbs ~", paste(genre_vars_demean, collapse = "+"),
+      "+ (1 | pid)"
+    ),
+  sim_h3
+)
+summary(fit_h2_rewb_sim)
+
+tidy(fit_h2_rewb_sim, conf.int = TRUE) |>
+  ggplot(aes(estimate, term)) +
+  geom_linerange(
+    aes(xmin = conf.low, xmax = conf.high),
+    linewidth = .5
+  ) +
+  geom_point() +
+  geom_vline(xintercept = -.06, linetype = "dashed") +
+  geom_vline(xintercept = .06, linetype = "dashed")
+```

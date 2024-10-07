@@ -8,13 +8,13 @@ This repo documents the data and analysis code for our project on the relationsh
 - preprocessing the data for analysis 
 - data analysis for three outputs, structured to match our programmatic registered report. 
 
-To reproduce the project in its entirety, run `quarto render --profile internal` (for lab members), or `quarto render --profile external` (for non-lab members). More details are provided below. 
+To reproduce the project in its entirety, run `quarto render` (for non-lab members). More details are provided below. 
 
 Data files are saved as .csv.gz for space efficiency. These can either be unzipped and opened in a spreadsheet program, or read directly into R using `readr::read_csv()` or Python using `pandas.read_csv()`.
 
 ## Scripts
 
-The first script generates a series of 8 simulated data tables, overviewed in `codebook.xlsx`. Generating the simulated  data is only possible by **internal** users, but the code is available in `0_generateSyntheticData.qmd`. The remaining scripts can be run by **external** users.
+The first script generates a series of 8 simulated data tables, overviewed in `codebook.xlsx`. Generating the simulated data is only possible by **internal** users, but the code is available in `0_generateSyntheticData.qmd`. The remaining scripts can be run by **external** users.
 
 These data tables are generated in the following scripts:
 
@@ -37,7 +37,7 @@ We then analyze these data in the following scripts:
 
 ## Running
 
-- For **external use** (non-lab members), run `quarto render --profile external` in the Rstudio terminal to render all of the quarto files except 0_generateSyntheticData.qmd, which requires internal credentials. This command uses the specifications in `_quarto-external.yml` to render the files in the correct order (indicated by their number), and output them to `outputs/`.
+- Run `quarto render --profile external` in the Rstudio terminal to render all of the quarto files except 0_generateSyntheticData.qmd, which requires internal credentials. This command uses the specifications in `_quarto.yml` to render the files in the correct order (indicated by their number), and output them to `outputs/`.
 
 - For **internal use**, run `quarto render` in the Rstudio terminal to render *all* quarto files. This command uses the specifications in `_quarto-internal.yml` to render the files in the correct order (indicated by their number), and output them to `docs/`. The files in `docs/` are hosted on GitHub pages here: [https://digital-wellbeing.github.io/platform-study-rr/](https://digital-wellbeing.github.io/platform-study-rr/).
 
