@@ -194,7 +194,7 @@ hypotheses(h1_total_time, "total_time_all_genres_within = 0", equivalence = c(-.
 
 ```
 
-## H2/H3. At least one genre's playtime predicts wellbeing
+## H2. Genres differ in how playtime relates to fluctuations in general mental wellbeing over a 2-week period (H2a, “within-person”) and to average wellbeing over the full study period (H2b, “between-person”).
 
 Multilevel within-between linear regression whereby playtime per genre (within- and between-centered) during the previous 2 weeks predicts wellbeing (WEMWBS), with a random intercept and random slopes for within-person variables. Due to identifiability issues with the high number of coefficients, we will fix the correlation between random intercept and random slope to 0. 
 
@@ -275,28 +275,13 @@ modelsummary(
 )
 ```
 
-### H2: Biweekly playtime in one or more of the 23 IGDB game genres is associated with individual changes in general mental wellbeing (H2a, "within-person") and with wellbeing differences between participants (H2b, "between-person").
+### Joint hypothesis test
 
-For both H2 and H3, we will conduct a joint Wald test on the coefficients in the above model. A joint test simultaneously assesses multiple related hypotheses, allowing us to determine whether the playtime effects for any of the 23 genres differ significantly from zero (H2) and from each other (H3). The joint test the estimated coefficients and their covariance matrix to determine if a set of parameters jointly equals specified value; this test follows the chi-squared distribution (Wald, 1943). The error rate is controlled in a similar manner as would be achieved by correcting the alpha level for all 23 surrogate hypotheses (García-Pérez, 2023). 
-
-For H2, we will test whether any genre's playtime is associated with changes in mental wellbeing by evaluating if at least one genre-specific coefficient is different from zero. we assess the probability of the data given the null that the genre coefficients as a group are not statistically different than 0 vs the alternative that at least one is non-zero. 
-
+We will conduct a joint Wald test on the coefficients in the above model. A joint test simultaneously assesses multiple related hypotheses, allowing us to determine whether the playtime effects for any of the 23 genres differ significantly from each other (H3). The joint test the estimated coefficients and their covariance matrix to determine if a set of parameters jointly equals specified value; this test follows the chi-squared distribution (Wald, 1943). The error rate is controlled in a similar manner as would be achieved by correcting the alpha level for all 23 surrogate hypotheses (García-Pérez, 2023). 
 
 ```{r}
 #| label: joint-hypotheses-h2
 #| code-summary: "Show code (joint hypotheses H2)"
-
-# test against null of all coefficients being 0 
-hypotheses(fit_h2_rewb, joint = "_between", hypothesis = 0)
-hypotheses(fit_h2_rewb, joint = "_within", hypothesis = 0)
-```
-
-
-### H3. At least one genre predicts playtime 
-
-```{r}
-#| label: joint-hypotheses-h3
-#| code-summary: "Show code (joint hypotheses H3)"
 
 # test against null of all coefficients being equal
 linearHypothesis(fit_h2_rewb, paste0(genre_within_vars[1], " = ", genre_within_vars[2:length(genre_within_vars)]))
@@ -356,7 +341,7 @@ We arbitrarily assume that the effect of an hour of daily play in each genre on 
 genre_coefs <- runif(length(genre_vars), -.2, .2)
 names(genre_coefs) <- genre_vars
 
-sim_h3 <- aggregated_playtime |> 
+sim_study3 <- aggregated_playtime |> 
   dplyr::select(pid, wave, contains("time"), wemwbs) %>%
   group_by(pid) |>
   mutate(
@@ -369,7 +354,7 @@ sim_h3 <- aggregated_playtime |>
 
 h1_total_time <- lmer(
   wemwbs ~ total_time_all_genres_within + total_time_all_genres_between + (1 + total_time_all_genres_within | pid), 
-  data = sim_h3
+  data = sim_study3
 )
 summary(h1_total_time)
 
@@ -380,7 +365,7 @@ fit_h2_rewb_sim <- lmer(
       "wemwbs ~", paste(genre_vars_demean, collapse = "+"),
       "+ (1 | pid)"
     ),
-  sim_h3
+  sim_study3
 )
 summary(fit_h2_rewb_sim)
 

@@ -1,14 +1,11 @@
 ---
 title: "Generate Synthetic Data"
 output: html_document
+execute-dir: project
 ---
 
 ::: {.callout-note}
-This file is intended for internal use---compilation requires access to the original data files and the Qualtrics API.
-
-For external users, the most relevant will be the synthetic data files and codebook that this file generates. We've nonetheless included this simulation code in case readers want to understand how the synthetic data was created. 
-
-To render the remaining files without the generation of simulated data, run `quarto render --profile external` from the root directory.
+This file creates the synthetic data used in our simulation analyses. Its outputs are saved in the `data-synthetic-raw` folder; this thus does not need to be run locally in order to reproduce the simulation analyses.
 :::
 
 ## Libraries
@@ -23,8 +20,10 @@ if (!require("pacman")) install.packages("pacman")
 library(pacman)
 
 p_load(
-  tidyverse, jsonlite, qualtRics, sjlabelled, hms, openxlsx, scales, qualtRics
+  tidyverse, jsonlite, qualtRics, sjlabelled, hms, openxlsx, scales, qualtRics, here
 )
+
+knitr::opts_knit$set(root.dir = "../")
 
 set.seed(8675309)
 ```
@@ -63,40 +62,28 @@ sampleRowByID <- function(id, df, nRows) {
 }
 ```
 
-Then, import the true data we need, from which we'll do some bootstrapping.
-
-::: {.callout-note}
-Some files are available publicly online; others are private and only on OneDrive (paths specified in `.Renviron`); and other are pulled using the Qualtrics API (internal use only).
-:::
+Then, import the true data we need, from which we'll do some bootstrapping. This is found in `data/data-template`.
 
 ```{r}
 #| label: load-data
 #| output: false
 #| code-summary: "Show code (load data)"
 
-datSurvey <- read_csv("data/survey.csv.gz")
-datNintendo <- read_csv("data/telemetry.csv.gz")
-datDemo <- read_csv("data/demographics.csv.gz")
-datMeta <- read_csv("data/gameMetadata.csv.gz")
-
-# other files are only available on onedrive privately (paths specified in .Renviron)
+datSurvey <- read_csv("data/data-template/survey.csv.gz")
+datNintendo <- read_csv("data/data-template/telemetry.csv.gz")
+datDemo <- read_csv("data/data-template/demographics.csv.gz")
+datMeta <- read_csv("data/data-template/gameMetadata.csv.gz")
 datXbox <- read.delim("data/data-template/xbox.txt")
-datSteam <- read_csv("data/data-template/steam.csv") |>
+datSteam <- read_csv("data/data-template/steam.csv.gz") |>
   filter(played == "Yes")
 datAndroid <- fromJSON("data/data-template/android.json")
 
-# and three are available through the Qualtrics API (internal use only)
-
 datIntake <- read_survey("data/data-template/intake.csv.gz") |>
   filter(consent == "Yes, I agree to take part") |> 
-  dplyr::select(-(StartDate:consent), -(isWilling:RANDOM_ID), -gender_4_TEXT) |>
+  dplyr::select(-(StartDate:consent), -(isWilling:RANDOM_ID), -c(gender_4_TEXT, localDatetime, gender, employment)) |>
   mutate(playProp_7 = "") # fix one broken column
 
-# pull panel survey from qualtrics - make sure test responses for the latest
-# published version of the survey have already been generated
-# two steps because we need to mutate without losing labels 
 datPanelRaw <- read_survey("data/data-template/panel.csv.gz")
-
 datPanel <- datPanelRaw |>
   dplyr::select(-c(StartDate:UserLanguage), -PID, -wave) |> 
   # test responses for mctq don't work at all so we need to fill these in manually
@@ -108,8 +95,6 @@ datPanel <- datPanelRaw |>
   # Reapply the original labels to ensure they are retained
   copy_labels(datPanelRaw)
 
-# pull diary survey from qualtrics - make sure test responses for the latest
-# published version of the survey have already been generated
 datDiary <- read_survey("data/data-template/diary.csv.gz") |>
   dplyr::select(-c(StartDate:UserLanguage), -PID, -wave)
 
@@ -124,10 +109,10 @@ Set up basic parameters of the data simulation.
 
 set.seed(8675309)
 n <- 2000
-diaryWaves <- 21
+diaryWaves <- 30
 panelWaves <- 6
 studyStartDate <- as_datetime("2024-05-01 00:00:00")
-studyDays <- panelWaves * 14
+studyDays <- (panelWaves-1) * 14 + 1
 studyDates <- ymd(studyStartDate + days(0:studyDays))
 ```
 
@@ -147,7 +132,6 @@ Participant platforms don't match the responses in the `platforms_X` intake item
 #| label: sim-intake
 #| output: false
 #| code-summary: "Show code (simulate intake)"
-
 
 synIntake <- tibble(
   pid = as.character(1:n),
@@ -816,13 +800,13 @@ Save the data to `data-synthetic`, for use in devising analysis scripts for e.g.
 #| code-summary: "Show code (save data)"
 
 # Export as compressed CSV
-write_csv(synIntake, "data-synthetic/synIntake.csv.gz")
-write_csv(synDiary, "data-synthetic/synDiary.csv.gz")
-write_csv(synPanel, "data-synthetic/synPanel.csv.gz")
-write_csv(synXbox, "data-synthetic/synXbox.csv.gz")
-write_csv(synNintendo, "data-synthetic/synNintendo.csv.gz")
-write_csv(synAndroid, "data-synthetic/synAndroid.csv.gz")
-write_csv(synSteam, "data-synthetic/synSteam.csv.gz")
-write_csv(syniOS, "data-synthetic/syniOS.csv.gz")
+# write_csv(synIntake, "data-synthetic/synIntake.csv.gz")
+# write_csv(synDiary, "data-synthetic/synDiary.csv.gz")
+# write_csv(synPanel, "data-synthetic/synPanel.csv.gz")
+# write_csv(synXbox, "data-synthetic/synXbox.csv.gz")
+# write_csv(synNintendo, "data-synthetic/synNintendo.csv.gz")
+# write_csv(synAndroid, "data-synthetic/synAndroid.csv.gz")
+# write_csv(synSteam, "data-synthetic/synSteam.csv.gz")
+# write_csv(syniOS, "data-synthetic/syniOS.csv.gz")
 
 ```

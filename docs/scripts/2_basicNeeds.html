@@ -346,18 +346,18 @@ Random effects:
 Conditional model:
  Groups Name        Variance   Std.Dev.   Corr                            
  pid    (Intercept)  1.041e+00  1.020e+00                                 
-        gameNS_cw    5.543e-04  2.354e-02 -1.00                           
-        globalNF_cw  1.888e-03  4.345e-02 -1.00       1.00                
- pid.1  day1        1.309e-245 3.618e-123 1.00 (ar1) 1.00 (ar1) 1.00 (ar1)
+        gameNS_cw    5.545e-04  2.355e-02 -1.00                           
+        globalNF_cw  1.887e-03  4.344e-02 -1.00       1.00                
+ pid.1  day1        3.123e-299 5.588e-150 1.00 (ar1) 1.00 (ar1) 1.00 (ar1)
 Number of obs: 6969, groups:  pid, 973
 
 Conditional model:
             Estimate Std. Error z value Pr(&gt;|z|)    
 (Intercept) -0.19893    0.04339  -4.584 4.56e-06 ***
-gameNS_cw    0.01047    0.02526   0.414   0.6786    
-gameNS_cb   -0.28593    0.11770  -2.429   0.0151 *  
+gameNS_cw    0.01047    0.02529   0.414   0.6790    
+gameNS_cb   -0.28593    0.11771  -2.429   0.0151 *  
 globalNF_cw -0.03674    0.03942  -0.932   0.3514    
-globalNF_cb  0.02889    0.22879   0.126   0.8995    
+globalNF_cb  0.02889    0.22881   0.126   0.8995    
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
@@ -460,25 +460,25 @@ globalNS ~ gameNS_cw + gameNS_cb + (1 + gameNS_cw | pid) + ar1(as.factor(day) +
 Data: sim_s1
 
      AIC      BIC   logLik deviance df.resid 
- 63198.4  63270.0 -31590.2  63180.4    20991 
+ 62999.8  63071.4 -31490.9  62981.8    20991 
 
 Random effects:
 
 Conditional model:
  Groups   Name            Variance Std.Dev. Corr                 
- pid      (Intercept)     0.9841   0.9920                        
-          gameNS_cw       0.2546   0.5046   0.03                 
- pid.1    as.factor(day)1 0.9259   0.9622   0.22 (ar1) 0.22 (ar1)
- Residual                 0.1164   0.3411                        
+ pid      (Intercept)     0.9922   0.9961                        
+          gameNS_cw       0.2218   0.4710   -0.02                
+ pid.1    as.factor(day)1 0.8922   0.9446   0.23 (ar1) 0.23 (ar1)
+ Residual                 0.1449   0.3807                        
 Number of obs: 21000, groups:  pid, 1000
 
-Dispersion estimate for gaussian family (sigma^2): 0.116 
+Dispersion estimate for gaussian family (sigma^2): 0.145 
 
 Conditional model:
             Estimate Std. Error z value Pr(&gt;|z|)    
-(Intercept)  1.95981    0.03254   60.22  &lt; 2e-16 ***
-gameNS_cw    0.09798    0.02140    4.58 4.68e-06 ***
-gameNS_cb    0.07100    0.03225    2.20   0.0277 *  
+(Intercept)  1.97178    0.03266   60.37  &lt; 2e-16 ***
+gameNS_cw    0.11351    0.02058    5.52 3.47e-08 ***
+gameNS_cb    0.07032    0.03303    2.13   0.0332 *  
 ---
 Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 </div>
@@ -499,7 +499,7 @@ Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1</code></pre>
 <div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">confint</span>(h1mod)[<span class="dv">2</span>,<span class="dv">3</span>] <span class="sc">-</span> <span class="fu">confint</span>(h1mod)[<span class="dv">2</span>,<span class="dv">2</span>]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-stdout">
-<pre><code>[1] -0.04194379</code></pre>
+<pre><code>[1] -0.04033081</code></pre>
 </div>
 </div>
 

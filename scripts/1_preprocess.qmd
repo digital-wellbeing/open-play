@@ -6,7 +6,7 @@ editor:
     wrap: 72
 ---
 
-## Libraries
+## Load Libraries and Data
 
 ```{r}
 #| label: load-libraries
@@ -19,8 +19,6 @@ p_load(tidyverse, mctq, data.table, pwr)
 
 set.seed(8675309)
 ```
-
-## Load data
 
 ```{r}
 #| label: load-data
@@ -43,11 +41,13 @@ synAndroid <- read_csv("data/data-synthetic-raw/synAndroid.csv.gz")
 
 ## Clean intake
 
-Here we want to: - define a socio-economic status (SES) index -
-calculate total height in inches - calculate BMI using the formula
-`(weight / (total_inches^2)) * 703`
+Here we: 
 
-These will be used as covariates primarily in Study 3.
+- define a socio-economic status (SES) index 
+- calculate total height in inches 
+- calculate BMI using the formula `(weight / (total_inches^2)) * 703`
+
+These will be used as covariates in Study 3.
 
 ```{r}
 #| label: clean-intake
@@ -100,7 +100,7 @@ synIntakeClean <- synIntake |>
 
 ## Clean diary
 
-Here we want to:
+Here we:
 
 -   recode the diary data to numeric values
 -   calculate mean scores of relevant variables

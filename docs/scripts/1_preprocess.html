@@ -210,19 +210,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#libraries" id="toc-libraries" class="nav-link active" data-scroll-target="#libraries"><span class="header-section-number">2.1</span> Libraries</a></li>
-  <li><a href="#load-data" id="toc-load-data" class="nav-link" data-scroll-target="#load-data"><span class="header-section-number">2.2</span> Load data</a></li>
-  <li><a href="#clean-intake" id="toc-clean-intake" class="nav-link" data-scroll-target="#clean-intake"><span class="header-section-number">2.3</span> Clean intake</a></li>
-  <li><a href="#clean-diary" id="toc-clean-diary" class="nav-link" data-scroll-target="#clean-diary"><span class="header-section-number">2.4</span> Clean diary</a></li>
-  <li><a href="#clean-panel" id="toc-clean-panel" class="nav-link" data-scroll-target="#clean-panel"><span class="header-section-number">2.5</span> Clean panel</a>
+  <li><a href="#load-libraries-and-data" id="toc-load-libraries-and-data" class="nav-link active" data-scroll-target="#load-libraries-and-data"><span class="header-section-number">2.1</span> Load Libraries and Data</a></li>
+  <li><a href="#clean-intake" id="toc-clean-intake" class="nav-link" data-scroll-target="#clean-intake"><span class="header-section-number">2.2</span> Clean intake</a></li>
+  <li><a href="#clean-diary" id="toc-clean-diary" class="nav-link" data-scroll-target="#clean-diary"><span class="header-section-number">2.3</span> Clean diary</a></li>
+  <li><a href="#clean-panel" id="toc-clean-panel" class="nav-link" data-scroll-target="#clean-panel"><span class="header-section-number">2.4</span> Clean panel</a>
   <ul class="collapse">
-  <li><a href="#chronotype" id="toc-chronotype" class="nav-link" data-scroll-target="#chronotype"><span class="header-section-number">2.5.1</span> Chronotype</a></li>
+  <li><a href="#chronotype" id="toc-chronotype" class="nav-link" data-scroll-target="#chronotype"><span class="header-section-number">2.4.1</span> Chronotype</a></li>
   </ul></li>
-  <li><a href="#process-telemetry" id="toc-process-telemetry" class="nav-link" data-scroll-target="#process-telemetry"><span class="header-section-number">2.6</span> Process telemetry</a></li>
-  <li><a href="#exclusion-criteria" id="toc-exclusion-criteria" class="nav-link" data-scroll-target="#exclusion-criteria"><span class="header-section-number">2.7</span> Exclusion criteria</a></li>
-  <li><a href="#positive-control-power" id="toc-positive-control-power" class="nav-link" data-scroll-target="#positive-control-power"><span class="header-section-number">2.8</span> Positive Control Power</a></li>
-  <li><a href="#impute-missing-data" id="toc-impute-missing-data" class="nav-link" data-scroll-target="#impute-missing-data"><span class="header-section-number">2.9</span> Impute missing data</a></li>
-  <li><a href="#save-data" id="toc-save-data" class="nav-link" data-scroll-target="#save-data"><span class="header-section-number">2.10</span> Save data</a></li>
+  <li><a href="#process-telemetry" id="toc-process-telemetry" class="nav-link" data-scroll-target="#process-telemetry"><span class="header-section-number">2.5</span> Process telemetry</a></li>
+  <li><a href="#exclusion-criteria" id="toc-exclusion-criteria" class="nav-link" data-scroll-target="#exclusion-criteria"><span class="header-section-number">2.6</span> Exclusion criteria</a></li>
+  <li><a href="#positive-control-power" id="toc-positive-control-power" class="nav-link" data-scroll-target="#positive-control-power"><span class="header-section-number">2.7</span> Positive Control Power</a></li>
+  <li><a href="#impute-missing-data" id="toc-impute-missing-data" class="nav-link" data-scroll-target="#impute-missing-data"><span class="header-section-number">2.8</span> Impute missing data</a></li>
+  <li><a href="#save-data" id="toc-save-data" class="nav-link" data-scroll-target="#save-data"><span class="header-section-number">2.9</span> Save data</a></li>
   </ul>
 <div class="quarto-other-links"><h2>Other Links</h2><ul><li><a href="https://osf.io/pb5nu"><i class="bi bi-file-pdf"></i>Stage 1 Manuscript (OSF)</a></li><li><a href="https://digital-wellbeing.github.io/platform-study-rr/"><i class="bi bi-github"></i>GitHub Repository</a></li></ul></div></nav>
     </div>
@@ -248,8 +247,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="libraries" class="level2" data-number="2.1">
-<h2 data-number="2.1" class="anchored" data-anchor-id="libraries"><span class="header-section-number">2.1</span> Libraries</h2>
+<section id="load-libraries-and-data" class="level2" data-number="2.1">
+<h2 data-number="2.1" class="anchored" data-anchor-id="load-libraries-and-data"><span class="header-section-number">2.1</span> Load Libraries and Data</h2>
 <div class="cell">
 <details class="code-fold">
 <summary>Show the code (libraries)</summary>
@@ -261,9 +260,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">8675309</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-</section>
-<section id="load-data" class="level2" data-number="2.2">
-<h2 data-number="2.2" class="anchored" data-anchor-id="load-data"><span class="header-section-number">2.2</span> Load data</h2>
 <div class="cell">
 <details class="code-fold">
 <summary>Show the code (load data)</summary>
@@ -283,10 +279,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </details>
 </div>
 </section>
-<section id="clean-intake" class="level2" data-number="2.3">
-<h2 data-number="2.3" class="anchored" data-anchor-id="clean-intake"><span class="header-section-number">2.3</span> Clean intake</h2>
-<p>Here we want to: - define a socio-economic status (SES) index - calculate total height in inches - calculate BMI using the formula <code>(weight / (total_inches^2)) * 703</code></p>
-<p>These will be used as covariates primarily in Study 3.</p>
+<section id="clean-intake" class="level2" data-number="2.2">
+<h2 data-number="2.2" class="anchored" data-anchor-id="clean-intake"><span class="header-section-number">2.2</span> Clean intake</h2>
+<p>Here we:</p>
+<ul>
+<li>define a socio-economic status (SES) index</li>
+<li>calculate total height in inches</li>
+<li>calculate BMI using the formula <code>(weight / (total_inches^2)) * 703</code></li>
+</ul>
+<p>These will be used as covariates in Study 3.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Show the code (clean intake)</summary>
@@ -335,9 +336,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </details>
 </div>
 </section>
-<section id="clean-diary" class="level2" data-number="2.4">
-<h2 data-number="2.4" class="anchored" data-anchor-id="clean-diary"><span class="header-section-number">2.4</span> Clean diary</h2>
-<p>Here we want to:</p>
+<section id="clean-diary" class="level2" data-number="2.3">
+<h2 data-number="2.3" class="anchored" data-anchor-id="clean-diary"><span class="header-section-number">2.3</span> Clean diary</h2>
+<p>Here we:</p>
 <ul>
 <li>recode the diary data to numeric values</li>
 <li>calculate mean scores of relevant variables</li>
@@ -408,11 +409,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </details>
 </div>
 </section>
-<section id="clean-panel" class="level2" data-number="2.5">
-<h2 data-number="2.5" class="anchored" data-anchor-id="clean-panel"><span class="header-section-number">2.5</span> Clean panel</h2>
+<section id="clean-panel" class="level2" data-number="2.4">
+<h2 data-number="2.4" class="anchored" data-anchor-id="clean-panel"><span class="header-section-number">2.4</span> Clean panel</h2>
 <p>Here we want to: - recode the panel data to numeric values - calculate mean scores of relevant variables - calculate within- and between-person centered variables</p>
-<section id="chronotype" class="level3" data-number="2.5.1">
-<h3 data-number="2.5.1" class="anchored" data-anchor-id="chronotype"><span class="header-section-number">2.5.1</span> Chronotype</h3>
+<section id="chronotype" class="level3" data-number="2.4.1">
+<h3 data-number="2.4.1" class="anchored" data-anchor-id="chronotype"><span class="header-section-number">2.4.1</span> Chronotype</h3>
 <p>Chronotype or sleep-corrected local time of mid-sleep on work-free days msf_sc() allows you to compute the chronotype, or corrected local time of mid-sleep on work-free days. It takes five arguments: msf (local time of mid-sleep on work-free days), sd_w (sleep duration on workdays), sd_f (sleep duration on work-free days), sd_week(average weekly sleep duration), and alarm_f (a logical object indicating if the respondent uses an alarm clock to wake up on work-free days).</p>
 <p>If sd_f is less or equal than sd_w, the output must be msf. Else, it must return msf minus the difference between sd_f and sd_week divided by 2. msf_sc can only be computed if alarm_f is equal to FALSE (the function will return NA when alarm_f == TRUE).</p>
 <p><code>msf_sc</code> applies a correction to msf, removing an estimation of the effect from accumulated sleep debt on workdays that usually is compensated on work-free days. See <code>?msf_sc</code> to learn more.</p>
@@ -549,8 +550,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </section>
 </section>
-<section id="process-telemetry" class="level2" data-number="2.6">
-<h2 data-number="2.6" class="anchored" data-anchor-id="process-telemetry"><span class="header-section-number">2.6</span> Process telemetry</h2>
+<section id="process-telemetry" class="level2" data-number="2.5">
+<h2 data-number="2.5" class="anchored" data-anchor-id="process-telemetry"><span class="header-section-number">2.5</span> Process telemetry</h2>
 <p>Here we: - join the survey data to each telemetry table - filter for only the sessions/rows that happened immediately after the survey was completed - join these back together with a binary indicator of whether at least one session occurred</p>
 <div class="cell">
 <details class="code-fold">
@@ -611,8 +612,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </details>
 </div>
 </section>
-<section id="exclusion-criteria" class="level2" data-number="2.7">
-<h2 data-number="2.7" class="anchored" data-anchor-id="exclusion-criteria"><span class="header-section-number">2.7</span> Exclusion criteria</h2>
+<section id="exclusion-criteria" class="level2" data-number="2.6">
+<h2 data-number="2.6" class="anchored" data-anchor-id="exclusion-criteria"><span class="header-section-number">2.6</span> Exclusion criteria</h2>
 <p>We will exclude any telemetry rows wherein players have logged more than 24 hours of playtime on one platform in any single day, or where sessions have taken place in the future, indicating a technical problem or manipulation of the system clock for in-game benefits.</p>
 <p>We will further include an attention check in the panel surveys whereby participants are given a random duplicated item from the need satisfaction and frustration measure. Responses where the two duplicate items differ by more than 1 scale point will be flagged for manual inspection of potential careless responding.</p>
 <p>We have 4 exclusion criteria total:</p>
@@ -652,8 +653,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </details>
 </div>
 </section>
-<section id="positive-control-power" class="level2" data-number="2.8">
-<h2 data-number="2.8" class="anchored" data-anchor-id="positive-control-power"><span class="header-section-number">2.8</span> Positive Control Power</h2>
+<section id="positive-control-power" class="level2" data-number="2.7">
+<h2 data-number="2.7" class="anchored" data-anchor-id="positive-control-power"><span class="header-section-number">2.7</span> Positive Control Power</h2>
 <p>In the manuscript, we specify a variety of positive controls—tests that must be passed in order to justify adhering to our proposed analysis strategy.</p>
 <p>It is important that our design has sufficient statistical power to detect such effects if they exist. Here we calculate the power for each of our positive controls.</p>
 <table class="table">
@@ -780,8 +781,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </section>
-<section id="impute-missing-data" class="level2" data-number="2.9">
-<h2 data-number="2.9" class="anchored" data-anchor-id="impute-missing-data"><span class="header-section-number">2.9</span> Impute missing data</h2>
+<section id="impute-missing-data" class="level2" data-number="2.8">
+<h2 data-number="2.8" class="anchored" data-anchor-id="impute-missing-data"><span class="header-section-number">2.8</span> Impute missing data</h2>
 <p>Here we give an indicative example of how multiple imputation will be performed. As this is computationally demanding and will ultimately depend on the parameters of the true data, we do not exhaustively simulate imputation here. Broadly, we:</p>
 <ul>
 <li>Pivot the data to wide format</li>
@@ -808,8 +809,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </details>
 </div>
 </section>
-<section id="save-data" class="level2" data-number="2.10">
-<h2 data-number="2.10" class="anchored" data-anchor-id="save-data"><span class="header-section-number">2.10</span> Save data</h2>
+<section id="save-data" class="level2" data-number="2.9">
+<h2 data-number="2.9" class="anchored" data-anchor-id="save-data"><span class="header-section-number">2.9</span> Save data</h2>
 <div class="cell">
 <details class="code-fold">
 <summary>Show the code (save data)</summary>
