@@ -3,6 +3,8 @@
 .RData
 .Ruserdata
 .DS_Store
+data-ms/
+^~$*
 
 data/
 outputs/
