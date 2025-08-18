@@ -1,0 +1,478 @@
+---
+title: "political-stress"
+format: html
+---
+
+```{r}
+#| label: load-libraries
+
+library(tidyverse)
+library(qualtRics)
+library(mgcv)
+library(marginaleffects)
+library(MatchIt)
+library(splines)
+library(lfe)
+library(lubridate)
+
+```
+
+
+```{r}
+#| label: load-survey
+
+intake <- read_csv("data-raw/survey_intake.csv.gz") |> 
+  mutate(
+    political_affiliation = case_when(
+      political_party %in% c("Conservative and Unionist Party", "Democratic Unionist Party (DUP)", "Reform UK") ~ "right",
+      political_party %in% c("Labour Party / Co-operative Party", "Scottish National Party (SNP)", "Sinn Féin", "Plaid Cymru", "Liberal Democrats", "Green Party of England and Wales") ~ "left",
+      political_party %in% c("Democratic Party") ~ "left",
+      political_party %in% c("Republican Party") ~ "right",
+      TRUE ~ "other"
+    )
+  ) |> 
+  select(pid, starts_with("pol"), everything())
+  
+```
+
+
+```{r}
+#| label: load-telemetry
+
+xbox <- read_csv("data-raw/telemetry_xbox.csv.gz")
+nintendo <- read_csv("data-raw/telemetry_nintendo.csv.gz")
+steam <- read_csv("data-raw/telemetry_steam.csv.gz")
+
+play_raw <- bind_rows(xbox, nintendo) |> 
+  left_join(intake, by = "pid")
+
+play <- play_raw |> 
+  filter(
+    duration < 480
+  )
+
+```
+
+
+```{r}
+#| label: define-dates
+
+window <- 3
+
+political_events <- tribble(
+  ~event, ~event_date, ~affected_country, ~stressed_party,
+  # "Roe v Wade Overturned", "2022-06-24", "US", "left",
+  # "Liz Truss Resignation", "2022-10-20", "UK", "right",
+  # "US midterm elections", "2022-11-08", "US", "right",
+  # "Trump NY Indictment", "2023-03-30", "US", "right",
+  # "UK general elections", "2024-07-04", "UK", "right",
+  # "Hamas Attack", "2023-10-07", "US/UK", "left/right",
+  "US presidential elections", "2024-11-05", "US", "left",
+  "US Inauguration day", "2025-01-20", "US", "left"
+) |> 
+  mutate(event_date = as_date(event_date)) |> 
+  rowwise() |> 
+  mutate(
+    post_event = list(seq(event_date, event_date + (window - 1), by = "day")),
+    pre_event = list(seq(event_date - window, event_date - 1, by = "day")),
+    year_prior = list(seq(event_date %m-% years(1), (event_date %m-% years(1)) + (window - 1), by = "day")),
+    year_after = list(seq(event_date %m+% years(1), (event_date %m+% years(1)) + (window - 1), by = "day")),
+  ) |> 
+  unnest(cols = c(post_event, pre_event, year_prior, year_after)) |> 
+  # Convert the period lists into long format, creating one row per event, period, and day
+  pivot_longer(
+    cols = c(post_event, pre_event, year_prior, year_after),
+    names_to = "period",
+    values_to = "day"
+  ) |> 
+  ungroup() |> 
+  mutate(
+    group = ifelse(period %in% c("pre_event", "post_event"), "current_year", "comparison_year"),
+    display_date = case_when(
+      period %in% c("year_prior") ~ day %m+% years(1), 
+      period %in% c("year_after") ~ day %m-% years(1),
+      TRUE ~ day)
+  ) |> 
+  filter(day >= as.Date("2022-05-01") & day <=as.Date("2025-04-01")) |> 
+  arrange(event, day)
+
+```
+
+```{r}
+#| label: create-person-day
+
+person_day <- play |>
+  mutate(day = as_date(session_start), pid = as.character(pid)) |>
+  group_by(
+    pid,
+    political_affiliation,
+    country,
+    age,
+    gender,
+    edu_level,
+    employment,
+    ethnicity,
+    day
+  ) |>
+  summarize(
+    total_duration = sum(duration, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  # 2. Zero-fill missing days per person
+  group_by(pid) |>
+  complete(
+    day = seq.Date(min(day), max(day), by = "day"),
+    fill = list(total_duration = 0)
+  ) |>
+  # 3. Carry demographics forward/backward
+  fill(
+    political_affiliation,
+    country,
+    age,
+    gender,
+    edu_level,
+    employment,
+    ethnicity,
+    .direction = "downup"
+  ) |>
+  ungroup() |>
+  # 4. Join in political events windows
+  left_join(
+    political_events |> filter(group != "comparison_year"),
+    by = "day",
+    relationship = "many-to-many"
+  ) |>
+  # 5. Flag event types and triple‐diff indicators
+  mutate(
+    event_type = case_when(
+      stressed_party == "left" ~ "LeftStress",
+      stressed_party == "right" ~ "RightStress",
+      TRUE ~ "Neutral"
+    ),
+    isWeekend = wday(day, week_start = 1) >= 6,
+    isPost = period == "post_event",
+    isRelevant = str_detect(country, affected_country),
+    isPartyMatch = political_affiliation == stressed_party,
+    isAffectedPos = as.numeric(isPost & isRelevant & isPartyMatch),
+    isAffectedNeg = as.numeric(isPost & isRelevant & (!isPartyMatch)),
+    day_num = as.numeric(day),
+    day_rel = as.numeric(day - event_date),
+    political_affiliation = factor(political_affiliation)
+  ) |>
+  # 6. Trim to days after each person's first non-zero play
+  arrange(pid, day_num) |>
+  group_by(pid) |>
+  filter(day >= min(day[total_duration > 0])) |>
+  ungroup()
+
+person_event <- person_day |>
+  filter(period %in% c("pre_event", "post_event")) |>
+  group_by(pid, political_affiliation, event, stressed_party, event_type) |>
+  summarize(
+    pre_event_duration = mean(
+      total_duration[period == "pre_event"],
+      na.rm = TRUE
+    ),
+    post_event_duration = mean(
+      total_duration[period == "post_event"],
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) |>
+  mutate(delta_y = post_event_duration - pre_event_duration)
+
+
+ggplot(person_event, aes(
+  x = event_type,
+  y = delta_y,
+  fill = political_affiliation
+)) +
+  geom_boxplot(position = position_dodge(width = 0.8)) +
+  labs(
+    x = "Event Type",
+    y = expression(Delta*y),
+    fill = "Party",
+    title = "Distribution of Δ Play by Event Type and Party"
+  ) +
+  theme_minimal()
+
+summary_df <- person_event %>%
+  group_by(event_type, political_affiliation) %>%
+  summarise(
+    m   = mean(delta_y, na.rm=TRUE),
+    lo  = m - qt(0.975, n()-1)*sd(delta_y)/sqrt(n()),
+    hi  = m + qt(0.975, n()-1)*sd(delta_y)/sqrt(n()),
+    .groups="drop"
+  )
+
+ggplot(summary_df, aes(
+  x = event_type,
+  y = m,
+  color = political_affiliation,
+  group = political_affiliation
+)) +
+  geom_point(position = position_dodge(0.5), size = 3) +
+  geom_errorbar(aes(ymin = lo, ymax = hi),
+                position = position_dodge(0.5),
+                width = 0.2) +
+  labs(y = expression(Mean~Delta*y), x = "Event Type") +
+  theme_light()
+
+ggplot(person_event |> filter(abs(delta_y) < 200), aes(
+  x = delta_y,
+  y = political_affiliation,
+  fill = political_affiliation
+)) +
+  geom_density_ridges(alpha = 0.5) +
+  facet_wrap(~event_type) +
+  labs(x = expression(Delta*y), y = "Party") +
+  theme_ridges()
+
+```
+
+
+```{r}
+#| label: individual-level-data
+
+tdd_panel <- felm(
+  total_duration ~
+    isAffectedPos +
+      isAffectedNeg |
+      pid + age + gender + edu_level + employment + ethnicity + day | # FEs
+      0 |
+      pid, # cluster by person
+  data = person_day
+)
+summary(tdd_panel)
+
+td_delta_fe <- feols(
+  total_duration ~
+    isAffectedPos +
+      isAffectedNeg |
+      age + gender + edu_level + employment + ethnicity + day,
+  data = person_day,
+  cluster = ~pid
+)
+summary(td_delta_fe)
+
+gam_df <- person_day |>
+  # keep just your event windows (so day_rel isn't NA)
+  filter(!is.na(day_rel)) |>
+  # if you only care about pre/post days:
+  filter(period %in% c("pre_event", "post_event")) |>
+  # drop any rows where the flags are NA
+  filter(!is.na(isAffectedPos) & !is.na(isAffectedNeg)) |>
+  mutate(pid = factor(pid))
+
+gam_tdd <- gam(
+  total_duration ~
+    isAffectedPos + # linear jump if you like
+      isAffectedNeg + age + gender + edu_level + ethnicity +
+      s(day_rel, k = 10) + # baseline smooth over days-around-event
+      s(day_rel, by = isAffectedPos, k = 5) + # extra smooth for the stressed group
+      s(day_rel, by = isAffectedNeg, k = 5) + # extra smooth for the “happy” group
+      s(pid, bs = "re") + # absorbs person‐level intercepts
+      isWeekend, # weekday/weekend control
+  data = gam_df
+)
+
+plot(gam_tdd)
+
+
+```
+
+```{r}
+#| label: visualize-play-patterns
+
+weekend_shading <- daily |>
+  filter(period %in% c("pre_event", "post_event")) |> # restrict to relevant periods
+  distinct(event, day) |> # get unique days for each event
+  filter(wday(day, week_start = 1) >= 6) |> # Saturday=6, Sunday=7 when week starts on Monday
+  mutate(
+    xmin = day - 0.5, # using Date arithmetic: subtracting 0.5 gives a DateTime, but for ggplot's date scale it works fine
+    xmax = day + 0.5
+  )
+
+daily |>
+  filter(!is.na(event)) |>
+  # filter(political_affiliation != "other") |>
+  filter(str_detect(country, affected_country)) |>
+  filter(group == "current_year") |>
+  ggplot(aes(
+    x = display_date,
+    y = total_duration,
+    color = political_affiliation,
+    group = political_affiliation
+  )) +
+  geom_line(stat = "identity") +
+  geom_rect(
+    data = weekend_shading,
+    aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+    fill = "grey80",
+    alpha = 0.5,
+    inherit.aes = FALSE
+  ) +
+  facet_wrap(~event, scales = "free") +
+  geom_vline(
+    data = filter(political_events, period == "post_event"),
+    aes(xintercept = event_date),
+    linetype = "dashed"
+  ) +
+  labs(
+    title = "Daily play duration by political affiliation",
+    x = "Day",
+    y = "Total play duration (minutes)",
+    color = "Political affiliation"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  scale_x_date(date_labels = "%b %d", date_breaks = "1 day")
+  scale_y_continuous(
+    labels = scales::label_number(scale_cut = scales::cut_short_scale())
+  )
+
+
+```
+
+```{r}
+#| label: triple-difference-estimator
+
+td <- felm(
+  total_duration ~
+    I(event_type=="LeftStress_post")    # left‐stress post
+  + I(event_type=="RightStress_post")   # right‐stress post
+  # + ...                                 # your other interactions
+  | pid + day
+  | 0
+  | pid,
+  data = individual
+)
+
+summary(td)
+
+td_panel <- felm(
+  delta_y ~ 
+     isAffectedPos + isAffectedNeg  # the two-way interactions
+  | pid   # person FEs
+  + day   # date FEs (common shocks)
+  | 0     # no IV
+  | pid   # cluster SEs by person
+  ,
+  data = person_event
+)
+
+td_delta <- felm(
+  delta_y ~ 0 
+            + political_affiliation:event_type    # only the two-way interactions
+  | pid                                # person & event FEs
+  | 0                                          # no instruments
+  | pid                                        # cluster SEs by person
+  , data = person_event
+)
+summary(td_delta)
+
+library(fixest)
+
+options(contrasts = c("contr.sum","contr.poly"))
+
+
+td_delta_fe <- feols(
+  delta_y ~ political_affiliation * event_type
+  | pid,         # absorb person FE
+  cluster = ~pid,
+  data    = person_event
+)
+summary(td_delta_fe)
+
+```
+
+```{r}
+#| label: plot-triple-difference
+
+# 1. Compute emmeans for each party × event_type
+emm <- emmeans(td_delta_fe, ~ political_affiliation * event_type) |> 
+  as_tibble() |> 
+  ggplot(aes(
+    x = event_type,
+    y = emmean,
+    color = political_affiliation,
+    group = political_affiliation
+  )) +
+  geom_point(position = position_dodge(width = 0.6), size = 3) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL),
+                position = position_dodge(width = 0.6),
+                width = 0.2) +
+  labs(
+    x = "Event Type",
+    y = expression(hat(Delta)*" Play Duration (mins)"),
+    color = "Party",
+    title = "Triple‐Difference Estimates: Δ Play by Party & Event Type"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1),
+    plot.title = element_text(face = "bold")
+  )
+
+```
+
+```{r}
+#| label: gam-party-level
+
+gam <- gam(total_duration ~ isAffectedPos + isAffectedNeg + political_affiliation + 
+             s(day_num, k = 5) +
+             isWeekend,
+           data = daily)
+
+
+summary(gam)
+
+plot(gam)
+
+plot_comparisons(gam, variables = "isAffectedPos",  by = "political_affiliation")
+```
+
+
+```{r}
+#| label: gam-indiv-level
+
+gam <- gam(total_duration ~ isAffectedPos + isAffectedNeg + political_affiliation + 
+             s(day_num, k = 5) +
+             isWeekend,
+           data = daily)
+
+
+summary(gam)
+
+plot(gam)
+
+plot_comparisons(gam, variables = "isAffectedPos",  by = "political_affiliation")
+```
+
+
+```{r}
+#| label: propensity-score-matching-country
+
+psm_model <- matchit(isAffectedPos ~ political_affiliation + country,
+                     data = individual,
+                     method = "nearest",  # you can choose other methods, e.g., optimal matching
+                     distance = "logit")
+
+matched_data <- match.data(psm_model)
+summary(psm_model)
+
+effect_model <- lm(total_duration ~ isAffectedPos * political_affiliation + ns(day_num, df = 4), 
+                   data = matched_data)
+summary(effect_model)
+
+```
+
+```{r}
+#| label: lfe
+
+model <- felm(total_duration ~ isAffectedNeg | pid + day, data = individual)
+summary(model)
+
+```

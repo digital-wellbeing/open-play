@@ -1,0 +1,54 @@
+project:
+  type: book
+  execute-dir: project
+  output-dir: docs
+
+book:
+  title: "Psychological Wellbeing, Sleep, and Video Gaming: Analyses of Comprehensive Digital Traces"
+  author: "Digital Wellbeing Lab"
+  date: "2024-10-06"
+  chapters:
+    - index.qmd
+    - scripts/1_preprocess.qmd
+    - scripts/2_basicNeeds.qmd
+    - scripts/3_sleep.qmd
+    - scripts/4_genres.qmd
+  search: true
+  repo-url: https://digital-wellbeing.github.io/platform-study-rr/
+  downloads: [pdf]
+  sharing: [twitter, facebook]
+
+comments:
+  hypothesis: true
+
+toc: true
+editor_options:
+  chunk_output_type: console
+execute:
+  warning: false
+  message: false
+  output: true
+  echo: true
+knitr:
+  opts_chunk:
+    root.dir: .
+page-layout: full
+format:
+  html:
+    theme:
+      light: united
+      dark: darkly
+    code-fold: true
+    fontsize: 13pt
+    other-links:
+      - text: Stage 1 Manuscript (OSF)
+        href: https://osf.io/pb5nu
+        icon: file-pdf
+      - text: GitHub Repository
+        href: https://digital-wellbeing.github.io/platform-study-rr/
+        icon: github
+bibliography: references.bib
+publish:
+  gh-pages:
+    branch: main
+    folder: docs

@@ -1,0 +1,5 @@
+---
+title: "Welcome"
+---
+
+This website describes the data simulation, preprocessing, and analysis code for our Stage 1 Registered Report. 
