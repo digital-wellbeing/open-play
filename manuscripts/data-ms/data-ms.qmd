@@ -14,7 +14,7 @@ author:
     #   - methodology
     #   - formal analysis
     #   - writing
-    
+
   - name: Tamás Andrei Földes
     corresponding: false
     orcid: 0000-0002-0623-9149
@@ -28,7 +28,7 @@ author:
     #   - methodology
     #   - formal analysis
     #   - writing
-      
+
   - name: Matti Vuorre
     corresponding: false
     orcid: 0000-0001-5052-066X
@@ -41,7 +41,7 @@ author:
     #   - funding acquisition
     #   - formal analysis
     #   - editing
-      
+
   - name: Thomas Hakman
     corresponding: false
     orcid: 0009-0009-8292-2482
@@ -53,7 +53,7 @@ author:
     #   - data curation
     #   - validation
     #   - editing
-      
+
   - name: Kristoffer Magnusson
     corresponding: false
     orcid: 0000-0003-0713-0556
@@ -64,7 +64,7 @@ author:
     # roles:
     #   - methodology
     #   - editing
-      
+
   - name: Andrew K Przybylski
     corresponding: true
     email: andy.pryzbylski@oii.ox.ac.uk
@@ -79,7 +79,8 @@ author:
     #   - editing
 output: html_document
 execute-dir: project
-format: 
+bibliography: ../../references.bib
+format:
   html:
     toc: true
     toc-depth: 2
@@ -100,14 +101,33 @@ echo: false
 ```{r}
 #| label: libraries
 
-if (!require("pacman")) install.packages("pacman")
-if (!require("devtools")) install.packages("devtools")
+if (!require("pacman")) {
+  install.packages("pacman")
+}
+if (!require("devtools")) {
+  install.packages("devtools")
+}
 library(pacman)
 
-if (!require("ggsankey")) devtools::install_github("davidsjoberg/ggsankey")
+if (!require("ggsankey")) {
+  devtools::install_github("davidsjoberg/ggsankey")
+}
 
 p_load(
-  tidyverse, jsonlite, qualtRics, sjlabelled, hms, openxlsx, scales, qualtRics, here, scales, ggsankey, tidycensus, here, ggrepel
+  tidyverse,
+  jsonlite,
+  qualtRics,
+  sjlabelled,
+  hms,
+  openxlsx,
+  scales,
+  qualtRics,
+  here,
+  scales,
+  ggsankey,
+  tidycensus,
+  here,
+  ggrepel
 )
 
 here::i_am("manuscripts/data-ms/data-ms.qmd")
@@ -143,9 +163,7 @@ xbox <- read_csv(here("data-minimal-pseudo/telemetry_xbox.csv.gz"))
 #| label: custom-funcs
 
 print_num <- function(num, accuracy = .1) {
-  scales::number(num, 
-                 accuracy = accuracy, 
-                 scale_cut = scales::cut_long_scale())
+  scales::number(num, accuracy = accuracy, scale_cut = scales::cut_long_scale())
 }
 
 ```
@@ -165,7 +183,11 @@ steam_sum <- steam |>
   group_by(pid, steam_id) |>
   mutate(
     # Calculate time difference between consecutive polls for the same user/game
-    time_diff_hours = as.numeric(difftime(timestamp, lag(timestamp), units = "hours")),
+    time_diff_hours = as.numeric(difftime(
+      timestamp,
+      lag(timestamp),
+      units = "hours"
+    )),
     # Calculate playtime difference
     playtime_diff = playtime_forever - lag(playtime_forever)
   ) |>
@@ -179,7 +201,8 @@ steam_sum <- steam |>
     !is.na(playtime_diff),
     playtime_diff >= 0,
     !is.na(time_diff_hours),
-    time_diff_hours > 0, time_diff_hours < 2 # Assuming roughly hourly polls
+    time_diff_hours > 0,
+    time_diff_hours < 2 # Assuming roughly hourly polls
   ) |>
   # If playtime_diff is large, it might span multiple hours.
   # This calculation assumes playtime is evenly distributed over the polling interval.
@@ -189,12 +212,19 @@ steam_sum <- steam |>
     minutes = playtime_diff,
     date = as.Date(timestamp),
     hour = hour(timestamp),
-    datetime_hour_start = ymd_hms(paste0(date, " ", sprintf("%02d", hour), ":00:00"), tz = "UTC")
+    datetime_hour_start = ymd_hms(
+      paste0(date, " ", sprintf("%02d", hour), ":00:00"),
+      tz = "UTC"
+    )
   ) |>
   group_by(pid, steam_id) |>
   # Calculate difference from previous hour and identify new sessions
   mutate(
-    hour_diff = as.numeric(difftime(datetime_hour_start, lag(datetime_hour_start), units = "hours")),
+    hour_diff = as.numeric(difftime(
+      datetime_hour_start,
+      lag(datetime_hour_start),
+      units = "hours"
+    )),
     is_new_session = ifelse(is.na(hour_diff) | hour_diff > 1, 1, 0),
     session_group_id = cumsum(is_new_session),
     session_start = min(datetime_hour_start),
@@ -206,18 +236,18 @@ steam_sum <- steam |>
 ```{r}
 #| label: preprocess-xbox
 
-xbox_clean <- xbox |> 
-  filter(title_placement == "Full") |> 
+xbox_clean <- xbox |>
+  filter(title_placement == "Full") |>
   filter(genres != "Video")
-  
+
 ```
 
 ```{r}
 #| label: preprocess-nintendo
 
-nintendo_clean <- nintendo |> 
+nintendo_clean <- nintendo |>
   filter(session_end <= time_of_pull)
-  
+
 ```
 
 ```{r}
@@ -227,9 +257,20 @@ n_participants <- print_num(length(unique(panel$pid)))
 n_daily <- print_num(nrow(diary))
 n_biweekly <- print_num(nrow(panel))
 n_sessions <- print_num(nrow(nintendo) + nrow(xbox) + nrow(steam_sum))
-n_hours <- print_num((sum(nintendo$duration, na.rm = TRUE) + sum(xbox$duration, na.rm = TRUE) + sum(steam_sum$minutes, na.rm = TRUE))/60)
+n_hours <- print_num(
+  (sum(nintendo$duration, na.rm = TRUE) +
+    sum(xbox$duration, na.rm = TRUE) +
+    sum(steam_sum$minutes, na.rm = TRUE)) /
+    60
+)
 
-n_platforms <- table(stringr::str_count(intake$linked_platforms[!is.na(intake$linked_platforms)], ",") + 1)
+n_platforms <- table(
+  stringr::str_count(
+    intake$linked_platforms[!is.na(intake$linked_platforms)],
+    ","
+  ) +
+    1
+)
 
 ```
 
@@ -237,29 +278,35 @@ n_platforms <- table(stringr::str_count(intake$linked_platforms[!is.na(intake$li
 #| label: load-US-census-data
 
 # import ethnicity data using the census API and tidycensus
-ethnicity_vars <- load_variables(2020, "pl", cache = TRUE) |> 
+ethnicity_vars <- load_variables(2020, "pl", cache = TRUE) |>
   filter(name %in% paste0("P1_00", 3:9, "N"))
 
 ethnicity_us <- get_decennial(
   geography = "us",
   variables = ethnicity_vars$name,
   year = 2020,
-) |> 
+) |>
   left_join(ethnicity_vars, by = c("variable" = "name")) %>%
-  mutate(label = map_chr(label, ~ str_trim(tail(str_split(.x, "!!")[[1]], 1)))) |> 
-  select(label, gen_pop = value) |> 
   mutate(
-    label = case_match(label,
+    label = map_chr(label, ~ str_trim(tail(str_split(.x, "!!")[[1]], 1)))
+  ) |>
+  select(label, gen_pop = value) |>
+  mutate(
+    label = case_match(
+      label,
       c("White alone") ~ "White",
-      c("Black or African American alone","Black or African American") ~ "Black",
+      c("Black or African American alone", "Black or African American") ~
+        "Black",
       c("Asian alone") ~ "Asian",
-      c("American Indian and Alaska Native alone") ~ "American Indian and Alaska Native",
-      c("Native Hawaiian and Other Pacific Islander alone") ~ "Native Hawaiian and Other Pacific Islander",
+      c("American Indian and Alaska Native alone") ~
+        "American Indian and Alaska Native",
+      c("Native Hawaiian and Other Pacific Islander alone") ~
+        "Native Hawaiian and Other Pacific Islander",
       c("Some Other Race alone") ~ "Other",
       c("Population of two or more races:") ~ "Two or More Races",
       .default = "Other"
     )
-  ) |> 
+  ) |>
   mutate(
     gen_prop = gen_pop / sum(gen_pop, na.rm = TRUE),
     moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
@@ -271,7 +318,9 @@ ethnicity_us <- get_decennial(
 ```{r}
 #| label: load-UK-census-data
 
-age_uk <- read_csv(here("data-census/TS009-2021-2-filtered-2025-03-05T23-18-32Z.csv")) |> 
+age_uk <- read_csv(here(
+  "data-census/TS009-2021-2-filtered-2025-03-05T23-18-32Z.csv"
+)) |>
   pivot_wider(
     id_cols = c(`Age (91 categories) Code`, `Age (91 categories)`),
     names_from = `Sex (2 categories)`,
@@ -281,39 +330,49 @@ age_uk <- read_csv(here("data-census/TS009-2021-2-filtered-2025-03-05T23-18-32Z.
   select(age = `Age (91 categories)`, female = Female, male = Male, total)
 
 # https://www.ons.gov.uk/datasets/TS021/editions/2021/versions/1/filter-outputs/f1addb18-dcb8-4adb-98a8-abeb9108c330#get-data
-ethnicity_uk <- read_csv(here("data-census/TS021-2021-1-filtered-2025-03-05T23-25-05Z.csv")) |> 
+ethnicity_uk <- read_csv(here(
+  "data-census/TS021-2021-1-filtered-2025-03-05T23-25-05Z.csv"
+)) |>
   # Optionally drop the row for "Does not apply"
   filter(`Ethnic group (20 categories)` != "Does not apply") %>%
   mutate(
     label = case_when(
       str_detect(`Ethnic group (20 categories)`, "^Asian") ~ "Asian",
       str_detect(`Ethnic group (20 categories)`, "^Black") ~ "Black",
-      str_detect(`Ethnic group (20 categories)`, "^Mixed") ~ "Two or More Races",
+      str_detect(`Ethnic group (20 categories)`, "^Mixed") ~
+        "Two or More Races",
       str_detect(`Ethnic group (20 categories)`, "^White") ~ "White",
-      str_detect(`Ethnic group (20 categories)`, "^Other ethnic group") ~ "Other",
-      TRUE ~ "Other"  # fallback if nothing matches
+      str_detect(`Ethnic group (20 categories)`, "^Other ethnic group") ~
+        "Other",
+      TRUE ~ "Other" # fallback if nothing matches
     )
-  ) |> 
-  group_by(label) |> 
-  summarize(gen_pop = sum(Observation, na.rm = TRUE)) |> 
-  ungroup() |> 
+  ) |>
+  group_by(label) |>
+  summarize(gen_pop = sum(Observation, na.rm = TRUE)) |>
+  ungroup() |>
   mutate(
     gen_prop = gen_pop / sum(gen_pop),
     moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
     country = "UK"
   )
 
-education_uk <- read_csv(here("data-census/TS067-2021-3-filtered-2025-03-05T23-37-22Z.csv")) |> 
-  select(4:5) |> 
-  rename_with(~ c("level","gen_pop")) |> 
-  filter(level != "Does not apply") |> 
+education_uk <- read_csv(here(
+  "data-census/TS067-2021-3-filtered-2025-03-05T23-37-22Z.csv"
+)) |>
+  select(4:5) |>
+  rename_with(~ c("level", "gen_pop")) |>
+  filter(level != "Does not apply") |>
   mutate(
     level = case_when(
       str_detect(level, "No qualifications") ~ "No formal qualifications",
-      str_detect(level, "Level 1") ~ "One to four GCSE passes (grade A* to C or grade 4 and above) and any other GCSEs at other grades, or equivalent qualifications",
-      str_detect(level, "Level 2") ~ "Five or more GCSE passes (grade A* to C or grade 4 and above) or equivalent qualifications",
-      str_detect(level, "Level 3") ~ "Two or more A Levels or equivalent qualifications",
-      str_detect(level, "Level 4") ~ "Higher National Certificate, Higher National Diploma, Bachelor's degree, or post-graduate qualifications",
+      str_detect(level, "Level 1") ~
+        "One to four GCSE passes (grade A* to C or grade 4 and above) and any other GCSEs at other grades, or equivalent qualifications",
+      str_detect(level, "Level 2") ~
+        "Five or more GCSE passes (grade A* to C or grade 4 and above) or equivalent qualifications",
+      str_detect(level, "Level 3") ~
+        "Two or more A Levels or equivalent qualifications",
+      str_detect(level, "Level 4") ~
+        "Higher National Certificate, Higher National Diploma, Bachelor's degree, or post-graduate qualifications",
       str_detect(level, "Other:") ~ "Other qualifications",
       str_detect(level, "Apprenticeship") ~ "Apprenticeships",
       TRUE ~ "Other qualifications"
@@ -406,9 +465,13 @@ lvl <- c(
 node_counts <- intake |>
   transmute(
     stage1 = "Screened",
-    stage2 = ifelse(is.na(linked_platforms), "Ineligible",    "Linked ≥1 account"),
+    stage2 = ifelse(is.na(linked_platforms), "Ineligible", "Linked ≥1 account"),
     stage3 = ifelse(qualified, "Recent trace data", "No recent trace data"),
-    stage4 = ifelse(pid %in% panel$pid,      "Began surveys", "Did not begin surveys")
+    stage4 = ifelse(
+      pid %in% panel$pid,
+      "Began surveys",
+      "Did not begin surveys"
+    )
   ) |>
   pivot_longer(everything(), names_to = "stage", values_to = "node") |>
   filter(!is.na(node)) |>
@@ -417,9 +480,21 @@ node_counts <- intake |>
 sankey_data <- intake |>
   transmute(
     Screening = "Screened",
-    Linking = ifelse(is.na(linked_platforms), "Ineligible",    "Linked ≥1 account"),
-    `Account Validation` = ifelse(qualified, "Recent trace data", "No recent trace data"),
-    Surveys = ifelse(pid %in% panel$pid,      "Began surveys", "Did not begin surveys")
+    Linking = ifelse(
+      is.na(linked_platforms),
+      "Ineligible",
+      "Linked ≥1 account"
+    ),
+    `Account Validation` = ifelse(
+      qualified,
+      "Recent trace data",
+      "No recent trace data"
+    ),
+    Surveys = ifelse(
+      pid %in% panel$pid,
+      "Began surveys",
+      "Did not begin surveys"
+    )
   ) |>
   make_long(Screening, Linking, `Account Validation`, Surveys) |>
   left_join(node_counts, by = "node") |>
@@ -431,26 +506,27 @@ sankey_data <- intake |>
   )
 
 # 2. plot with parse = TRUE
-ggplot(sankey_data,
-       aes(x = x,
-           next_x = next_x,
-           node = node,
-           next_node = next_node,
-           fill = factor(node),
-           label = node_label)) +
+ggplot(
+  sankey_data,
+  aes(
+    x = x,
+    next_x = next_x,
+    node = node,
+    next_node = next_node,
+    fill = factor(node),
+    label = node_label
+  )
+) +
   geom_sankey(flow.alpha = .6, node.color = "gray30") +
   # pass parse = TRUE into the label layer
-  geom_sankey_label(parse = TRUE,
-                    size = 3, 
-                    color = "white", 
-                    fill = "gray40") +
+  geom_sankey_label(parse = TRUE, size = 3, color = "white", fill = "gray40") +
   scale_fill_viridis_d(drop = FALSE) +
   theme_sankey() +
   theme(
     legend.position = "none",
-    axis.text.y     = element_blank(),
-    axis.ticks.y    = element_blank(),
-    axis.title.x    = element_blank()
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank()
   )
 ```
 
@@ -518,10 +594,10 @@ linked each type of account are shown in @tbl-platforms.
 |              |              | \<https://a  | for 65% of   |
 |              |              | c            | Switch       |
 |              |              | c            | playtime     |
-|              |              | ounts.ninten | @BallouEtAl  |
-|              |              | do           | 2            |
-|              |              | .            | 0            |
-|              |              | com/qrcode\> | 25Perceived. |
+|              |              | ounts.ninten | [@BallouEtAl2025Perceived]  |
+|              |              | do           |             |
+|              |              | .            |             |
+|              |              | com/qrcode\> |  |
 +--------------+--------------+--------------+--------------+
 | Xbox (US     | Data-sharing | Participants | Session      |
 | only)        | agreement    | consent to   | records      |
@@ -690,23 +766,25 @@ remained available for 96 hours.
 ```{r}
 #| label: participant-gender
 
-gender_counts <- intake |> 
-  filter(country != "OTHER") |> 
+gender_counts <- intake |>
+  filter(country != "OTHER") |>
   mutate(
     gender = ifelse(gender %in% c("Man", "Woman"), gender, "Other")
-  ) |> 
+  ) |>
   group_by(qualified) |>
-  count(gender) |> 
+  count(gender) |>
   mutate(
-    prop = paste0(100*round(prop.table(n), 3), "%")
+    prop = paste0(100 * round(prop.table(n), 3), "%")
   )
 
-gender_text_all <- with(gender_counts,
-                    paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
+gender_text_all <- with(
+  gender_counts,
+  paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
 )
 
-gender_text_qualified <- with(gender_counts |> filter(qualified),
-                    paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
+gender_text_qualified <- with(
+  gender_counts |> filter(qualified),
+  paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
 )
 
 
@@ -715,26 +793,37 @@ gender_text_qualified <- with(gender_counts |> filter(qualified),
 ```{r}
 #| label: fig-representative
 
-ethnicity_survey <- intake |> 
+ethnicity_survey <- intake |>
   mutate(
     ethnicity = case_match(
       ethnicity,
       c("Other ethnic group", "Others", "Some Other Race alone") ~ "Other",
       "White alone" ~ "White",
-      c("Black or African American alone","Black, African, Caribbean or Black British","Black or African American alone") ~ "Black",
-      "Native Hawaiian and Other Pacific Islander alone" ~ "Native Hawaiian and Other Pacific Islander",
-      "American Indian and Alaska Native alone" ~ "American Indian and Alaska Native",
-      c("Asian","Asian alone","Asian or Asian British") ~ "Asian",
+      c(
+        "Black or African American alone",
+        "Black, African, Caribbean or Black British",
+        "Black or African American alone"
+      ) ~
+        "Black",
+      "Native Hawaiian and Other Pacific Islander alone" ~
+        "Native Hawaiian and Other Pacific Islander",
+      "American Indian and Alaska Native alone" ~
+        "American Indian and Alaska Native",
+      c("Asian", "Asian alone", "Asian or Asian British") ~ "Asian",
       c("Mixed or multiple ethnic groups", "Mixed") ~ "Two or More Races",
       .default = ethnicity
     ),
-  ) |> 
+  ) |>
   filter(
-    !country %in% c("OTHER", NA) & 
+    !country %in% c("OTHER", NA) &
       !ethnicity %in% c("Prefer not to say", NA) &
-      !(country == "UK" & ethnicity %in% c("American Indian and Alaska Native alone", 
-                                           "Native Hawaiian and Other Pacific Islander alone"))
-  ) |> 
+      !(country == "UK" &
+        ethnicity %in%
+          c(
+            "American Indian and Alaska Native alone",
+            "Native Hawaiian and Other Pacific Islander alone"
+          ))
+  ) |>
   group_by(country, ethnicity) %>%
   summarize(
     survey_count = n(),
@@ -742,9 +831,11 @@ ethnicity_survey <- intake |>
     qualified_count = sum(qualified, na.rm = TRUE),
     survey_moe = 1.96 * sqrt(survey_count * (1 - survey_count / n())) / n(),
     gamers_moe = 1.96 * sqrt(gamers_count * (1 - gamers_count / n())) / n(),
-    qualified_moe = 1.96 * sqrt(qualified_count * (1 - qualified_count / n())) / n()
-  ) |> 
-  group_by(country) |> 
+    qualified_moe = 1.96 *
+      sqrt(qualified_count * (1 - qualified_count / n())) /
+      n()
+  ) |>
+  group_by(country) |>
   mutate(
     survey_prop = survey_count / sum(survey_count),
     gamers_prop = gamers_count / sum(gamers_count),
@@ -752,25 +843,47 @@ ethnicity_survey <- intake |>
   )
 
 # Join the census and survey summaries
-ethnicity_combined <- ethnicity_survey |> 
-  ungroup() |> 
-  left_join(bind_rows(ethnicity_us, ethnicity_uk), by = c("ethnicity" = "label", "country")) |> 
+ethnicity_combined <- ethnicity_survey |>
+  ungroup() |>
+  left_join(
+    bind_rows(ethnicity_us, ethnicity_uk),
+    by = c("ethnicity" = "label", "country")
+  ) |>
   pivot_longer(
     cols = c(gen_prop, survey_prop, gamers_prop, qualified_prop),
     names_to = "group",
     values_to = "value"
-  ) |> 
+  ) |>
   filter(!is.na(value) & !is.na(gen_pop)) |>
   mutate(
-    group = recode(group,
-                   gen_prop = "General Population",
-                   survey_prop = "Screened Participants",
-                   gamers_prop = "Self-reported Video Game Players",
-                   qualified_prop = "Qualified Participants"
+    group = recode(
+      group,
+      gen_prop = "General Population",
+      survey_prop = "Screened Participants",
+      gamers_prop = "Self-reported Video Game Players",
+      qualified_prop = "Qualified Participants"
     ),
-    group = fct_relevel(group, c("General Population", "Screened Participants", "Self-reported Video Game Players", "Qualified Participants")),
-    ethnicity = fct_relevel(ethnicity, c("White", "Black", "Asian", "Two or More Races", "American Indian and Alaska Native", 
-                                         "Native Hawaiian and Other Pacific Islander", "Other"))
+    group = fct_relevel(
+      group,
+      c(
+        "General Population",
+        "Screened Participants",
+        "Self-reported Video Game Players",
+        "Qualified Participants"
+      )
+    ),
+    ethnicity = fct_relevel(
+      ethnicity,
+      c(
+        "White",
+        "Black",
+        "Asian",
+        "Two or More Races",
+        "American Indian and Alaska Native",
+        "Native Hawaiian and Other Pacific Islander",
+        "Other"
+      )
+    )
   )
 
 ggplot(ethnicity_combined, aes(x = group, y = value, fill = ethnicity)) +
@@ -787,11 +900,23 @@ ggplot(ethnicity_combined, aes(x = group, y = value, fill = ethnicity)) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   geom_text(
     aes(
-      label = ifelse(value < 0.01, "", scales::label_percent(accuracy = 1)(value)),, 
+      label = ifelse(
+        value < 0.01,
+        "",
+        scales::label_percent(accuracy = 1)(value)
+      ),
+      ,
       family = "serif"
-    ), 
-    position = position_stack(vjust = 0.5), color = "white") +
-  scale_fill_viridis_d(option = "magma", begin = .1, end = .8, labels = function(x) str_wrap(x, width = 25))
+    ),
+    position = position_stack(vjust = 0.5),
+    color = "white"
+  ) +
+  scale_fill_viridis_d(
+    option = "magma",
+    begin = .1,
+    end = .8,
+    labels = function(x) str_wrap(x, width = 25)
+  )
 
 
 ```
@@ -869,26 +994,27 @@ TODO: convert to table
 
 # TODO: daily aggregate stacked bar plots
 # subplots: self-reported survey data, time use data, telemetry data
-# side-by-side stacked bar plot 
+# side-by-side stacked bar plot
 
 sr_pid <- intake |>
   mutate(
     pid,
     qualified,
     self_reported_weekly_play,
-    Steam       = self_reported_weekly_play * coalesce(prop_steam/100, 0),
-    Xbox        = self_reported_weekly_play * coalesce(prop_xbox/100, 0),
-    PlayStation = self_reported_weekly_play * coalesce(prop_playstation/100, 0),
-    Nintendo    = self_reported_weekly_play * coalesce(prop_nintendo/100, 0),
-    iOS         = self_reported_weekly_play * coalesce(prop_ios/100, 0),
-    Android     = self_reported_weekly_play * coalesce(prop_android/100, 0),
+    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
+    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
+    PlayStation = self_reported_weekly_play *
+      coalesce(prop_playstation / 100, 0),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
+    iOS = self_reported_weekly_play * coalesce(prop_ios / 100, 0),
+    Android = self_reported_weekly_play * coalesce(prop_android / 100, 0),
     .keep = "none"
   ) |>
   pivot_longer(
     cols = c(Steam, Xbox, PlayStation, Nintendo, iOS, Android),
     names_to = "platform",
     values_to = "minutes"
-  ) |> 
+  ) |>
   filter(!is.na(minutes))
 
 sr_long <- sr_pid |>
@@ -897,51 +1023,55 @@ sr_long <- sr_pid |>
   mutate(source = "Self-report")
 
 steam_weekly <- steam_sum |>
-  filter(timestamp > as.Date("2025-06-01")) |> 
-  mutate(week = floor_date(timestamp, "week")) |> 
-  group_by(week) |> 
+  filter(timestamp > as.Date("2025-06-01")) |>
+  mutate(week = floor_date(timestamp, "week")) |>
+  group_by(week) |>
   summarise(
     total_minutes = sum(minutes, na.rm = TRUE),
-    minutes_per_player = sum(minutes, na.rm = TRUE) / n_distinct(intake$pid[intake$qualified])
-  ) |> 
+    minutes_per_player = sum(minutes, na.rm = TRUE) /
+      n_distinct(intake$pid[intake$qualified])
+  ) |>
   summarise(
     minutes = mean(minutes_per_player, na.rm = TRUE)
-  ) |> 
+  ) |>
   mutate(platform = "Steam", source = "Telemetry")
 
-xbox_weekly <- xbox_clean |> 
-  filter(session_start > as.Date("2025-06-01")) |> 
-  mutate(week = floor_date(session_start, "week")) |> 
-  group_by(week) |> 
+xbox_weekly <- xbox_clean |>
+  filter(session_start > as.Date("2025-06-01")) |>
+  mutate(week = floor_date(session_start, "week")) |>
+  group_by(week) |>
   summarise(
     total_minutes = sum(duration, na.rm = TRUE),
-    minutes_per_player = sum(duration, na.rm = TRUE) / n_distinct(intake$pid[intake$qualified])
-  ) |> 
+    minutes_per_player = sum(duration, na.rm = TRUE) /
+      n_distinct(intake$pid[intake$qualified])
+  ) |>
   summarise(
     minutes = mean(minutes_per_player, na.rm = TRUE)
-  ) |> 
+  ) |>
   mutate(platform = "Xbox", source = "Telemetry")
 
-xbox_pid <- xbox_clean |> 
-  filter(session_start > as.Date("2025-06-01")) |> 
-  filter(title_placement == "Full") |> 
-  filter(genres != "Video") |> 
-  mutate(day = floor_date(session_start, "day")) |> 
-  group_by(pid, day) |> 
+xbox_pid <- xbox_clean |>
+  filter(session_start > as.Date("2025-06-01")) |>
+  filter(title_placement == "Full") |>
+  filter(genres != "Video") |>
+  mutate(day = floor_date(session_start, "day")) |>
+  group_by(pid, day) |>
   summarise(
-    total_minutes = sum(duration, na.rm = TRUE))
+    total_minutes = sum(duration, na.rm = TRUE)
+  )
 
 nintendo_weekly <- nintendo_clean |>
-  filter(session_start > as.Date("2025-06-01")) |> 
-  mutate(week = floor_date(session_start, "week")) |> 
-  group_by(week) |> 
+  filter(session_start > as.Date("2025-06-01")) |>
+  mutate(week = floor_date(session_start, "week")) |>
+  group_by(week) |>
   summarise(
     total_minutes = sum(duration, na.rm = TRUE),
-    minutes_per_player = sum(duration, na.rm = TRUE) / n_distinct(intake$pid[intake$qualified])
-  ) |> 
+    minutes_per_player = sum(duration, na.rm = TRUE) /
+      n_distinct(intake$pid[intake$qualified])
+  ) |>
   summarise(
     minutes = mean(minutes_per_player, na.rm = TRUE)
-  ) |> 
+  ) |>
   mutate(platform = "Nintendo", source = "Telemetry")
 
 ```
@@ -949,78 +1079,106 @@ nintendo_weekly <- nintendo_clean |>
 ```{r}
 #| label: fig-stacked-playtime
 
-weekly_by_platform <-  bind_rows(
-    sr_long,
-    steam_weekly,
-    xbox_weekly,
-    nintendo_weekly
-  ) |> 
-  group_by(source) |> 
-  mutate(prop = minutes / sum(minutes)) |> 
-  filter(source == "Telemetry" | qualified) |> 
+weekly_by_platform <- bind_rows(
+  sr_long,
+  steam_weekly,
+  xbox_weekly,
+  nintendo_weekly
+) |>
+  group_by(source) |>
+  mutate(prop = minutes / sum(minutes)) |>
+  filter(source == "Telemetry" | qualified) |>
   mutate(platform = fct_reorder(platform, minutes))
-  
+
 stack_order <- weekly_by_platform %>%
   filter(source == "Self-report") %>%
   count(platform, wt = minutes, name = "sr") %>%
-  arrange(sr) %>% pull(platform)
+  arrange(sr) %>%
+  pull(platform)
 
 weekly_by_platform <- weekly_by_platform %>%
-  mutate(source = factor(source, levels = c("Self-report","Telemetry")),
-         platform = factor(platform, levels = stack_order))
+  mutate(
+    source = factor(source, levels = c("Self-report", "Telemetry")),
+    platform = factor(platform, levels = stack_order)
+  )
 
 ghost <- weekly_by_platform %>%
   select(platform, source, minutes) %>%
   pivot_wider(names_from = source, values_from = minutes, values_fill = 0) %>%
   mutate(gap = pmax(`Self-report` - Telemetry, 0)) %>%
-  arrange(desc(gap)) %>%                                # largest bottom → smallest top
+  arrange(desc(gap)) %>% # largest bottom → smallest top
   mutate(
-    tele_top = sum(Telemetry, na.rm = TRUE)[1],        # SINGLE anchor = top of Telemetry bar
-    ymin     = tele_top + lag(cumsum(gap), default = 0),
-    ymax     = ymin + gap,
-    xmid     = match("Telemetry", levels(weekly_by_platform$source)),
-    xmin     = xmid - 0.9/2,
-    xmax     = xmid + 0.9/2,
-    ymid     = (ymin + ymax)/2,
-    reason = dplyr::case_match(platform, 
-                               "iOS" ~ "Missing or low quality screenshots",
-                               "PlayStation" ~ "No PlayStation telemetry method",
-                               "Android" ~ "Missing or low-quality screenshots",
-                               "Nintendo" ~ "Missing 3rd party play",
-                               "Steam" ~ "Uncaptured Steam play\n(e.g., invisible mode, account sharing)", .default = NA_character_)
-  ) |> 
+    tele_top = sum(Telemetry, na.rm = TRUE)[1], # SINGLE anchor = top of Telemetry bar
+    ymin = tele_top + lag(cumsum(gap), default = 0),
+    ymax = ymin + gap,
+    xmid = match("Telemetry", levels(weekly_by_platform$source)),
+    xmin = xmid - 0.9 / 2,
+    xmax = xmid + 0.9 / 2,
+    ymid = (ymin + ymax) / 2,
+    reason = dplyr::case_match(
+      platform,
+      "iOS" ~ "Missing or low quality screenshots",
+      "PlayStation" ~ "No PlayStation telemetry method",
+      "Android" ~ "Missing or low-quality screenshots",
+      "Nintendo" ~ "Missing 3rd party play",
+      "Steam" ~
+        "Uncaptured Steam play\n(e.g., invisible mode, account sharing)",
+      .default = NA_character_
+    )
+  ) |>
   filter(gap > 0)
 
 ggplot(weekly_by_platform, aes(x = source, y = minutes, fill = platform)) +
   geom_bar(stat = "identity", position = "stack", width = 0.9) +
-  scale_fill_viridis_d(option = "magma", begin = .1, end = .8, limits = stack_order) +
+  scale_fill_viridis_d(
+    option = "magma",
+    begin = .1,
+    end = .8,
+    limits = stack_order
+  ) +
   labs(x = "Data Source", y = "Weekly Playtime (minutes)", fill = "Platform") +
   theme(legend.position = "bottom") +
   geom_text(
     aes(label = ifelse(minutes < 10, "", round(minutes, 0))),
-    position = position_stack(vjust = 0.5), color = "white", family = "serif"
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    family = "serif"
   ) +
   # dotted ghost rectangles that fill Telemetry up to Self-report
   geom_rect(
     data = ghost,
     aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-    inherit.aes = FALSE, linetype = "dotted", linewidth = 0.6, color = "black", fill = NA
+    inherit.aes = FALSE,
+    linetype = "dotted",
+    linewidth = 0.6,
+    color = "black",
+    fill = NA
   ) +
   geom_text(
     data = ghost,
     aes(x = xmid, y = ymid, label = paste0("+", round(gap, 0))),
-    inherit.aes = FALSE, family = "serif"
+    inherit.aes = FALSE,
+    family = "serif"
   ) +
   # optional arrows + brief reasons (remove if not needed)
   geom_text_repel(
     data = ghost %>% filter(!is.na(reason)),
     aes(x = xmid + .05, y = ymid, label = reason),
-    nudge_x = 1, hjust = 1, direction = "y",
+    nudge_x = 1,
+    hjust = 1,
+    direction = "y",
     arrow = arrow(length = unit(6, "pt"), type = "closed"),
-    min.segment.length = 0, box.padding = 0.25, point.padding = 0.25,
-    inherit.aes = FALSE, family = "serif"
+    min.segment.length = 0,
+    box.padding = 0.25,
+    point.padding = 0.25,
+    inherit.aes = FALSE,
+    family = "serif"
   ) +
-  coord_cartesian(clip = "off", ylim = c(0, max(ghost$ymax) * 1.08), xlim = c(1, max(ghost$xmax) * 1.08))
+  coord_cartesian(
+    clip = "off",
+    ylim = c(0, max(ghost$ymax) * 1.08),
+    xlim = c(1, max(ghost$xmax) * 1.08)
+  )
 ```
 
 TODO: single case study plot
@@ -1067,13 +1225,13 @@ We collected the following demographic variables:
 | satisfaction   | Satisfaction   | and value in   |                |
 | and            | and            | life.          |                |
 | frustration    | Frustration    |                |                |
-|                | Scale* [@Che   |                |                |
-|                | n              |                |                |
-|                | EtAl2015Basic] |                |                |
+|                | Scale* [@ChenEtAl2015Basic]   |                |                |
+|                |               |                |                |
+|                |  |                |                |
 |                | brief version  |                |                |
-|                | @MartelaRy     |                |                |
-|                | a              |                |                |
-|                | n2024Assessing |                |                |
+|                | @MartelaRyan2024Assessing     |                |                |
+|                |               |                |                |
+|                |  |                |                |
 +----------------+----------------+----------------+----------------+
 |                |                |                |                |
 +----------------+----------------+----------------+----------------+
