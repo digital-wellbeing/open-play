@@ -73,6 +73,7 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#executive-function" id="toc-executive-function" class="nav-link" data-scroll-target="#executive-function">Executive Function</a></li>
   <li><a href="#time-use" id="toc-time-use" class="nav-link" data-scroll-target="#time-use">Time Use</a></li>
   <li><a href="#data-quality-checks" id="toc-data-quality-checks" class="nav-link" data-scroll-target="#data-quality-checks">Data Quality Checks</a></li>
+  <li><a href="#missingness" id="toc-missingness" class="nav-link" data-scroll-target="#missingness">Missingness</a></li>
   </ul></li>
   <li><a href="#discussion" id="toc-discussion" class="nav-link" data-scroll-target="#discussion">Discussion</a>
   <ul class="collapse">
@@ -220,21 +221,24 @@ Table&nbsp;1: : Platform Details
 <td>Nintendo</td>
 <td>Data-sharing agreements with Nintendo of America (US) and Nintendo of Europe (UK)</td>
 <td><p>Participants share an identifier contained within a QR code on Nintendo web interface[<br>
-<a href="#_ftn1">1]</a>. Nintendo of America/Europe uses this identifier to retrieve gameplay data and share it with the research team.</p>
-<p><a href="#_ftnref1">[1 ]</a> &lt;https://a ccounts.ninten do.com/qrcode&gt;</p></td>
-<td>Session records (what game was played, at what time, for how long) for 1st party games (games published in whole or in part by Nintendo, but not by third party publishers such as Electronic Arts). In previous research, Nint endo-published games accounted for 65% of Switch playtime <span class="citation" data-cites="BallouEtAl">@BallouEtAl</span> 2025Perceived.</td>
+<a href="#_ftn1">1 ]</a>. Nintendo of A m erica/Europe uses this identifier to retrieve gameplay data and share it with the research team.</p>
+<p>[[1<br>
+]] (#_ftnref1) &lt;https://a c c ounts.ninten do . com/qrcode&gt;</p></td>
+<td>Session records (what game was played, at what time, for how long) for 1st party games (games published in whole or in part by Nintendo, but not by third party publishers such as Electronic Arts). In previous research, Nint e n do-published games accounted for 65% of Switch playtime <span class="citation" data-cites="BallouEtAl">@BallouEtAl</span> 2 0 25Perceived.</td>
 </tr>
 <tr class="even">
 <td>Xbox (US only)</td>
 <td>Data-sharing agreement with Microsoft</td>
-<td><p>Participants consent to data sharing by opting in to the study on Xbox Insiders<a href="#_ftn1">[1]</a> with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in pseudonymized form.</p>
-<p><a href="#_ftnref1">[1 ]</a> &lt;https://s upport.xbox.co m/en-US/help/a ccount-profile /manage-accoun t/guide-to-ins ider-program&gt;</p></td>
+<td><p>Participants consent to data sharing by opting in to the study on Xbox Insiders[<br>
+<a href="#_ftn1">1]</a> with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in p seudonymized form.</p>
+<p>[[1<br>
+]] (#_ftnref1) &lt;https://s u p port.xbox.co m / en-US/help/a c c ount-profile / m anage-accoun t / guide-to-ins i d er-program&gt;</p></td>
 <td>Session records (what game was played, at what time, for how long). The name of the game replaced with a random persistent identifier for all third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared.</td>
 </tr>
 <tr class="odd">
 <td>Steam</td>
-<td>Custom web app (Gam eplay.Science)</td>
-<td>Participants sign up for Ga meplay.Science ( &lt;https://gamep lay.science),&gt; an open-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID).</td>
+<td>Custom web app (Gam e p lay.Science)</td>
+<td>Participants sign up for Ga m e play.Science ( &lt; h ttps://gamep la y .science),&gt; an open-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is a uthenticated using the official Steam a u thentication API (OpenID).</td>
 <td>Incremental playtime per game (every hour, the total time spent playing during the previous hour)</td>
 </tr>
 <tr class="even">
@@ -306,22 +310,37 @@ Figure&nbsp;2
 </section>
 <section id="dataset" class="level1">
 <h1>Dataset</h1>
+<div class="cell">
+<div class="cell-output-display">
+<div id="fig-stacked-playtime" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-stacked-playtime-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="data-ms_files/figure-html/fig-stacked-playtime-1.png" id="fig-stacked-playtime" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-stacked-playtime-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>TODO: single case study plot</p>
 <section id="demographic-measures" class="level2">
 <h2 class="anchored" data-anchor-id="demographic-measures">Demographic measures</h2>
 <p>We collected the following demographic variables:</p>
 <ul>
-<li><p>age</p></li>
-<li><p>gender</p></li>
-<li><p>ethnicity</p></li>
-<li><p>educational attainment</p></li>
-<li><p>employment status</p></li>
-<li><p>height</p></li>
-<li><p>weight</p></li>
-<li><p>self-identified neurodivergence (e.g., ASD, ADHD, dyslexia)</p></li>
-<li><p>diagnosed neurodivergence</p></li>
-<li><p>marital status</p></li>
-<li><p>caretaking responsibilities (children, family members)</p></li>
-<li><p>postal geography (general area only; first three digits of the five-digit US ZIP Code; UK outward code)</p></li>
+<li>age</li>
+<li>gender</li>
+<li>ethnicity</li>
+<li>educational attainment</li>
+<li>employment status</li>
+<li>height</li>
+<li>weight</li>
+<li>self-identified neurodivergence (e.g., ASD, ADHD, dyslexia)</li>
+<li>diagnosed neurodivergence</li>
+<li>marital status</li>
+<li>caretaking responsibilities (children, family members)</li>
+<li>postal geography (general area only; first three digits of the five-digit US ZIP Code; UK outward code)</li>
 </ul>
 </section>
 <section id="self-report-measures" class="level2">
@@ -360,10 +379,10 @@ Figure&nbsp;2
 <table class="table">
 <caption><em>Daily self-report measures</em></caption>
 <colgroup>
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
-<col style="width: 25%">
+<col style="width: 23%">
+<col style="width: 23%">
+<col style="width: 23%">
+<col style="width: 23%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -376,7 +395,7 @@ Figure&nbsp;2
 <tbody>
 <tr class="odd">
 <td style="text-align: left;">Basic psychological need satisfaction and frustration</td>
-<td style="text-align: left;"><em>Basic Psychological Need Satisfaction and Frustration Scale</em> <span class="citation" data-cites="ChenEtAl2015Basic">[@ChenEtAl2015Basic]</span> brief version <span class="citation" data-cites="MartelaRyan2024Assessing">@MartelaRyan2024Assessing</span></td>
+<td style="text-align: left;"><em>Basic Psychological Need Satisfaction and Frustration Scale</em> <span class="citation" data-cites="Che">[@Che n EtAl2015Basic]</span> brief version <span class="citation" data-cites="MartelaRy">@MartelaRy</span> a n2024Assessing</td>
 <td style="text-align: left;">I was able to do things that I really want and value in life.</td>
 <td style="text-align: left;"></td>
 </tr>
@@ -456,6 +475,9 @@ Figure&nbsp;2
 <li>In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, and [TODO: other heuristics]</li>
 </ol>
 </section>
+<section id="missingness" class="level2">
+<h2 class="anchored" data-anchor-id="missingness">Missingness</h2>
+</section>
 </section>
 <section id="discussion" class="level1">
 <h1>Discussion</h1>
@@ -464,6 +486,7 @@ Figure&nbsp;2
 <p>Nonetheless, the richness of this data means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). To stimulate ideas, we present a few questions we think the data are well-suited to answering.</p>
 <p><em>How do seasons and weather impact playtime?</em> Because we capture timestamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. By quantifying these effects, researchers can better distinguish weather‐related demand from other drivers (like work schedules or weekend routines), improving the precision of studies on gaming’s impact on wellbeing, motivation, and cognition.</p>
 <p><em>How do neurotypical and neurodiverse players differ in their gaming behavior?</em> Using the neurodivergence data we collected (which includes, for example, 358 participants who identify as having autism and 495 who identify as having ADHD), researchers can. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods</p>
+<p>Self-reported play accuracy - inference from other papers</p>
 <section id="future-work" class="level2">
 <h2 class="anchored" data-anchor-id="future-work">Future Work</h2>
 <p>The trace data presented here is wide-ranging, but shallow—we capture all gaming that happens on a particular platform or set of platforms, but have no insight into what the player is doing in-game. With previous work and theory clear that in-game behavior (e.g., what character role a player adopts) and experiences (e.g., performance in competitive modes) are key features of games’ wellbeing impacts,</p>

@@ -388,6 +388,8 @@ below.
 The dataset is openly available at \[LINK\] under a CC0 license for
 unrestricted reuse.
 
+highlight that data collection methods are preregistered 
+
 # Design
 
 ```{r}
@@ -673,15 +675,15 @@ valid telemetry were excluded from the study
 
 ## Stage 4: Surveys
 
-Eligible participants were invited to complete 6 waves of panel surveys,
+Eligible participants were invited to complete 6 waves of biweekly surveys,
 one every two weeks. Eligible US participants will additionally be
 invited to complete daily diary surveys for 30 days, concurrently with
-the first panel surveys. Running survey types concurrently allows us to
+the first biweekly surveys. Running survey types concurrently allows us to
 harmonize distribution across regions without delaying the UK sample on
 the US sample’s account, and to minimize attrition.
 
 Diary survey links were sent every day at 2pm local time for the
-participant and remained available until 3am. Panel survey links were
+participant and remained available until 3am. Biweekly survey links were
 sent every second week from the first day of the study at 12pm and
 remained available for 96 hours.
 
@@ -948,6 +950,10 @@ nintendo_weekly <- nintendo_clean |>
 
 ```{r}
 #| label: fig-stacked-playtime
+
+# TODO: blur or fuzzy lines? 
+# TODO: week-to-week variance? 
+# violin plot / side by side - comparison of 5 specific individuals - by quantiles 
 
 weekly_by_platform <-  bind_rows(
     sr_long,
