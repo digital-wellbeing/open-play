@@ -27,7 +27,7 @@ library(fs)
 #| label: load-data
 
 # Load the time use diary data
-time_use_data <- read_csv("data/raw/timeuse_diary.csv")
+time_use_data <- read_csv("data_minimal/raw/timeuse_diary.csv")
 ```
 
 ## Inspect Data
@@ -267,7 +267,7 @@ ai_inspection <- processed_time_use |>
 
 View(ai_inspection)
 # Save the inspection table for manual review and correction
-write_csv(ai_inspection, "data/processed/ai_classification_inspection2.csv")
+write_csv(ai_inspection, "data_minimal/processed/ai_classification_inspection2.csv")
 ```
 
 We will manually inspect the `ai_classification_inspection.csv` file and make any necessary corrections. After making corrections, we will load the corrected classifications and update the main dataset accordingly. Rowns with NA's will be removed.
@@ -279,7 +279,7 @@ After manual correction of the AI classifications, we will load the final classi
 #| label: load-corrected-classifications
 
 # Load manual corrections and join
-manual_corrections <- read_delim("data/processed/ai_classification_inspection_manual.csv", 
+manual_corrections <- read_delim("data_minimal/processed/ai_classification_inspection_manual.csv", 
                                 delim = ";", 
                                 col_types = cols(.default = "c")) |>
   select(otherDetails, manualCorrection) |>
@@ -321,7 +321,7 @@ final_dataset <- processed_time_use |>
   )
 
 # Save the final dataset with corrected activities
-write_csv(final_dataset, "data/clean/timeuse_diaryClean.csv")
+write_csv(final_dataset, "data_minimal/clean/timeuse_diaryClean.csv")
 ```
 
 ## to do: Create a quality score for each diary entry
