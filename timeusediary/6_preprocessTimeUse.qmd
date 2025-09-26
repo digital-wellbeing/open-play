@@ -1,0 +1,327 @@
+---
+title: "Preprocess Time Use Diary Data"
+author: "Thomas Hakman"
+format: html
+---
+
+## Introduction
+
+In this script, we minimally preprocess the time use diary data so that it is shareable. The preprocessing steps include loading the data, renaming and ordering variables,removing PII, and transforming it into a suitable format for the data spec paper.
+
+## Load Libraries
+
+```{r}
+#| label: load-libraries
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(stringr)
+library(lubridate)
+library(here)
+library(fs)
+```
+
+## Load Data
+
+```{r}
+#| label: load-data
+
+# Load the time use diary data
+time_use_data <- read_csv("data/raw/timeuse_diary.csv")
+```
+
+## Inspect Data
+
+```{r}
+#| label: inspect-data
+
+# Basic data overview
+glimpse(time_use_data)
+
+# Check for missing values
+time_use_data |> 
+  summarise(across(everything(), ~ sum(is.na(.x)))) |> 
+  pivot_longer(everything(), names_to = "column", values_to = "missing") |> 
+  filter(missing > 0)
+
+# Check duplicates
+cat("Duplicate rows:", sum(duplicated(time_use_data)), "\n")
+```
+
+## Rename and Order Variables
+
+```{r}
+#| label: create-processed-data
+
+# Create new dataframe with specified columns
+processed_time_use <- time_use_data |> 
+  select(
+    pid,
+    date = created_at,
+    diaryWave,
+    startTime,
+    endTime,
+    activity
+  )
+# Convert date to Date type
+processed_time_use <- processed_time_use |> 
+  mutate(date = as.Date(date))
+# Convert startTime and endTime to POSIXct type
+processed_time_use <- processed_time_use |> 
+  mutate(
+    startTime = as.POSIXct(startTime, format="%H:%M:%S"),
+    endTime = as.POSIXct(endTime, format="%H:%M:%S")
+  )
+
+# Quick check of the new dataframe
+glimpse(processed_time_use)
+```
+
+## Recode activity variable
+
+There are 10 predefined activity categories in the time use diary, and 1 free-text input named "Other". We will recode all the unique free-text inputs into one category named "Other" and keep the inputs in a new variable named "otherDetails".
+
+## check unique activities
+
+```{r}
+#| label: check-unique-activities
+# Check unique activities
+unique(processed_time_use$activity)
+```
+
+There are 800 unique activities, most of them are free-text inputs.
+
+## Recode activity variable
+
+```{r}
+#| label: structure-activity-variable
+# Define pre-defined activity categories
+predefined_activities <- c(
+  "Personal Care", "Sleep", "Other Digital Media Use", "Video Gaming",
+  "Household and Family Care", "Offline Leisure & Social Life",
+  "Travel and Transportation", "Work and Employment",
+  "Exercise and Sports", "Education"
+)
+# Recode activity variable
+processed_time_use <- processed_time_use |> 
+  mutate(
+    # First rename the activity variable to activityOriginal
+    activityOriginal = activity,
+    # Then create otherDetails with original activity values for non-predefined activities
+    otherDetails = ifelse(activity %in% predefined_activities, NA, activity),
+    # Then recode activity to "Other" for non-predefined activities
+    activityCategory = ifelse(activity %in% predefined_activities, activity, "Other")
+  )
+# Quick check of unique activities
+unique(processed_time_use$activity)
+```
+
+## recategorize the "Other" activities into the existing categories
+
+We will create a new variable named "recategorizedActivity" where we will recategorize the "Other" activities into the existing categories based on the free-text input in the "otherDetails" variable using AI.
+
+1.  Download Ollama: Go to https://ollama.ai and download the installer for your operating system Install and start Ollama:
+2.  After installation, open a terminal/command prompt and run: "ollama serve"
+3.  Download a lightweight model like llama3.2 (in a new terminal window): "ollama pull llama3.2:latest"
+
+```{r}
+# Install rollama package
+if (!require(rollama)) {
+  install.packages("rollama")
+  library(rollama)
+}
+
+library(rollama)
+```
+
+## Classify "Other" activities using Ollama
+We will create a function to classify the free-text inputs using the llama3.2 model.
+
+```{r}
+# Function to classify activities using Ollama
+classify_with_ollama <- function(activity_texts, model = "llama3.2:latest") {
+  # Define the categories for the prompt
+  categories <- paste(predefined_activities, collapse = ", ")
+  
+  # Function to classify a single activity
+  classify_single <- function(text) {
+    if (is.na(text) || text == "") return("Other")
+    
+    # Create a focused prompt for classification
+    prompt <- paste0(
+      "You are an expert at categorizing daily activities. Classify this activity into exactly ONE of these categories:\n\n",
+      categories,
+      "\n\nRules:\n",
+      "- Respond with ONLY the exact category name\n",
+      "- No explanation or additional text\n",
+      "- If unsure, choose the most likely category\n",
+      "\nActivity to classify: \"", text, "\"\n\nCategory:"
+    )
+    
+    tryCatch({
+      # Query the Ollama model
+      result <- query(
+        prompt, 
+        model = model,
+        output = "text"
+      )
+      
+      # Clean up the response
+      classification <- str_trim(str_to_title(result))
+      
+      # Validate the classification is one of our predefined categories
+      if (classification %in% predefined_activities) {
+        return(classification)
+      } else {
+        # Try to find partial matches (case-insensitive)
+        matches <- predefined_activities[str_detect(predefined_activities, 
+                                                   regex(classification, ignore_case = TRUE))]
+        if (length(matches) > 0) {
+          return(matches[1])
+        }
+        
+        # Try reverse matching (if the result contains part of a category)
+        for (category in predefined_activities) {
+          if (str_detect(classification, regex(str_extract(category, "\\w+"), ignore_case = TRUE))) {
+            return(category)
+          }
+        }
+        
+        return("Other")
+      }
+      
+    }, error = function(e) {
+      message("Error classifying '", substr(text, 1, 50), "': ", e$message)
+      return("Other")
+    })
+  }
+  
+  # Apply to all texts with progress indication
+  message("Classifying ", length(activity_texts), " activities with Ollama AI...")
+  message("This may take a few minutes...")
+  
+  results <- map_chr(seq_along(activity_texts), function(i) {
+    result <- classify_single(activity_texts[i])
+    
+    # Progress indicator
+    if (i %% 10 == 0) {
+      cat(sprintf("Progress: %d/%d (%.1f%%)\n", i, length(activity_texts), 
+                  i/length(activity_texts) * 100))
+    }
+    
+    return(result)
+  })
+  
+  message("AI classification completed!")
+  return(results)
+}
+```
+
+## Apply AI classification to "Other" activities
+
+```{r}
+# Get all activities that are currently classified as "Other"
+activities_to_classify <- processed_time_use |>
+  filter(activityCategory == "Other", !is.na(otherDetails)) |>
+  distinct(otherDetails) |>
+  pull(otherDetails)
+
+message("Found ", length(activities_to_classify), " unique 'Other' activities to classify with AI")
+
+# Apply AI classification 
+ai_classifications <- classify_with_ollama(activities_to_classify)
+
+# Create lookup table for AI classifications
+ai_lookup <- tibble(
+  otherDetails = activities_to_classify,
+  ai_category = ai_classifications
+)
+
+# Apply AI classifications to the main dataset
+processed_time_use <- processed_time_use |>
+  left_join(ai_lookup, by = "otherDetails") |>
+  mutate(
+    activity = case_when(
+      activityCategory != "Other" ~ activityCategory,  # Keep predefined categories
+      !is.na(ai_category) ~ ai_category,  # Use AI classification for "Other"
+      TRUE ~ "Other"  # Fallback for remaining "Other" activities
+    )
+  ) |>
+  select(-ai_category)  # Clean up temporary column
+```
+
+When done, stop the Ollama server by pressing Ctrl+C in the terminal where "ollama serve" is running.
+
+
+After the AI classification, only 10 "Other" activities remain. We will now manually inspect all classifications to ensure accuracy.
+
+## manual inspection of AI classifications
+
+```{r}
+# Inspect all unique "Other" activities and their AI classifications
+ai_inspection <- processed_time_use |>
+  filter(originalActivity == "Other" & activity != "Other") |>
+  select(otherDetails, activity) |>
+  distinct() |>
+  arrange(activity, otherDetails)
+
+View(ai_inspection)
+# Save the inspection table for manual review and correction
+write_csv(ai_inspection, "data/processed/ai_classification_inspection2.csv")
+```
+
+We will manually inspect the `ai_classification_inspection.csv` file and make any necessary corrections. After making corrections, we will load the corrected classifications and update the main dataset accordingly. Rowns with NA's will be removed.
+
+## Load corrected classifications
+After manual correction of the AI classifications, we will load the final classifications and add the manual corrections (manualCorrection). The final activity variable will be named "activityCorrected".
+
+```{r}
+#| label: load-corrected-classifications
+
+# Load manual corrections and join
+manual_corrections <- read_delim("data/processed/ai_classification_inspection_manual.csv", 
+                                delim = ";", 
+                                col_types = cols(.default = "c")) |>
+  select(otherDetails, manualCorrection) |>
+  filter(!is.na(manualCorrection))  # This removes the "NA" strings that became actual NAs
+
+# Join and create activityCorrected
+processed_time_use <- processed_time_use |>
+  left_join(manual_corrections, by = "otherDetails") |>
+  mutate(
+    activityCorrected = case_when(
+      !is.na(manualCorrection) ~ manualCorrection,
+      TRUE ~ activityCategory
+    )
+  ) |>
+  # Remove the leftover "Other" entries (these were marked as "NA" for removal)
+  filter(activityCorrected != "Other") |>
+  select(-manualCorrection)
+
+```
+
+Now 'activityCorrected' contains the final corrected activity categories (10 pre-defined with no others), and is ready to be analyzed.
+
+## Save final dataset
+
+```{r}
+#| label: save-final-dataset
+
+# Select only the specified columns for the final dataset
+final_dataset <- processed_time_use |>
+  select(
+    pid,
+    date,
+    diaryWave,
+    startTime,
+    endTime,
+    activityCategory, # Original activity category (with "Other")
+    otherDetails, # Free-text details for "Other"
+    activityCorrected # Final corrected activity category after AI and manual review
+  )
+
+# Save the final dataset with corrected activities
+write_csv(final_dataset, "data/clean/timeuse_diaryClean.csv")
+```
+
+## to do: Create a quality score for each diary entry
