@@ -1,0 +1,17 @@
+# Activate with: quarto render --profile sim
+project:
+  # Render the manuscript plus the simulation pages
+  render:
+    - index.qmd
+    - R/*.qmd
+
+book:
+  # keep the manuscript first, then add one chapter that *contains* all sims
+  chapters:
+    - index.qmd
+    - part: "Simulation Study"
+      chapters:
+        - R/1_preprocess.qmd
+        - R/2_basicNeeds.qmd
+        - R/3_sleep.qmd
+        - R/4_genres.qmd

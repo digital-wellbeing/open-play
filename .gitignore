@@ -5,8 +5,9 @@
 .DS_Store
 ^~$*
 data-synthetic/data-template/
+data/synthetic/data-template/
+*_cache/
 
-data/
 outputs/
 /.quarto/
 .Renviron
@@ -17,3 +18,4 @@ raw/
 /3_sleep_files
 /3_sleep_cache/*
 renv/
+deprecated/
