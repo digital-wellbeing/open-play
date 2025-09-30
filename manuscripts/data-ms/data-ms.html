@@ -26,7 +26,27 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
-</style>
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
 
 
 <script src="data-ms_files/libs/clipboard/clipboard.min.js"></script>
@@ -53,20 +73,12 @@ ul.task-list li input[type="checkbox"] {
   <ul class="collapse">
   <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a></li>
   <li><a href="#overview" id="toc-overview" class="nav-link" data-scroll-target="#overview">Overview</a></li>
-  <li><a href="#design" id="toc-design" class="nav-link" data-scroll-target="#design">Design</a>
+  <li><a href="#method" id="toc-method" class="nav-link" data-scroll-target="#method">Method</a>
   <ul class="collapse">
-  <li><a href="#stage-1-screening" id="toc-stage-1-screening" class="nav-link" data-scroll-target="#stage-1-screening">Stage 1: Screening</a></li>
-  <li><a href="#stage-2-account-linking" id="toc-stage-2-account-linking" class="nav-link" data-scroll-target="#stage-2-account-linking">Stage 2: Account Linking</a></li>
-  <li><a href="#stage-3-account-validation" id="toc-stage-3-account-validation" class="nav-link" data-scroll-target="#stage-3-account-validation">Stage 3: Account Validation</a></li>
-  <li><a href="#stage-4-surveys" id="toc-stage-4-surveys" class="nav-link" data-scroll-target="#stage-4-surveys">Stage 4: Surveys</a></li>
-  </ul></li>
-  <li><a href="#participants" id="toc-participants" class="nav-link" data-scroll-target="#participants">Participants</a>
-  <ul class="collapse">
+  <li><a href="#design" id="toc-design" class="nav-link" data-scroll-target="#design">Design</a></li>
+  <li><a href="#participants" id="toc-participants" class="nav-link" data-scroll-target="#participants">Participants</a></li>
   <li><a href="#ethics-and-compensation" id="toc-ethics-and-compensation" class="nav-link" data-scroll-target="#ethics-and-compensation">Ethics and Compensation</a></li>
-  </ul></li>
   <li><a href="#deviations-from-preregistration" id="toc-deviations-from-preregistration" class="nav-link" data-scroll-target="#deviations-from-preregistration">Deviations from Preregistration</a></li>
-  <li><a href="#dataset" id="toc-dataset" class="nav-link" data-scroll-target="#dataset">Dataset</a>
-  <ul class="collapse">
   <li><a href="#demographic-measures" id="toc-demographic-measures" class="nav-link" data-scroll-target="#demographic-measures">Demographic measures</a></li>
   <li><a href="#self-report-measures" id="toc-self-report-measures" class="nav-link" data-scroll-target="#self-report-measures">Self-report measures</a></li>
   <li><a href="#digital-trace-data" id="toc-digital-trace-data" class="nav-link" data-scroll-target="#digital-trace-data">Digital Trace Data</a></li>
@@ -75,8 +87,10 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#data-quality-checks" id="toc-data-quality-checks" class="nav-link" data-scroll-target="#data-quality-checks">Data Quality Checks</a></li>
   <li><a href="#missingness" id="toc-missingness" class="nav-link" data-scroll-target="#missingness">Missingness</a></li>
   </ul></li>
+  <li><a href="#dataset" id="toc-dataset" class="nav-link" data-scroll-target="#dataset">Dataset</a></li>
   <li><a href="#discussion" id="toc-discussion" class="nav-link" data-scroll-target="#discussion">Discussion</a>
   <ul class="collapse">
+  <li><a href="#limitations" id="toc-limitations" class="nav-link" data-scroll-target="#limitations">Limitations</a></li>
   <li><a href="#future-work" id="toc-future-work" class="nav-link" data-scroll-target="#future-work">Future Work</a></li>
   <li><a href="#data-availability" id="toc-data-availability" class="nav-link" data-scroll-target="#data-availability">Data Availability</a></li>
   </ul></li>
@@ -142,7 +156,7 @@ ul.task-list li input[type="checkbox"] {
           </p>
       </div>
     <div class="quarto-title-meta-contents">
-    <p class="author">Andrew K Przybylski <a href="mailto:andy.pryzbylski@oii.ox.ac.uk" class="quarto-title-author-email"><i class="bi bi-envelope"></i></a> <a href="https://orcid.org/0000-0003-4126-0696" class="quarto-title-author-orcid"> <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo1N0NEMjA4MDI1MjA2ODExOTk0QzkzNTEzRjZEQTg1NyIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDozM0NDOEJGNEZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDozM0NDOEJGM0ZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M1IE1hY2ludG9zaCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkZDN0YxMTc0MDcyMDY4MTE5NUZFRDc5MUM2MUUwNEREIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjU3Q0QyMDgwMjUyMDY4MTE5OTRDOTM1MTNGNkRBODU3Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+84NovQAAAR1JREFUeNpiZEADy85ZJgCpeCB2QJM6AMQLo4yOL0AWZETSqACk1gOxAQN+cAGIA4EGPQBxmJA0nwdpjjQ8xqArmczw5tMHXAaALDgP1QMxAGqzAAPxQACqh4ER6uf5MBlkm0X4EGayMfMw/Pr7Bd2gRBZogMFBrv01hisv5jLsv9nLAPIOMnjy8RDDyYctyAbFM2EJbRQw+aAWw/LzVgx7b+cwCHKqMhjJFCBLOzAR6+lXX84xnHjYyqAo5IUizkRCwIENQQckGSDGY4TVgAPEaraQr2a4/24bSuoExcJCfAEJihXkWDj3ZAKy9EJGaEo8T0QSxkjSwORsCAuDQCD+QILmD1A9kECEZgxDaEZhICIzGcIyEyOl2RkgwAAhkmC+eAm0TAAAAABJRU5ErkJggg=="></a></p>
+    <p class="author">Andrew K Przybylski <a href="mailto:andy.przybylski@oii.ox.ac.uk" class="quarto-title-author-email"><i class="bi bi-envelope"></i></a> <a href="https://orcid.org/0000-0001-5547-2185" class="quarto-title-author-orcid"> <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo1N0NEMjA4MDI1MjA2ODExOTk0QzkzNTEzRjZEQTg1NyIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDozM0NDOEJGNEZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDozM0NDOEJGM0ZGNTcxMUUxODdBOEVCODg2RjdCQ0QwOSIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M1IE1hY2ludG9zaCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOkZDN0YxMTc0MDcyMDY4MTE5NUZFRDc5MUM2MUUwNEREIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjU3Q0QyMDgwMjUyMDY4MTE5OTRDOTM1MTNGNkRBODU3Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+84NovQAAAR1JREFUeNpiZEADy85ZJgCpeCB2QJM6AMQLo4yOL0AWZETSqACk1gOxAQN+cAGIA4EGPQBxmJA0nwdpjjQ8xqArmczw5tMHXAaALDgP1QMxAGqzAAPxQACqh4ER6uf5MBlkm0X4EGayMfMw/Pr7Bd2gRBZogMFBrv01hisv5jLsv9nLAPIOMnjy8RDDyYctyAbFM2EJbRQw+aAWw/LzVgx7b+cwCHKqMhjJFCBLOzAR6+lXX84xnHjYyqAo5IUizkRCwIENQQckGSDGY4TVgAPEaraQr2a4/24bSuoExcJCfAEJihXkWDj3ZAKy9EJGaEo8T0QSxkjSwORsCAuDQCD+QILmD1A9kECEZgxDaEZhICIzGcIyEyOl2RkgwAAhkmC+eAm0TAAAAABJRU5ErkJggg=="></a></p>
   </div>
   <div class="quarto-title-meta-contents">
         <p class="affiliation">
@@ -165,19 +179,23 @@ ul.task-list li input[type="checkbox"] {
 
 <section id="introduction" class="level1">
 <h1>Introduction</h1>
-<p>Scientists widely agree that digital trace data—behavioral logs automatically collected by online platforms—are necessary to understand the effects of technology on varied outcomes such as health, wellbeing, academic achievement, and cognition. Users struggle to accurately self-report even high-level measures of use (e.g., total screentime) <span class="citation" data-cites="ParryEtAl2021systematic">[@ParryEtAl2021systematic]</span>, and these high-level metrics are generally poorly predictive of outcomes <span class="citation" data-cites="Orben2019Teens">[@Orben2019Teens]</span>. To systematically understand the effects of technology, we therefore need data that captures nuanced factors we now know to be much more impactful: the frequency, duration, and time of day of each session, the specific content engaged, and the trajectory of user behavior over time. Digital trace data is well-suited to address this need.</p>
-<p>As one of the world’s foremost leisure activities, video games are a key Digital trace data has been widely implemented in many studies of social media and wellbeing, but in studies of video games has been much more limited. In part, this is a function of availability: video game consoles are restrictive and typically do not allow third party tracking software; most video game platforms do not have a 1-click “download my data” option offered by several social media platforms (e.g., TikTok, Instagram); and there are thousands of individual games whose data may be relevant for a given study or population.</p>
-<p>Where trace data has been used in video games studies, it has largely been limited to a single game <span class="citation" data-cites="VuorreEtAl2022Time JohannesEtAl2021Video LarrieuEtAl2023How PerryEtAl2018onlineonly">[@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly]</span> or platform <span class="citation" data-cites="BallouEtAl2023Gaming BallouEtAl2025Perceived">[@BallouEtAl2023Gaming; @BallouEtAl2025Perceived]</span> per user. Previous studies that secured video game telemetry was widely limited to a single game or a single gaming platform. However, as the data we present here shows, players commonly use a wide range of games and platforms. Capturing just one game or one gaming platform among potentially many that the person may be engaging with—and affected by. For example, a player may</p>
+<p>Scientists widely agree that digital trace data—behavioral logs automatically collected by online platforms—are necessary to understand the nuances of technology use <span class="citation" data-cites="Freelon2014Interpretation GriffioenEtAl2020improveda">(<a href="#ref-Freelon2014Interpretation" role="doc-biblioref">Freelon 2014</a>; <a href="#ref-GriffioenEtAl2020improveda" role="doc-biblioref">Griffioen et al. 2020</a>)</span>, and thereby its effects on varied outcomes such as health, wellbeing, academic achievement, and cognition <span class="citation" data-cites="BurgessEtAl2024Potential">(<a href="#ref-BurgessEtAl2024Potential" role="doc-biblioref">Burgess et al., n.d.</a>)</span>. Users struggle to accurately self-report even high-level measures of use (e.g., total screentime) <span class="citation" data-cites="ParryEtAl2021systematic">(<a href="#ref-ParryEtAl2021systematic" role="doc-biblioref">Parry et al. 2021</a>)</span>, and these high-level metrics are generally poorly predictive of outcomes <span class="citation" data-cites="Orben2019Teens">(<a href="#ref-Orben2019Teens" role="doc-biblioref">Orben 2019</a>)</span>. To systematically understand the effects of technology, we therefore need data that captures nuanced factors we now know to be more impactful. Beyond screentime, the next layer of granularity includes the frequency, duration, and time of day of each session; the specific content engaged; and the trajectory of user behavior over time. Digital trace data is well-suited to deliver these elements.</p>
+<p>As one of the world’s foremost leisure activities among youth and adults alike <span class="citation" data-cites="Ofcom2023Online EntertainmentSoftwareAssociation20242024">(<a href="#ref-Ofcom2023Online" role="doc-biblioref">Ofcom 2023</a>; <a href="#ref-EntertainmentSoftwareAssociation20242024" role="doc-biblioref">Entertainment Software Association 2024</a>)</span>, video games are a key medium for which digital trace data is needed. Digital trace data has been widely implemented in many studies of social media and wellbeing, but in studies of video games has been much more limited. Trace data in video games primarily falls under the field of game analytics or game data science, but (1) the majority of these studies involve the use of proprietary data that is not publicly shared, and (2) the focus of this field tends to be more on player behavior metrics with clear industry value .</p>
+<p>i In part, this is a function of availability: video game consoles are restrictive and typically do not allow third party tracking software; most video game platforms do not have a 1-click “download my data” option offered by several social media platforms (e.g., TikTok, Instagram); and there are thousands of individual games whose data may be relevant for a given study or population.</p>
+<p>Where trace data has been used in video games studies, it has largely been limited to a single game <span class="citation" data-cites="VuorreEtAl2022Time JohannesEtAl2021Video LarrieuEtAl2023How PerryEtAl2018onlineonly">(<a href="#ref-VuorreEtAl2022Time" role="doc-biblioref">Vuorre et al. 2022</a>; <a href="#ref-JohannesEtAl2021Video" role="doc-biblioref">Johannes, Vuorre, and Przybylski 2021</a>; <a href="#ref-LarrieuEtAl2023How" role="doc-biblioref">Larrieu et al. 2023</a>; <a href="#ref-PerryEtAl2018onlineonly" role="doc-biblioref">Perry et al. 2018</a>)</span> or platform <span class="citation" data-cites="BallouEtAl2023Gaming BallouEtAl2025Perceived">(<a href="#ref-BallouEtAl2023Gaming" role="doc-biblioref">Ballou et al. 2023</a>, <a href="#ref-BallouEtAl2025Perceived" role="doc-biblioref">2025</a>)</span> per user. Previous studies that secured video game telemetry was widely limited to a single game or a single gaming platform. However, as the data we present here shows, players commonly use a wide range of games and platforms. Capturing just one game or one gaming platform among potentially many that the person may be engaging with—and affected by. For example, a player may</p>
 <p>Digital trace data on its own is limited however; without additional information from users about how their lives are going, we will struggle to understand the causal network. In the field of game analytics, a number of studies have digital trace data to explore social networks, We therefore see particular value in longitudinal studies that combine comprehensive digital trace data with repeated surveys, in both experimental and observational contexts. Ideally, surveys should be frequent enough to capture short-term effects (e.g., playing a game to recover from a stressful workday) and longer-term development (e.g., a pattern of increasing play over time displacing sleep).</p>
 </section>
 <section id="overview" class="level1">
 <h1>Overview</h1>
-<p>This paper addresses this need for longitudinal digital trace data across multiple gaming platforms. Here, we present a dataset consisting of 1.8K participants, 14.2K daily surveys, 4.4K surveys, and a total of 3.4M of gameplay distributed across 5.7M.</p>
+<p>This paper addresses this need for longitudinal digital trace data across multiple gaming platforms. Here, we present a dataset consisting of 2.0K participants, 18.8K daily surveys, 6.9K surveys, and a total of 3.4M of gameplay distributed across 5.7M.</p>
 <p>Digital trace data was sourced for five distinct platforms—Xbox, Nintendo, Steam, iOS, and Android—through distinct piplines detailed below.</p>
 <p>The dataset is openly available at [LINK] under a CC0 license for unrestricted reuse.</p>
+<p>highlight that data collection methods are preregistered</p>
 </section>
-<section id="design" class="level1">
-<h1>Design</h1>
+<section id="method" class="level1">
+<h1>Method</h1>
+<section id="design" class="level2">
+<h2 class="anchored" data-anchor-id="design">Design</h2>
 <div class="cell">
 <div class="cell-output-display">
 <div id="fig-sankey" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
@@ -193,13 +211,13 @@ Figure&nbsp;1
 </div>
 </div>
 <p>The study consisted of four stages (<a href="#fig-sankey" class="quarto-xref">Figure&nbsp;1</a>).</p>
-<section id="stage-1-screening" class="level2">
-<h2 class="anchored" data-anchor-id="stage-1-screening">Stage 1: Screening</h2>
+<section id="stage-1-screening" class="level3">
+<h3 class="anchored" data-anchor-id="stage-1-screening">Stage 1: Screening</h3>
 <p>In the first stage, we screened participants in order to find people aged 18-40 who (1) self-report playing video games, (2) self-report that at least 50% of their total video game play takes place on the platforms included in the study, and (3) were willing to link their gaming accounts to provide digital trace data. We screened participants from two panel sources: PureProfile and Prolific.</p>
 <p>Participants were recruited under an initial set of ethnicity‐based quotas designed to mirror the general population’s demographic composition. After we reached approximately 50% of our target sample under quota constraints and found that further quota‐eligible recruits were scarce, we suspended the quotas for the remainder of data collection; all subsequent participants were enrolled on a first‐come, first‐served basis. Final sample characteristic reflect both quota‐driven and open‐enrollment phases (see below).</p>
 </section>
-<section id="stage-2-account-linking" class="level2">
-<h2 class="anchored" data-anchor-id="stage-2-account-linking">Stage 2: Account Linking</h2>
+<section id="stage-2-account-linking" class="level3">
+<h3 class="anchored" data-anchor-id="stage-2-account-linking">Stage 2: Account Linking</h3>
 <p>Participants who were deemed eligible during screening proceeded directly to an account linking survey wherein they provided details of the gaming platforms they actively use. For UK participants, this includes Nintendo Switch, Steam, Android and iOS. For US participants, this includes the same four alongside Xbox. Details of how participants linked each type of account are shown in <a href="#tbl-platforms" class="quarto-xref">Table&nbsp;1</a>.</p>
 <div id="tbl-platforms" class="quarto-float anchored">
 <figure class="quarto-float quarto-float-tbl figure">
@@ -208,49 +226,48 @@ Table&nbsp;1: : Platform Details
 </figcaption>
 <div aria-describedby="tbl-platforms-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <table class="table">
-<thead>
-<tr class="header">
-<th>Platform</th>
-<th>Data Source</th>
-<th>Account Linking Process</th>
-<th>Type of Data Collected</th>
-</tr>
-</thead>
+<colgroup>
+<col style="width: 2%">
+<col style="width: 12%">
+<col style="width: 45%">
+<col style="width: 38%">
+</colgroup>
 <tbody>
 <tr class="odd">
+<td><strong>Platform</strong></td>
+<td><strong>Data Source</strong></td>
+<td><strong>Account Linking Process</strong></td>
+<td><strong>Type of Data Collected</strong></td>
+</tr>
+<tr class="even">
 <td>Nintendo</td>
 <td>Data-sharing agreements with Nintendo of America (US) and Nintendo of Europe (UK)</td>
-<td><p>Participants share an identifier contained within a QR code on Nintendo web interface[<br>
-<a href="#_ftn1">1 ]</a>. Nintendo of A m erica/Europe uses this identifier to retrieve gameplay data and share it with the research team.</p>
-<p>[[1<br>
-]] (#_ftnref1) &lt;https://a c c ounts.ninten do . com/qrcode&gt;</p></td>
-<td>Session records (what game was played, at what time, for how long) for 1st party games (games published in whole or in part by Nintendo, but not by third party publishers such as Electronic Arts). In previous research, Nint e n do-published games accounted for 65% of Switch playtime <span class="citation" data-cites="BallouEtAl">@BallouEtAl</span> 2 0 25Perceived.</td>
+<td>Participants share an identifier contained within a QR code on Nintendo web interface.<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> Nintendo of America/Europe uses this identifier to retrieve gameplay data and share it with the research team.<br>
+</td>
+<td>Session records (what game was played, at what time, for how long) for 1st party games (games published in whole or in part by Nintendo, but not by third party publishers such as Electronic Arts).<a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Xbox (US only)</td>
 <td>Data-sharing agreement with Microsoft</td>
-<td><p>Participants consent to data sharing by opting in to the study on Xbox Insiders[<br>
-<a href="#_ftn1">1]</a> with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in p seudonymized form.</p>
-<p>[[1<br>
-]] (#_ftnref1) &lt;https://s u p port.xbox.co m / en-US/help/a c c ount-profile / m anage-accoun t / guide-to-ins i d er-program&gt;</p></td>
+<td>Participants consent to data sharing by opting in to the study on Xbox Insiders<a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a> with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in pseudonymized form.</td>
 <td>Session records (what game was played, at what time, for how long). The name of the game replaced with a random persistent identifier for all third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Steam</td>
-<td>Custom web app (Gam e p lay.Science)</td>
-<td>Participants sign up for Ga m e play.Science ( &lt; h ttps://gamep la y .science),&gt; an open-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is a uthenticated using the official Steam a u thentication API (OpenID).</td>
+<td>Custom web app (Gameplay.Science)</td>
+<td>Participants sign up for Gameplay.Science (https://gameplay.science), an o pen-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID).</td>
 <td>Incremental playtime per game (every hour, the total time spent playing during the previous hour)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>iOS</td>
 <td>iOS Screen Time Screenshots</td>
-<td>At each biweekly survey, participants submit screenshots from the built-in iOS Screen Time app. These show details of the previous 3 weeks’ of gaming app use (whats games were played and for how long). Data was extracted using OCR.</td>
+<td>In each biweekly survey, participants submitted screenshots from the built-in iOS Screen Time app. These show details of the previous 3 weeks’ of gaming app use (what games were played and for how long). Data was extracted using OCR.</td>
 <td>Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Android</td>
 <td>Digital Wellbeing Screenshots</td>
-<td>At each biweekly survey, participants submitted screenshots from the Digital Screen Time app, if available on their Android OS. These show details of the previous 3 weeks’ of phone use (what app categories are used and for how long). Data was extracted using OCR.</td>
+<td>In each biweekly survey, participants submitted screenshots from the Digital Screen Time app, if available on their Android OS. These show details of the previous 3 weeks’ of phone use (what app categories are used and for how long). Data was extracted using OCR.</td>
 <td>Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)</td>
 </tr>
 </tbody>
@@ -259,18 +276,32 @@ Table&nbsp;1: : Platform Details
 </figure>
 </div>
 </section>
-<section id="stage-3-account-validation" class="level2">
-<h2 class="anchored" data-anchor-id="stage-3-account-validation">Stage 3: Account Validation</h2>
-<p>After players completed the account linking process, we . Participants needed to have valid telemetry from at least one platform in order to be eligible for the next stage of the study. Participants who did not have valid telemetry were excluded from the study</p>
+<section id="stage-3-account-validation" class="level3">
+<h3 class="anchored" data-anchor-id="stage-3-account-validation">Stage 3: Account Validation</h3>
+<p>After players completed the account linking process, we checked each account for evidence of valid gaming—specifically, records of active gameplay sessions on one or more of Steam, Xbox, and Nintendo within the 2 weeks before survey completion. Participants who did not have recent, valid telemetry on any console platform were excluded from the rest of the study.</p>
 </section>
-<section id="stage-4-surveys" class="level2">
-<h2 class="anchored" data-anchor-id="stage-4-surveys">Stage 4: Surveys</h2>
-<p>Eligible participants were invited to complete 6 waves of panel surveys, one every two weeks. Eligible US participants will additionally be invited to complete daily diary surveys for 30 days, concurrently with the first panel surveys. Running survey types concurrently allows us to harmonize distribution across regions without delaying the UK sample on the US sample’s account, and to minimize attrition.</p>
-<p>Diary survey links were sent every day at 2pm local time for the participant and remained available until 3am. Panel survey links were sent every second week from the first day of the study at 12pm and remained available for 96 hours.</p>
+<section id="stage-4-surveys" class="level3">
+<h3 class="anchored" data-anchor-id="stage-4-surveys">Stage 4: Surveys</h3>
+<div class="cell">
+<div class="cell-output-display">
+<div id="fig-design" class="quarto-figure quarto-figure-center quarto-float anchored" width="324">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-design-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="design.png" id="fig-design" class="img-fluid figure-img" width="324">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-design-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>Eligible participants were invited to complete 6 waves of biweekly surveys, one every two weeks (<a href="#fig-design" class="quarto-xref">Figure&nbsp;2</a>). US participants were additionally invited to complete daily surveys for 30 days, concurrently with the first biweekly surveys. During waves 1, 3, and 5, a cognitive task was also administered within the biweekly survey.</p>
+<p>Daily survey links were sent every day at 2pm local time for the participant and remained available until 3am. Biweekly survey links were sent every second week from the first day of the study at 12pm and remained available for 96 hours.</p>
 </section>
 </section>
-<section id="participants" class="level1">
-<h1>Participants</h1>
+<section id="participants" class="level2">
+<h2 class="anchored" data-anchor-id="participants">Participants</h2>
 <div class="cell">
 <div class="cell-output-display">
 <div id="fig-representative" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
@@ -279,64 +310,100 @@ Table&nbsp;1: : Platform Details
 <img src="data-ms_files/figure-html/fig-representative-1.png" id="fig-representative" class="img-fluid figure-img" width="672">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-representative-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-Figure&nbsp;2
-</figcaption>
-</figure>
-</div>
-</div>
-</div>
-<p>Our final sample consists of 2002 qualified participants, selected from a pool of 32990 screened participants. Of the 2002 with recent telemetry, 4408 also completed at least one survey.</p>
-<p>Our screening sample was roughly representative of the general population of the US and UK by ethnicity (<a href="#fig-representative" class="quarto-xref">Figure&nbsp;2</a>) and gender identity: Man (14736, 47.7%); Other (372, 1.2%); Woman (15777, 51.1%); Man (1305, 65.2%); Other (125, 6.2%); Woman (572, 28.6%).</p>
-<p>The sample of qualified participants is less representative of the general population, containing more men and non-binary participants (Man (14736, 47.7%); Other (372, 1.2%); Woman (15777, 51.1%); Man (1305, 65.2%); Other (125, 6.2%); Woman (572, 28.6%)), as well as fewer black participants (<a href="#fig-representative" class="quarto-xref">Figure&nbsp;2</a>)</p>
-<section id="ethics-and-compensation" class="level2">
-<h2 class="anchored" data-anchor-id="ethics-and-compensation">Ethics and Compensation</h2>
-<p>This study received ethical approval from the Social Sciences and Humanities Inter-Divisional Research Ethics Committee at the University of Oxford (OII_CIA_23_107). All participants provided informed consent at the start of the study, including consent to their data being shared openly for reanalysis.</p>
-<p>Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening (plus £5 for linking at least one account with recent data), £2 for a 10-minute intake survey, £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.</p>
-</section>
-</section>
-<section id="deviations-from-preregistration" class="level1">
-<h1>Deviations from Preregistration</h1>
-<p>Due to challenges in the recruitment process, we made several deviations from our preregistration. These changes were made to ensure we could recruit enough participants to meet our sample size goals and to improve the quality of the data collected, but in our view do not threaten the validity of the study. The following deviations were made:</p>
-<p>TODO: convert to table</p>
-<ul>
-<li>After exhausting the PureProfile participant pool, we recruited additional participants through the Prolific platform.</li>
-<li>After exhausting available participants when screening for representative samples for ethnicity and gender, we later removed quotas and allowed participants from all backgrounds</li>
-<li>Instead of recruiting participants aged 18–30 in the US and 18–75 in the UK, we recruited participants in both regions from 18–40. This was done because (1) we were unable to recruit enough participants in the US aged 18–30, and (2) we wanted results from both regions to be comparable.</li>
-<li>Instead of requiring 75% of total gameplay to take place on the platforms included in the study, we instead required 50%</li>
-<li>Rather than requiring valid play data from the 7-day baseline period, we required valid play data from the previous 14-days after feedback from participants indicated that play during a 7-day period was too easily disrupted by real-world events.</li>
-<li>Instead of sending surveys at 7pm local time, we sent them at 2pm to increase our response rate after feedback from participants indicated that evening plans often interfered with survey completion.</li>
-<li>Due to restrictions in the privacy policy of PureProfile, we were not able to install third-party apps on users’ phones, and therefore could not capture Android trace data using ActivityWatch. Instead, we used a similar process as iOS by leveraging the Digital Wellbeing interface present on many Android models</li>
-</ul>
-</section>
-<section id="dataset" class="level1">
-<h1>Dataset</h1>
-<div class="cell">
-<div class="cell-output-display">
-<div id="fig-stacked-playtime" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
-<figure class="quarto-float quarto-float-fig figure">
-<div aria-describedby="fig-stacked-playtime-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="data-ms_files/figure-html/fig-stacked-playtime-1.png" id="fig-stacked-playtime" class="img-fluid figure-img" width="672">
-</div>
-<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-stacked-playtime-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 Figure&nbsp;3
 </figcaption>
 </figure>
 </div>
 </div>
 </div>
-<p>TODO: single case study plot</p>
+<p>Our final sample consists of 2551 qualified participants, selected from a pool of 34229 screened participants. Of the 2551 with recent telemetry, 1973 also completed at least one survey.</p>
+<p>Our screening sample was roughly representative of the general population of the US and UK by ethnicity (<a href="#fig-representative" class="quarto-xref">Figure&nbsp;3</a>) and gender identity: Man (16728, 47.7%); Other (535, 1.2%); Woman (16862, 51.1%).</p>
+<p>The sample of qualified participants is less representative of the general population, containing more men and non-binary participants: Man (1659, 65%); Other (158, 6.2%); Woman (734, 28.8%), as well as fewer black participants (<a href="#fig-representative" class="quarto-xref">Figure&nbsp;3</a>). However, the demographics of console video game players are not well-understood; it is likely that our sample more closely represents this population than the general population.</p>
+</section>
+<section id="ethics-and-compensation" class="level2">
+<h2 class="anchored" data-anchor-id="ethics-and-compensation">Ethics and Compensation</h2>
+<p>This study received ethical approval from the Social Sciences and Humanities Inter-Divisional Research Ethics Committee at the University of Oxford (OII_CIA_23_107). All participants provided informed consent at the start of the study, including consent to their data being shared openly for reanalysis.</p>
+<p>Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening, £2 for the 10-minute intake survey (plus £5 for linking at least one account with recent data), £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.</p>
+</section>
+<section id="deviations-from-preregistration" class="level2">
+<h2 class="anchored" data-anchor-id="deviations-from-preregistration">Deviations from Preregistration</h2>
+<p>We made several deviations from our preregistration to ensure we could recruit enough high-quality participants to meet our sample size goals. In our view, none are so severe enough to threaten the validity of the study. Deviations are summarised in <a href="#tbl-trait" class="quarto-xref">Table&nbsp;2</a>.</p>
+<div id="tbl-trait" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-trait-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: : Summary of deviations from preregistration
+</figcaption>
+<div aria-describedby="tbl-trait-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<colgroup>
+<col style="width: 26%">
+<col style="width: 34%">
+<col style="width: 38%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Preregistered</th>
+<th>Actual</th>
+<th>Justification for Deviation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>All participants sourced from PureProfile</td>
+<td>Participants sourced from both PureProfile and Prolific</td>
+<td>Exhausted PureProfile participant pool before reaching required sample size</td>
+</tr>
+<tr class="even">
+<td>Screening sample would be nationally representative by ethnicity and gender</td>
+<td>Approximately 50% of screening was done using quotas for national representativeness by ethnicity and gender; all subsequent sampling used convenience sampling with no quotas</td>
+<td>Exhausted participant pools of smaller demographic categories on both Prolific and PureProfile before reaching required sample size</td>
+</tr>
+<tr class="odd">
+<td>Sample consists of participants aged 18–30 in the US and 18–75 in the UK</td>
+<td>Sample consists of participants aged 18-40 in both regions</td>
+<td>(1) Unable to recruit enough participants in the US aged 18–30; (2) near-zero qualification rates from UK adults over 50; (3) desire for results from both regions to be more easily comparable</td>
+</tr>
+<tr class="even">
+<td>To qualify, ≥75% of a participant’s total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)</td>
+<td>To qualify, ≥50% of a participant’s total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)</td>
+<td>Low rates of study qualification at 75% threshold, in large part due to substantial uncaptured Playstation play</td>
+</tr>
+<tr class="odd">
+<td>Qualification contingent upon valid telemetry within last 7 days</td>
+<td>Qualification contingent upon valid telemetry within last 14 days</td>
+<td>Feedback from participants indicating that play during a 7-day period was subject to too many fluctuations (e.g., a busy workweek)</td>
+</tr>
+<tr class="even">
+<td>Daily and biweekly surveys sent at 7pm local time</td>
+<td>Daily and biweekly surveys sent at 2pm local time</td>
+<td>Feedback from participants indicating that evening plans often interfered with survey completion and thus adversely affected response rate</td>
+</tr>
+<tr class="odd">
+<td>Session-level Android data captured via the ActivityWatch app</td>
+<td>Daily-level Android data captured using screenshots of the Digital Wellbeing interface</td>
+<td>Restrictions in PureProfile’s privacy policy preventing installation of 3rd party apps; technical challenges in supporting users with the installation and data export</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+</section>
 <section id="demographic-measures" class="level2">
 <h2 class="anchored" data-anchor-id="demographic-measures">Demographic measures</h2>
 <p>We collected the following demographic variables:</p>
 <ul>
 <li>age</li>
 <li>gender</li>
+</ul>
+<p>For all participants who were eligible based on self-reported video game play (but who did not always successfully linked accounts), we additionally collected the following</p>
+<ul>
 <li>ethnicity</li>
 <li>educational attainment</li>
 <li>employment status</li>
-<li>height</li>
-<li>weight</li>
+<li>height and weight</li>
 <li>self-identified neurodivergence (e.g., ASD, ADHD, dyslexia)</li>
+<li>political party affiliation</li>
 <li>diagnosed neurodivergence</li>
 <li>marital status</li>
 <li>caretaking responsibilities (children, family members)</li>
@@ -345,160 +412,446 @@ Figure&nbsp;3
 </section>
 <section id="self-report-measures" class="level2">
 <h2 class="anchored" data-anchor-id="self-report-measures">Self-report measures</h2>
-<section id="trait-measures" class="level3">
-<h3 class="anchored" data-anchor-id="trait-measures">Trait measures</h3>
+<section id="trait-or-traitlike-measures" class="level3">
+<h3 class="anchored" data-anchor-id="trait-or-traitlike-measures">Trait or traitlike measures</h3>
 <table class="table">
-<thead>
-<tr class="header">
-<th style="text-align: left;">Construct</th>
-<th style="text-align: left;">Measure</th>
-<th style="text-align: left;">Example Item</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">Chronotype</td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-</tr>
-<tr class="even">
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="daily-measures" class="level3">
-<h3 class="anchored" data-anchor-id="daily-measures">Daily measures</h3>
-<table class="table">
-<caption><em>Daily self-report measures</em></caption>
 <colgroup>
+<col style="width: 15%">
 <col style="width: 23%">
-<col style="width: 23%">
-<col style="width: 23%">
-<col style="width: 23%">
+<col style="width: 32%">
+<col style="width: 27%">
 </colgroup>
 <thead>
 <tr class="header">
 <th style="text-align: left;">Construct</th>
 <th style="text-align: left;">Measure</th>
 <th style="text-align: left;">Example Item</th>
-<th style="text-align: left;">Internal consistency (<strong>McDonald’s ω_h)</strong></th>
+<th>Response Format</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td style="text-align: left;">Basic psychological need satisfaction and frustration</td>
-<td style="text-align: left;"><em>Basic Psychological Need Satisfaction and Frustration Scale</em> <span class="citation" data-cites="Che">[@Che n EtAl2015Basic]</span> brief version <span class="citation" data-cites="MartelaRy">@MartelaRy</span> a n2024Assessing</td>
-<td style="text-align: left;">I was able to do things that I really want and value in life.</td>
-<td style="text-align: left;"></td>
+<td style="text-align: left;">Chronotype</td>
+<td style="text-align: left;">Munich Chronotype Questionnaire <span class="citation" data-cites="RoennebergEtAl2003Life">(<a href="#ref-RoennebergEtAl2003Life" role="doc-biblioref">Roenneberg, Wirz-Justice, and Merrow 2003</a>)</span></td>
+<td style="text-align: left;"><em>I go to bed at…</em></td>
+<td>Times and numbers of minutes</td>
 </tr>
 <tr class="even">
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
+<td style="text-align: left;">Big 5 Personality</td>
+<td style="text-align: left;">BFI-2-XS <span class="citation" data-cites="SotoJohn2017short">(<a href="#ref-SotoJohn2017short" role="doc-biblioref">Soto and John 2017</a>)</span></td>
+<td style="text-align: left;"><em>I am someone who…is compassionate, has a soft heart.</em></td>
+<td>5-pt Likert scale from 1 (Disagree strongly) to 5 (Agree strongly)</td>
 </tr>
 <tr class="odd">
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
-<td style="text-align: left;"></td>
+<td style="text-align: left;">Player Trait Typology</td>
+<td style="text-align: left;">Trojan Player Typology <span class="citation" data-cites="KahnEtAl2015trojan">(<a href="#ref-KahnEtAl2015trojan" role="doc-biblioref">Kahn et al. 2015</a>)</span></td>
+<td style="text-align: left;"><em>It’s important to me to play with a tightly knit group.</em></td>
+<td>5-pt Likert scale from 1 (Strongly disagree) to 5 (Strongly agree)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Gaming Disorder Symptoms[^data-ms-4]</td>
+<td style="text-align: left;">Gaming Disorder Test <span class="citation" data-cites="PontesEtAl2019measurement">(<a href="#ref-PontesEtAl2019measurement" role="doc-biblioref">Pontes et al. 2019</a>)</span></td>
+<td style="text-align: left;"><em>In the past 3 months…I have had difficulties controlling my gaming activity</em>.</td>
+<td>5-pt Likert scale from 1 (Never) to 5 (Very often)</td>
 </tr>
 </tbody>
 </table>
-<p>Consensus Sleep Diary (https://doi.org/10.5665/sleep.1642)</p>
-<p>Basic Needs in Games Scale (https://doi.org/10.31234/osf.io/4965z7)</p>
-<p>Daily Inventory of Stressful Events (https://doi.org/10.1177/1073191102091006)</p>
-<p>Life satisfaction - Cantril Self-anchoring Scale (Cantril, 1965)</p>
-<p>Affective valence</p>
+<dl>
+<dt>[^data-ms-4]: Measured twice, at biweekly waves 1 and 6</dt>
+<dd>
+<p>Trait or traitlike measures assessed only once {#tbl-trait}</p>
+</dd>
+</dl>
+</section>
+<section id="daily-measures" class="level3">
+<h3 class="anchored" data-anchor-id="daily-measures">Daily measures</h3>
+<div id="tbl-daily" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;3: : Self-report measures in the daily surveys
+</figcaption>
+<div aria-describedby="tbl-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 28%">
+<col style="width: 34%">
+<col style="width: 20%">
+</colgroup>
+<tbody>
+<tr class="odd">
+<td><strong>Construct</strong></td>
+<td><strong>Measure</strong></td>
+<td><strong>Example Item</strong></td>
+<td><strong>Response format</strong></td>
+</tr>
+<tr class="even">
+<td>Basic psychological need satisfaction and frustration - life in general</td>
+<td>Basic Psychological Need Satisfaction and Frustration Scale <span class="citation" data-cites="ChenEtAl2015Basic">(<a href="#ref-ChenEtAl2015Basic" role="doc-biblioref">Chen et al. 2015</a>)</span>, brief version <span class="citation" data-cites="MartelaRyan2024Assessing">(<a href="#ref-MartelaRyan2024Assessing" role="doc-biblioref">Martela and Ryan 2024</a>)</span></td>
+<td><em>In the last 24 hours…I was able to do things I really want and value in life.</em></td>
+<td>7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)</td>
+</tr>
+<tr class="odd">
+<td>Basic psychological need satisfaction and frustration - video games</td>
+<td>Basic Needs in Games scale <span class="citation" data-cites="BallouEtAl2024Basic">(<a href="#ref-BallouEtAl2024Basic" role="doc-biblioref">Ballou et al. 2024</a>)</span>, brief session-level version</td>
+<td><em>In my most recent session of [X]…I felt disappointed with my performance.</em></td>
+<td>7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)</td>
+</tr>
+<tr class="even">
+<td>Life satisfaction</td>
+<td>Cantril Self-anchoring Scale <span class="citation" data-cites="Cantril1965pattern">(<a href="#ref-Cantril1965pattern" role="doc-biblioref">Cantril 1965</a>)</span>, daily version</td>
+<td><em>I was satisfied with my life today.</em></td>
+<td>Visual Analogue Scale from 1 (Strongly disagree) to 100 (Strongly agree)</td>
+</tr>
+<tr class="odd">
+<td>Affective valence</td>
+<td>ad hoc</td>
+<td>How are you feeling right now?</td>
+<td>Visual Analogue Scale from 1 (very bad) to 100 (very good)</td>
+</tr>
+<tr class="even">
+<td>Sleep Quality</td>
+<td>Sleep quality item (Item 9) from Consensus Sleep Diary <span class="citation" data-cites="CarneyEtAl2012Consensus">(<a href="#ref-CarneyEtAl2012Consensus" role="doc-biblioref">Carney et al. 2012</a>)</span></td>
+<td>How do you rate the quality of your sleep?</td>
+<td>5-pt Likert scale from 1 (very poor) to 5 (very good)</td>
+</tr>
+<tr class="odd">
+<td>Stressors</td>
+<td>Daily Inventory of Stressful Events <span class="citation" data-cites="AlmeidaEtAl2002Daily">(<a href="#ref-AlmeidaEtAl2002Daily" role="doc-biblioref">Almeida, Wethington, and Kessler 2002</a>)</span>, modified for digital delivery</td>
+<td><em>[In the last 24 hours], what kinds of stressful event(s) occurred? [Participant selects among 7 options, including e.g.&nbsp;argument or disagreement]</em></td>
+<td>Yes/No, followed by a 4-pt Likert scale from 1 (Not at all stressful) to 4 (Very stressful)</td>
+</tr>
+<tr class="even">
+<td>Self-reported displacement</td>
+<td>ad hoc</td>
+<td><em>Think back to your most recent gaming session. If you hadn’t played a game, what would you most likely have done instead?</em></td>
+<td>Open response</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
 </section>
 <section id="biweekly-measures" class="level3">
 <h3 class="anchored" data-anchor-id="biweekly-measures">Biweekly measures</h3>
+<div id="tbl-daily" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;4: Self-report measures in the biweekly surveys
+</figcaption>
+<div aria-describedby="tbl-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<colgroup>
+<col style="width: 17%">
+<col style="width: 20%">
+<col style="width: 41%">
+<col style="width: 20%">
+</colgroup>
+<tbody>
+<tr class="odd">
+<td><strong>Construct</strong></td>
+<td><strong>Measure</strong></td>
+<td><strong>Example Item</strong></td>
+<td><strong>Response format</strong></td>
+</tr>
+<tr class="even">
+<td>General Mental Wellbeing</td>
+<td>Warwick-Edinburgh Mental Wellbeing Scale <span class="citation" data-cites="TennantEtAl2007warwickedinburgh">(<a href="#ref-TennantEtAl2007warwickedinburgh" role="doc-biblioref">Tennant et al. 2007</a>)</span></td>
+<td><em>I’ve been feeling optimistic about the future</em></td>
+<td>5-pt Likert scale from 1 (none of the time) to 5 (all of the time)</td>
+</tr>
+<tr class="odd">
+<td>Depression symptoms</td>
+<td>PROMIS Short Form 8a Adult Depression Scale <span class="citation" data-cites="PilkonisEtAl2011item">(<a href="#ref-PilkonisEtAl2011item" role="doc-biblioref">Pilkonis et al. 2011</a>)</span></td>
+<td><em>In the past 7 days…I felt that I had nothing to look forward to.</em></td>
+<td>5-pt Likert scale from 1 (Never) to 5 (Always)</td>
+</tr>
+<tr class="even">
+<td>Life satisfaction</td>
+<td>Cantril Self-anchoring Scale <span class="citation" data-cites="Cantril1965pattern">(<a href="#ref-Cantril1965pattern" role="doc-biblioref">Cantril 1965</a>)</span></td>
+<td><em>On which step of [a ladder from 0 to 10 representing the best possible life] would you say you personally feel you stood over the past two weeks?</em></td>
+<td>10-pt unlabeled scale from 0 to 10</td>
+</tr>
+<tr class="odd">
+<td>Basic psychological need satisfaction and frustration - video games</td>
+<td>Basic Needs in Games scale <span class="citation" data-cites="BallouEtAl2024Basic">(<a href="#ref-BallouEtAl2024Basic" role="doc-biblioref">Ballou et al. 2024</a>)</span>, gaming in general version</td>
+<td><em>When playing video games during the last 2 weeks…I could play in the way I wanted.</em></td>
+<td>7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)</td>
+</tr>
+<tr class="even">
+<td>Subjective displacement</td>
+<td>ad hoc</td>
+<td><em>Over the last two weeks, to what extent has the time you spend playing video games influenced the following areas of your life? […] Work/school performance</em></td>
+<td>7-pt Likert scale from 1 (greatly interfered) to 7 (greatly supported)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
 </section>
 <section id="monthly-measures" class="level3">
 <h3 class="anchored" data-anchor-id="monthly-measures">Monthly measures</h3>
+<div id="tbl-daily" class="quarto-float anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;5: Self-report measures in alternating biweekly surveys
+</figcaption>
+<div aria-describedby="tbl-daily-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="table">
+<colgroup>
+<col style="width: 10%">
+<col style="width: 19%">
+<col style="width: 44%">
+<col style="width: 25%">
+</colgroup>
+<tbody>
+<tr class="odd">
+<td><strong>Construct</strong></td>
+<td><strong>Measure</strong></td>
+<td><strong>Example Item</strong></td>
+<td><strong>Response format</strong></td>
+</tr>
+<tr class="even">
+<td>Sleep quality</td>
+<td>Pittsburgh Sleep Quality Index <span class="citation" data-cites="BuysseEtAl1989Pittsburgh">(<a href="#ref-BuysseEtAl1989Pittsburgh" role="doc-biblioref">Buysse et al. 1989</a>)</span></td>
+<td><em>During the past month, what time have you usually gotten up in the morning?</em></td>
+<td>Various</td>
+</tr>
+<tr class="odd">
+<td>Daytime sleepiness</td>
+<td>Epworth Sleepiness Scale <span class="citation" data-cites="Johns1991New">(<a href="#ref-Johns1991New" role="doc-biblioref">Johns 1991</a>)</span></td>
+<td><em>How likely are you to doze off or fall asleep in the following situations, in comparison to feeling just tired? […] Watching TV</em></td>
+<td>4-pt Likert scale from 1 (No chance of dozing) to 4 (High chance of dozing)</td>
+</tr>
+<tr class="even">
+<td>Harms and benefits of gaming</td>
+<td>2 free text questions</td>
+<td>Do you feel that gaming is sometimes a problem for you? Please describe.</td>
+<td>Open text</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
 </section>
 <section id="self-reported-play" class="level3">
 <h3 class="anchored" data-anchor-id="self-reported-play">Self-reported play</h3>
 <p><em>Social context of play</em>: Participants reported which types of social play they engaged in during the last 24 hours (single-player games only, multiplayer with real-world friends, multiplayer with online-only friends, multiplayer with strangers). Participants could select more than one option.</p>
+<p><em>Self-reported Playtime</em>: In each biweekly survey, participants estimated the time they spent playing games on platforms they had linked during the study (e.g., excluding other platforms such as Playstation) in each of the following periods: last 24 hours, last 7 days, and last 14 days.</p>
+<p><em>Self-reported recent sessions:</em> In each biweekly survey, participants reported details of at least 1 and up to 3 of their most recent gaming sessions (game, date, and start/end time).</p>
 </section>
 </section>
 <section id="digital-trace-data" class="level2">
 <h2 class="anchored" data-anchor-id="digital-trace-data">Digital Trace Data</h2>
-<p>TODO: distribution across platforms</p>
-<p>Digital trace data from games is collected from five platforms: Xbox, Nintendo Switch, Steam, iOS, and Android. Each platform differs in its data structure and collection method. On Xbox and Nintendo, we have <em>session-level</em> data, comprised includes the following fields: . On Steam we have <em>hourly aggregates</em> - every hour, how much time people spent playing each game. On iOS and Android, we have <em>daily aggregates</em> - every day, how much time people spent playing each game. We describe each platform in more detail below.</p>
-<section id="xbox" class="level3">
-<h3 class="anchored" data-anchor-id="xbox">Xbox</h3>
-<p>Xbox data is comprised of session histories—that is, a record of the start and end times when a user plays a game on Xbox. Data was provided via a data-sharing agreement with Microsoft.</p>
-<!-- - `user_id`: A unique identifier for the user -->
-<!-- - `game_id`: A unique identifier for the game (typically the title) -->
-<!-- - `start_time`: The start time of the session -->
-<!-- - `end_time`: The end time of the session -->
-<!-- - `duration`: The duration of the session in minutes -->
-<!-- - `genre`: The genre(s) of the game (e.g., action, strategy, etc.) -->
-<p>Due to restrictions in our data-sharing agreement, game titles are anonymized and only the game ID is provided alongside information about its genre(s) and age rating. The game ID is a unique identifier for each game title, allowing us to analyze gameplay without identifying specific games.</p>
-</section>
-<section id="nintendo-switch" class="level3">
-<h3 class="anchored" data-anchor-id="nintendo-switch">Nintendo Switch</h3>
-</section>
-<section id="steam" class="level3">
-<h3 class="anchored" data-anchor-id="steam">Steam</h3>
-</section>
-<section id="ios" class="level3">
-<h3 class="anchored" data-anchor-id="ios">iOS</h3>
-</section>
-<section id="android" class="level3">
-<h3 class="anchored" data-anchor-id="android">Android</h3>
-</section>
-<section id="discord" class="level3">
-<h3 class="anchored" data-anchor-id="discord">Discord</h3>
-</section>
+<p>As described above, we collected video game play data from five platforms: Xbox, Nintendo Switch, Steam, iOS, and Android (full details in <a href="#tbl-platforms" class="quarto-xref">Table&nbsp;1</a>). To recap, on Xbox and Nintendo, we have <em>session-level</em> data, characterized by the following fields: a game ID (Xbox) or title (Nintendo), a start and end time, and genre(s). On Steam we have <em>hourly aggregates</em> - every hour, how much time people spent playing for all games they played in that hour. On iOS and Android, we have <em>daily aggregates</em> - every day, how much time people spent playing each game. We describe each platform in more detail below. For concision, we do not repeat the details of <a href="#tbl-platforms" class="quarto-xref">Table&nbsp;1</a> in here, but direct readers to that table or our supplementary materials for the exact variables in each platform’s trace data.</p>
+<p>All telemetry timestamps are stored as UTC, but can be converted to the participant’s local time using the <code>local_timezone</code> variable.</p>
 </section>
 <section id="executive-function" class="level2">
 <h2 class="anchored" data-anchor-id="executive-function">Executive Function</h2>
+<p>TODO</p>
 </section>
 <section id="time-use" class="level2">
 <h2 class="anchored" data-anchor-id="time-use">Time Use</h2>
+<p>TODO</p>
 </section>
 <section id="data-quality-checks" class="level2">
 <h2 class="anchored" data-anchor-id="data-quality-checks">Data Quality Checks</h2>
 <p>We implemented a variety of data quality checks.</p>
 <ol type="1">
-<li>In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency <span class="citation" data-cites="MeadeCraig2012identifying">[@MeadeCraig2012identifying]</span>; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding.</li>
-<li>In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, and [TODO: other heuristics]</li>
+<li>In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency <span class="citation" data-cites="MeadeCraig2012identifying">(<a href="#ref-MeadeCraig2012identifying" role="doc-biblioref">Meade and Craig 2012</a>)</span>; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding.</li>
+<li>In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, 3 or more games being played simultaneously [TODO: other heuristics]</li>
+<li>In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any</li>
 </ol>
 </section>
 <section id="missingness" class="level2">
 <h2 class="anchored" data-anchor-id="missingness">Missingness</h2>
+<p>TODO - figure</p>
+<p>TODO - text</p>
 </section>
+</section>
+<section id="dataset" class="level1">
+<h1>Dataset</h1>
+<p>Here we visualize key aspects of the data to provide an overview of its contents and properties.</p>
+<p><a href="#fig-stacked-playtime" class="quarto-xref">Figure&nbsp;4</a> compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people’s self-reports of media use are inaccurate <span class="citation" data-cites="KahnEtAl2014why ParryEtAl2021systematic">(<a href="#ref-KahnEtAl2014why" role="doc-biblioref">Kahn, Ratan, and Williams 2014</a>; <a href="#ref-ParryEtAl2021systematic" role="doc-biblioref">Parry et al. 2021</a>)</span>, with some previous work finding systemic overestimation of video game play <span class="citation" data-cites="JohannesEtAl2021Video">(<a href="#ref-JohannesEtAl2021Video" role="doc-biblioref">Johannes, Vuorre, and Przybylski 2021</a>)</span>. Nonetheless, it is likely that some portion of player’s true gaming is systematically uncaptured, due to factors such as missing platforms (e.g., Playstation), missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam).</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>I’m halfway through making changes to the stacked bar chart preprocessing, ignore the actual values.</p>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output-display">
+<div id="fig-stacked-playtime" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-stacked-playtime-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="data-ms_files/figure-html/fig-stacked-playtime-1.png" id="fig-stacked-playtime" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-stacked-playtime-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>In <a href="#fig-heatmap" class="quarto-xref">Figure&nbsp;5</a>, we visualize the distribution of play across days and times. As expected, we find that the likelihood of play peaks on weekends from 8-11pm, and is lowest in the early morning.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div id="fig-heatmap" class="quarto-figure quarto-figure-center quarto-float anchored" width="672">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="data-ms_files/figure-html/fig-heatmap-1.png" id="fig-heatmap" class="img-fluid figure-img" width="672">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig quarto-uncaptioned" id="fig-heatmap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;5
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>Finally, <strong>?@fig-case-study</strong> descriptively visualizes three participants’ (in the 25th, 50th, and 75th percentiles of playtime) playtime and wellbeing throughout the study.</p>
 </section>
 <section id="discussion" class="level1">
 <h1>Discussion</h1>
 <p>We believe this dataset has potential to address a wide variety of common research questions in the field.</p>
-<p>Some of these questions will be addressed in forthcoming registered reports: specifically, we have plans to test (1) key hypotheses from the Basic Needs in Games model <span class="citation" data-cites="BallouDeterding2024Basic">[@BallouDeterding2024Basic]</span> about how gaming relates to basic psychological needs over time, (2) the relationship between late-night gaming and sleep, and (3) the relationship between playtime in different genres and wellbeing.</p>
+<p>Some of these questions will be addressed in forthcoming registered reports: specifically, we have plans to test (1) key hypotheses from the Basic Needs in Games model <span class="citation" data-cites="BallouDeterding2024Basic">(<a href="#ref-BallouDeterding2024Basic" role="doc-biblioref">Ballou and Deterding 2024</a>)</span> about how gaming relates to basic psychological needs over time, (2) the relationship between late-night gaming and sleep, and (3) the relationship between playtime in different genres and wellbeing.</p>
 <p>Nonetheless, the richness of this data means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). To stimulate ideas, we present a few questions we think the data are well-suited to answering.</p>
-<p><em>How do seasons and weather impact playtime?</em> Because we capture timestamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. By quantifying these effects, researchers can better distinguish weather‐related demand from other drivers (like work schedules or weekend routines), improving the precision of studies on gaming’s impact on wellbeing, motivation, and cognition.</p>
-<p><em>How do neurotypical and neurodiverse players differ in their gaming behavior?</em> Using the neurodivergence data we collected (which includes, for example, 358 participants who identify as having autism and 495 who identify as having ADHD), researchers can. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods</p>
-<p>Self-reported play accuracy - inference from other papers</p>
+<p><em>How do seasons and weather impact playtime?</em> Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. By quantifying these effects, researchers can better distinguish weather‐related demand from other drivers (like work schedules or weekend routines), improving the precision of studies on gaming’s impact on wellbeing, motivation, and cognition.</p>
+<p><em>How do neurotypical and neurodiverse players differ in their gaming behavior?</em> Using the neurodivergence data we collected (which includes, for example, 432 participants who identify as having autism and 578 who identify as having ADHD), researchers can. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods</p>
+<p>Accuracy of self-reported data - inference from other papers</p>
+<p>We encourage researchers from a wide range of disciplines to explore these or other questions using the data we present, which is freely available for reuse under a CC0 license.</p>
+<section id="limitations" class="level2">
+<h2 class="anchored" data-anchor-id="limitations">Limitations</h2>
+<p>While this dataset represents a substantial step forward in holistic coverage of video game play, it remains imperfect: we did not capture data on PlayStation (~19% of gaming market) or computer games played outside the Steam platform (~11% of gaming market); on Nintendo, we do not have access to third-party titles (42% of Nintendo play), and our coverage of smartphone play is limited by the difficulties and inconsistencies of screenshot-based donation and OCR retrieval.</p>
+<p>We further are unable to identify idle time (when players have a game open but are not actively playing it) and account sharing (when players let friends or family use their account); some playtime values may therefore be overestimates of the person’s true playtime, though we are unable to say by how much.</p>
+</section>
 <section id="future-work" class="level2">
 <h2 class="anchored" data-anchor-id="future-work">Future Work</h2>
-<p>The trace data presented here is wide-ranging, but shallow—we capture all gaming that happens on a particular platform or set of platforms, but have no insight into what the player is doing in-game. With previous work and theory clear that in-game behavior (e.g., what character role a player adopts) and experiences (e.g., performance in competitive modes) are key features of games’ wellbeing impacts,</p>
-<p>There is an inherent trade-off between breadth (how widely telemetry can be captured) and depth (the level of detail about in-game behaviours). At present, we areWe see strong potential in study designs that capture platform-level contextual data, combined with</p>
+<p>The trace data presented here is broad in scope but limited in granularity: we capture all gaming activity on a given platform, but not what happens within individual games. Prior work and theory make clear that in-game behaviors (e.g., what role a player adopts, whether they compete or cooperate, or how they perform in competitive modes) are critical determinants of player experience and thereby wellbeing (see e.g., <span class="citation" data-cites="ElsonEtAl2014More">Elson et al. (<a href="#ref-ElsonEtAl2014More" role="doc-biblioref">2014</a>)</span> for a review of how in-game contexts shape effects). This highlights a fundamental trade-off in digital trace research between breadth—how comprehensively play can be captured across platforms—and depth—the granularity of in-game behaviors and experiences. At present, our dataset emphasizes breadth, but we see strong potential in future study designs that combine platform-level telemetry with targeted in-game behavioral data to provide a more complete picture.</p>
+<p>We also see strong potential in combining digital trace data with experimental designs that enable stronger causal inference—for example, randomizing players to single-player games only, or restricting play to certain times of day, to examine effects on social wellbeing or sleep. Previous researchers have noted a dearth of digital trace data-backed field experiments, while highlighting their potential <span class="citation" data-cites="StierEtAl2020Integrating">(<a href="#ref-StierEtAl2020Integrating" role="doc-biblioref">Stier et al. 2020</a>)</span>: Trace data not only captures naturalistic gaming behavior but also allows researchers to assess <em>substitution</em> (what games or platforms participants switch to under intervention) and <em>adherence</em> (how closely they follow assigned play patterns).</p>
 </section>
 <section id="data-availability" class="level2">
 <h2 class="anchored" data-anchor-id="data-availability">Data Availability</h2>
 <p>All data, materials, and code related to this dataset are available on the Open Science Framework [TODO: LINK], and the data is archived on Zenodo [TODO: LINK].</p>
+
 </section>
 </section>
 
-</main>
+
+<div id="quarto-appendix" class="default"><section class="quarto-appendix-contents" role="doc-bibliography" id="quarto-bibliography"><h2 class="anchored quarto-appendix-heading">References</h2><div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list">
+<div id="ref-AlmeidaEtAl2002Daily" class="csl-entry" role="listitem">
+Almeida, David M., Elaine Wethington, and Ronald C. Kessler. 2002. <span>“The Daily Inventory of Stressful Events: An Interview-Based Approach for Measuring Daily Stressors.”</span> <em>Assessment</em> 9 (1): 41–55. <a href="https://doi.org/10.1177/1073191102091006">https://doi.org/10.1177/1073191102091006</a>.
+</div>
+<div id="ref-BallouEtAl2024Basic" class="csl-entry" role="listitem">
+Ballou, Nick, Alena Denisova, Richard Ryan, C. Scott Rigby, and Sebastian Deterding. 2024. <span>“The Basic Needs in Games Scale (BANGS): A New Tool for Investigating Positive and Negative Video Game Experiences.”</span> <em>International Journal of Human-Computer Studies</em> 188 (August): 103289. <a href="https://doi.org/10.1016/j.ijhcs.2024.103289">https://doi.org/10.1016/j.ijhcs.2024.103289</a>.
+</div>
+<div id="ref-BallouDeterding2024Basic" class="csl-entry" role="listitem">
+Ballou, Nick, and Sebastian Deterding. 2024. <span>“The Basic Needs in Games Model of Video Game Play and Mental Health.”</span> <em>Interacting with Computers</em>, October, iwae042. <a href="https://doi.org/10.1093/iwc/iwae042">https://doi.org/10.1093/iwc/iwae042</a>.
+</div>
+<div id="ref-BallouEtAl2023Gaming" class="csl-entry" role="listitem">
+Ballou, Nick, Craig Sewall, Jack Ratcliffe, David Zendle, Laurissa Tokarchuk, and Sebastian Deterding. 2023. <span>“Gaming and Wellbeing: A Panel Study of Objectively Tracked Playtime.”</span> <a href="https://doi.org/10.17605/OSF.IO/EDTWN">https://doi.org/10.17605/OSF.IO/EDTWN</a>.
+</div>
+<div id="ref-BallouEtAl2025Perceived" class="csl-entry" role="listitem">
+Ballou, Nick, Matti Vuorre, Thomas Hakman, and Andrew K Przybylski. 2025. <span>“Perceived Value of Video Games, but Not Hours Played, Predicts Mental Well-Being in Casual Adult Nintendo Players.”</span> <em>Royal Society Open Science</em> 12: 241174. https://doi.org/<a href="https://doi.org/10.1098/rsos.241174">https://doi.org/10.1098/rsos.241174</a>.
+</div>
+<div id="ref-BurgessEtAl2024Potential" class="csl-entry" role="listitem">
+Burgess, Romana, Elizabeth Dolan, Neo Poon, Victoria Jenneson, Francesca Pontin, Torty Sivill, Michelle Morris, and Anya Skatova. n.d. <span>“The Potential of Digital Footprint Data for Health &amp; Wellbeing Research.”</span> <a href="https://doi.org/10.31234/osf.io/9jgn2">https://doi.org/10.31234/osf.io/9jgn2</a>.
+</div>
+<div id="ref-BuysseEtAl1989Pittsburgh" class="csl-entry" role="listitem">
+Buysse, Daniel J., Charles F. Reynolds, Timothy H. Monk, Susan R. Berman, and David J. Kupfer. 1989. <span>“The Pittsburgh Sleep Quality Index: A New Instrument for Psychiatric Practice and Research.”</span> <em>Psychiatry Research</em> 28 (2): 193–213. <a href="https://doi.org/10.1016/0165-1781(89)90047-4">https://doi.org/10.1016/0165-1781(89)90047-4</a>.
+</div>
+<div id="ref-Cantril1965pattern" class="csl-entry" role="listitem">
+Cantril, Hadley. 1965. <em>The Pattern of Human Concerns</em>. Rutgers University Press.
+</div>
+<div id="ref-CarneyEtAl2012Consensus" class="csl-entry" role="listitem">
+Carney, Colleen E., Daniel J. Buysse, Sonia Ancoli-Israel, Jack D. Edinger, Andrew D. Krystal, Kenneth L. Lichstein, and Charles M. Morin. 2012. <span>“The Consensus Sleep Diary: Standardizing Prospective Sleep Self-Monitoring.”</span> <em>Sleep</em> 35 (2): 287–302. <a href="https://doi.org/10.5665/sleep.1642">https://doi.org/10.5665/sleep.1642</a>.
+</div>
+<div id="ref-ChenEtAl2015Basic" class="csl-entry" role="listitem">
+Chen, Beiwen, Maarten Vansteenkiste, Wim Beyers, Liesbet Boone, Edward L. Deci, Jolene Van der Kaap-Deeder, Bart Duriez, et al. 2015. <span>“Basic Psychological Need Satisfaction, Need Frustration, and Need Strength Across Four Cultures.”</span> <em>Motivation and Emotion</em> 39 (2): 216–36. <a href="https://doi.org/10.1007/s11031-014-9450-1">https://doi.org/10.1007/s11031-014-9450-1</a>.
+</div>
+<div id="ref-ElsonEtAl2014More" class="csl-entry" role="listitem">
+Elson, Malte, Johannes Breuer, James D. Ivory, and Thorsten Quandt. 2014. <span>“More Than Stories With Buttons: Narrative, Mechanics, and Context as Determinants of Player Experience in Digital Games: Narrative, Mechanics, and Context in Digital Games.”</span> <em>Journal of Communication</em> 64 (3): 521–42. <a href="https://doi.org/10.1111/jcom.12096">https://doi.org/10.1111/jcom.12096</a>.
+</div>
+<div id="ref-EntertainmentSoftwareAssociation20242024" class="csl-entry" role="listitem">
+Entertainment Software Association. 2024. <span>“2024 Essential Facts about the u.s. Video Game Industry.”</span> Washington D.C. <a href="https://www.theesa.com/wp-content/uploads/2024/05/Essential-Facts-2024-FINAL.pdf">https://www.theesa.com/wp-content/uploads/2024/05/Essential-Facts-2024-FINAL.pdf</a>.
+</div>
+<div id="ref-Freelon2014Interpretation" class="csl-entry" role="listitem">
+Freelon, Deen. 2014. <span>“On the Interpretation of Digital Trace Data in Communication and Social Computing Research.”</span> <em>Journal of Broadcasting &amp; Electronic Media</em> 58 (1): 59–75. <a href="https://doi.org/10.1080/08838151.2013.875018">https://doi.org/10.1080/08838151.2013.875018</a>.
+</div>
+<div id="ref-GriffioenEtAl2020improveda" class="csl-entry" role="listitem">
+Griffioen, Nastasia, Marieke van Rooij, Anna Lichtwarck-Aschoff, and Isabela Granic. 2020. <span>“Toward Improved Methods in Social Media Research.”</span> <em>Technology, Mind, and Behavior</em> 1 (1). <a href="https://doi.org/10.1037/tmb0000005">https://doi.org/10.1037/tmb0000005</a>.
+</div>
+<div id="ref-JohannesEtAl2021Video" class="csl-entry" role="listitem">
+Johannes, Niklas, Matti Vuorre, and Andrew K. Przybylski. 2021. <span>“Video Game Play Is Positively Correlated with Well-Being.”</span> <em>Royal Society Open Science</em> 8 (2): rsos.202049, 202049. <a href="https://doi.org/10.1098/rsos.202049">https://doi.org/10.1098/rsos.202049</a>.
+</div>
+<div id="ref-Johns1991New" class="csl-entry" role="listitem">
+Johns, Murray W. 1991. <span>“A New Method for Measuring Daytime Sleepiness: The Epworth Sleepiness Scale.”</span> <em>Sleep</em> 14 (6): 540–45. <a href="https://doi.org/10.1093/sleep/14.6.540">https://doi.org/10.1093/sleep/14.6.540</a>.
+</div>
+<div id="ref-KahnEtAl2014why" class="csl-entry" role="listitem">
+Kahn, Adam S., Rabindra Ratan, and Dmitri Williams. 2014. <span>“Why We Distort in Self-Report: Predictors of Self-Report Errors in Video Game Play.”</span> <em>Journal of Computer-Mediated Communication</em> 19 (4): 1010–23. <a href="https://doi.org/10.1111/jcc4.12056">https://doi.org/10.1111/jcc4.12056</a>.
+</div>
+<div id="ref-KahnEtAl2015trojan" class="csl-entry" role="listitem">
+Kahn, Adam S., Cuihua Shen, Li Lu, Rabindra A. Ratan, Sean Coary, Jinghui Hou, Jingbo Meng, Joseph Osborn, and Dmitri Williams. 2015. <span>“The Trojan Player Typology: A Cross-Genre, Cross-Cultural, Behaviorally Validated Scale of Video Game Play Motivations.”</span> <em>Computers in Human Behavior</em> 49 (August): 354–61. <a href="https://doi.org/10.1016/j.chb.2015.03.018">https://doi.org/10.1016/j.chb.2015.03.018</a>.
+</div>
+<div id="ref-LarrieuEtAl2023How" class="csl-entry" role="listitem">
+Larrieu, Maxime, Yoann Fombouchet, Joël Billieux, and Greg Decamps. 2023. <span>“How Gaming Motives Affect the Reciprocal Relationships Between Video Game Use and Quality of Life: A Prospective Study Using Objective Playtime Indicators.”</span> <em>Computers in Human Behavior</em> 147 (October): 107824. <a href="https://doi.org/10.1016/j.chb.2023.107824">https://doi.org/10.1016/j.chb.2023.107824</a>.
+</div>
+<div id="ref-MartelaRyan2024Assessing" class="csl-entry" role="listitem">
+Martela, Frank, and Richard M. Ryan. 2024. <span>“Assessing Autonomy, Competence, and Relatedness Briefly: Validating Single-Item Scales for Basic Psychological Need Satisfaction.”</span> <em>European Journal of Psychological Assessment</em>, July, 1015–5759/a000846. <a href="https://doi.org/10.1027/1015-5759/a000846">https://doi.org/10.1027/1015-5759/a000846</a>.
+</div>
+<div id="ref-MeadeCraig2012identifying" class="csl-entry" role="listitem">
+Meade, Adam W., and S. Bartholomew Craig. 2012. <span>“Identifying Careless Responses in Survey Data.”</span> <em>Psychological Methods</em> 17 (3): 437–55. <a href="https://doi.org/10.1037/a0028085">https://doi.org/10.1037/a0028085</a>.
+</div>
+<div id="ref-Ofcom2023Online" class="csl-entry" role="listitem">
+Ofcom. 2023. <span>“Online Nation 2023 Report.”</span> <a href="https://www.ofcom.org.uk/siteassets/resources/documents/research-and-data/online-research/online-nation/2023/online-nation-2023-report.pdf?v=368355">https://www.ofcom.org.uk/siteassets/resources/documents/research-and-data/online-research/online-nation/2023/online-nation-2023-report.pdf?v=368355</a>.
+</div>
+<div id="ref-Orben2019Teens" class="csl-entry" role="listitem">
+Orben, Amy. 2019. <span>“Teens, Screens and Well-Being: An Improved Approach.”</span> PhD thesis, University of Oxford. <a href="https://amyorben.com/uploads/thesis/">https://amyorben.com/uploads/thesis/</a>.
+</div>
+<div id="ref-ParryEtAl2021systematic" class="csl-entry" role="listitem">
+Parry, Douglas A., Brittany I. Davidson, Craig J. R. Sewall, Jacob T. Fisher, Hannah Mieczkowski, and Daniel S. Quintana. 2021. <span>“A Systematic Review and Meta-Analysis of Discrepancies Between Logged and Self-Reported Digital Media Use.”</span> <em>Nature Human Behaviour</em> 5 (May): 1535–47. <a href="https://doi.org/10.1038/s41562-021-01117-5">https://doi.org/10.1038/s41562-021-01117-5</a>.
+</div>
+<div id="ref-PerryEtAl2018onlineonly" class="csl-entry" role="listitem">
+Perry, Ryan, Anders Drachen, Allison Kearney, Simone Kriglstein, Lennart E. Nacke, Rafet Sifa, Guenter Wallner, and Daniel Johnson. 2018. <span>“Online-Only Friends, Real-Life Friends or Strangers? Differential Associations with Passion and Social Capital in Video Game Play.”</span> <em>Computers in Human Behavior</em> 79 (February): 202–10. <a href="https://doi.org/10.1016/j.chb.2017.10.032">https://doi.org/10.1016/j.chb.2017.10.032</a>.
+</div>
+<div id="ref-PilkonisEtAl2011item" class="csl-entry" role="listitem">
+Pilkonis, Paul A., Seung W. Choi, Steven P. Reise, Angela M. Stover, William T. Riley, David Cella, and PROMIS Cooperative Group. 2011. <span>“Item Banks for Measuring Emotional Distress From the Patient-Reported Outcomes Measurement Information System (PROMIS®): Depression, Anxiety, and Anger.”</span> <em>Assessment</em> 18 (3): 263–83. <a href="https://doi.org/10.1177/1073191111411667">https://doi.org/10.1177/1073191111411667</a>.
+</div>
+<div id="ref-PontesEtAl2019measurement" class="csl-entry" role="listitem">
+Pontes, Halley M., Bruno Schivinski, Cornelia Sindermann, Mei Li, Benjamin Becker, Min Zhou, and Christian Montag. 2019. <span>“Measurement and Conceptualization of Gaming Disorder According to the World Health Organization Framework: The Development of the Gaming Disorder Test.”</span> <em>International Journal of Mental Health and Addiction</em> 19 (June): 508528. <a href="https://doi.org/10.1007/s11469-019-00088-z">https://doi.org/10.1007/s11469-019-00088-z</a>.
+</div>
+<div id="ref-RoennebergEtAl2003Life" class="csl-entry" role="listitem">
+Roenneberg, Till, Anna Wirz-Justice, and Martha Merrow. 2003. <span>“Life Between Clocks: Daily Temporal Patterns of Human Chronotypes.”</span> <em>Journal of Biological Rhythms</em> 18 (1): 80–90. <a href="https://doi.org/10.1177/0748730402239679">https://doi.org/10.1177/0748730402239679</a>.
+</div>
+<div id="ref-SotoJohn2017short" class="csl-entry" role="listitem">
+Soto, Christopher J., and Oliver P. John. 2017. <span>“Short and Extra-Short Forms of the Big Five Inventory<span></span>2: The BFI-2-S and BFI-2-XS.”</span> <em>Journal of Research in Personality</em> 68 (June): 69–81. <a href="https://doi.org/10.1016/j.jrp.2017.02.004">https://doi.org/10.1016/j.jrp.2017.02.004</a>.
+</div>
+<div id="ref-StierEtAl2020Integrating" class="csl-entry" role="listitem">
+Stier, Sebastian, Johannes Breuer, Pascal Siegers, and Kjerstin Thorson. 2020. <span>“Integrating Survey Data and Digital Trace Data: Key Issues in Developing an Emerging Field.”</span> <em>Social Science Computer Review</em> 38 (5): 503–16. <a href="https://doi.org/10.1177/0894439319843669">https://doi.org/10.1177/0894439319843669</a>.
+</div>
+<div id="ref-TennantEtAl2007warwickedinburgh" class="csl-entry" role="listitem">
+Tennant, Ruth, Louise Hiller, Ruth Fishwick, Stephen Platt, Stephen Joseph, Scott Weich, Jane Parkinson, Jenny Secker, and Sarah Stewart-Brown. 2007. <span>“The Warwick-Edinburgh Mental Well-Being Scale (WEMWBS): Development and UK Validation.”</span> <em>Health and Quality of Life Outcomes</em> 5 (1): 63. <a href="https://doi.org/10.1186/1477-7525-5-63">https://doi.org/10.1186/1477-7525-5-63</a>.
+</div>
+<div id="ref-VuorreEtAl2022Time" class="csl-entry" role="listitem">
+Vuorre, Matti, Niklas Johannes, Kristoffer Magnusson, and Andrew K. Przybylski. 2022. <span>“Time Spent Playing Video Games Is Unlikely to Impact Well-Being.”</span> <em>Royal Society Open Science</em> 9 (7): 220411. <a href="https://doi.org/10.1098/rsos.220411">https://doi.org/10.1098/rsos.220411</a>.
+</div>
+</div></section><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><h2 class="anchored quarto-appendix-heading">Footnotes</h2>
+
+<ol>
+<li id="fn1"><p>https://accounts.nintendo.com/qrcode<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2"><p>In previous research, Nint endo -published games accounted for 65% of Switch playtime <span class="citation" data-cites="BallouEtAl2025Perceived">(<a href="#ref-BallouEtAl2025Perceived" role="doc-biblioref">Ballou et al. 2025</a>)</span><a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3"><p>https://support.xbox.com/en-US/help/account-profile/manage-account/guide-to-insider-program<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section></div></main>
 <!-- /main column -->
 <script id="quarto-html-after-body" type="application/javascript">
 window.document.addEventListener("DOMContentLoaded", function (event) {

@@ -67,8 +67,8 @@ author:
 
   - name: Andrew K Przybylski
     corresponding: true
-    email: andy.pryzbylski@oii.ox.ac.uk
-    orcid: 0000-0003-4126-0696
+    email: andy.przybylski@oii.ox.ac.uk
+    orcid: 0000-0001-5547-2185
     affiliations:
       - name: University of Oxford
         department: Oxford Internet Institute
@@ -93,9 +93,11 @@ format:
 editor_options:
   chunk_output_type: console
   markdown:
-    wrap: 72
-warning: false
-echo: false
+    wrap: none
+execute:
+  warning: false
+  echo: false
+  cache: true
 ---
 
 ```{r}
@@ -115,19 +117,21 @@ if (!require("ggsankey")) {
 
 p_load(
   tidyverse,
+  lubridate,
+  data.table,
+  dtplyr,
   jsonlite,
   qualtRics,
   sjlabelled,
   hms,
   openxlsx,
   scales,
-  qualtRics,
-  here,
-  scales,
   ggsankey,
   tidycensus,
   here,
-  ggrepel
+  ggrepel,
+  ggstream,
+  patchwork
 )
 
 here::i_am("manuscripts/data-ms/data-ms.qmd")
@@ -148,6 +152,7 @@ options(scipen = 999)
 
 ```{r}
 #| label: load-data
+#| cache.extra: !expr file.mtime("data-minimal-pseudo/survey_intake.csv.gz")
 
 intake <- read_csv(here("data-minimal-pseudo/survey_intake.csv.gz"))
 diary <- read_csv(here("data-minimal-pseudo/survey_diary.csv.gz"))
@@ -166,15 +171,24 @@ print_num <- function(num, accuracy = .1) {
   scales::number(num, accuracy = accuracy, scale_cut = scales::cut_long_scale())
 }
 
+offset_secs <- function(z){
+  z <- toupper(sub("^GMT", "", z))
+  m <- regexec("^([+-])(\\d{2})(\\d{2})$", z); p <- regmatches(z, m)
+  sapply(p, \(x) if (length(x)) (ifelse(x[2]=="-", -1, 1))*(as.numeric(x[3])*3600 + as.numeric(x[4])*60) else 0)
+}
+
 ```
 
 ```{r}
 #| label: preprocess-steam
 
 # TODO: filter by non-account sharing
+idle_games <- source(here("data-minimal-pseudo/idle_titles_vector.txt"))$value
+non_games <- source(here("data-minimal-pseudo/non_games_vector.txt"))$value
 
 # Arrange data to calculate differences correctly
-steam_sum <- steam |>
+steam_clean <- steam |>
+  filter(!title_id %in% idle_games & !title_id %in% non_games) |> 
   mutate(
     steam_id = as.character(steam_id),
     pid = as.character(pid)
@@ -196,7 +210,6 @@ steam_sum <- steam |>
   # - First entry for each user/game (lag is NA)
   # - Negative playtime difference (data anomaly or reset?)
   # - Large time gaps between polls (e.g., > 2 hours for hourly polling, indicates missed polls or stopped tracking)
-  #   Adjust the threshold (e.g., 1.1 or 1.5 hours) as needed based on polling frequency and tolerance.
   filter(
     !is.na(playtime_diff),
     playtime_diff >= 0,
@@ -217,6 +230,11 @@ steam_sum <- steam |>
       tz = "UTC"
     )
   ) |>
+    # filter out rows where 3+ games are being played simultaneously
+  group_by(pid, datetime_hour_start) |>
+  mutate(concurrent_titles = n_distinct(steam_id[minutes > 0])) |>
+  ungroup() |>
+  mutate(minutes = ifelse(concurrent_titles >= 3, 0, minutes)) |> 
   group_by(pid, steam_id) |>
   # Calculate difference from previous hour and identify new sessions
   mutate(
@@ -227,26 +245,228 @@ steam_sum <- steam |>
     )),
     is_new_session = ifelse(is.na(hour_diff) | hour_diff > 1, 1, 0),
     session_group_id = cumsum(is_new_session),
-    session_start = min(datetime_hour_start),
-    session_end = max(datetime_hour_start) + hours(1) # Session ends at the end of the last hour block played
+    session_start = datetime_hour_start,
+    session_end = datetime_hour_start + hours(1) # Session ends at the end of the last hour block played
   ) |>
-  filter(minutes > 0)
+  filter(minutes > 0 & minutes < 120)
 ```
 
 ```{r}
 #| label: preprocess-xbox
 
-xbox_clean <- xbox |>
+# Clean Xbox data and keep only active gaming sessions 
+# In particular, canonicalize overlapping Xbox sessions per pid:
+# - at most one title at any instant
+# - handoff tolerance 'tol_sec' (short overlaps => later-starting title wins)
+# - ≥3 concurrent titles => drop that slice
+canonicalize_xbox_sessions <- function(df, tol_sec = 60) {
+  df <- df |>
+    filter(!is.na(session_start), !is.na(session_end), session_end > session_start) |>
+    mutate(
+      pid = as.character(pid),
+      session_start = as.POSIXct(session_start, tz = "UTC"),
+      session_end   = as.POSIXct(session_end,   tz = "UTC")
+    ) |>
+    arrange(pid, session_start, session_end)
+
+  if (nrow(df) == 0L) return(df[0, ])
+
+  # 1) atomic segments
+  segs <- df |>
+    group_by(pid) |>
+    reframe(cuts = sort(unique(c(session_start, session_end)))) |>
+    mutate(seg_start = cuts, seg_end = lead(cuts)) |>
+    filter(!is.na(seg_end), seg_end > seg_start) |>
+    select(pid, seg_start, seg_end) |>
+    ungroup()
+
+  # 2) overlap join (carry ALL original cols)
+  olap <- inner_join(
+    segs, df,
+    by = join_by(pid, seg_start < session_end, seg_end > session_start)
+  )
+
+  if (nrow(olap) == 0L) return(df[0, ])
+
+  # 3) per-segment: drop ≥3 titles; choose latest-starting row
+  assigned <- olap |>
+    group_by(pid, seg_start, seg_end) |>
+    mutate(n_titles = n_distinct(title_id)) |>
+    filter(n_titles < 3L) |>
+    slice_max(session_start, with_ties = FALSE) |>
+    ungroup() |>
+    mutate(session_start = seg_start, session_end = seg_end) |>
+    select(-seg_start, -seg_end, -n_titles)
+
+  if (nrow(assigned) == 0L) return(df[0, ])
+
+  # columns to carry via first() when merging
+  meta_cols <- setdiff(
+    names(assigned),
+    c("pid", "title_id", "session_start", "session_end")
+  )
+
+  # 4) merge adjacent slices within tol_sec; keep metadata from first row
+  out <- assigned |>
+    arrange(pid, title_id, session_start, session_end) |>
+    group_by(pid, title_id) |>
+    mutate(
+      gap_sec = as.numeric(session_start - lag(session_end), units = "secs"),
+      grp = cumsum(if_else(is.na(gap_sec) | gap_sec > tol_sec, 1L, 0L))
+    ) |>
+    arrange(session_start, .by_group = TRUE) |>
+    group_by(pid, title_id, grp) |>
+    summarise(
+      session_start = min(session_start),
+      session_end   = max(session_end),
+      across(all_of(meta_cols), ~ dplyr::first(.)),
+      .groups = "drop"
+    ) |>
+    mutate(duration = as.numeric(difftime(session_end, session_start, units = "mins"))) |>
+    arrange(pid, session_start)
+
+  # align columns to original order where possible
+  out <- out |> select(any_of(names(df)), everything())
+  out
+}
+
+xbox_clean <- xbox |> 
   filter(title_placement == "Full") |>
-  filter(genres != "Video")
+  filter(genres != "Video") |> 
+  filter(!is.na(session_start), !is.na(session_end), session_end > session_start) |> 
+  filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |>  # something weird with this title, almost every player has played it and it accounts for 4x the playtime of the next-highest game - and it's unrated. I suspect it's the home screen or something.
+  filter(duration <= 600) |> 
+  arrange(pid, session_start, session_end) |> 
+  canonicalize_xbox_sessions(tol_sec = 60)
 
 ```
 
 ```{r}
 #| label: preprocess-nintendo
 
-nintendo_clean <- nintendo |>
-  filter(session_end <= time_of_pull)
+# TODO: nintendo data quality checks
+tol <- dseconds(60)
+
+nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
+  filter(
+    !is.na(session_start), 
+    !is.na(session_end), 
+    session_end > session_start,
+    session_start < time_of_pull
+  ) |> 
+  arrange(pid, title_id, session_start, session_end) |> 
+  group_by(pid, title_id) %>%
+  mutate(
+    start_num = as.numeric(session_start),
+    end_num   = as.numeric(session_end),
+    prev_max_end = lag(cummax(end_num), default = -Inf),
+    new_cluster = start_num > (prev_max_end + as.numeric(tol)),
+    cluster = cumsum(new_cluster),
+    dur_sec = end_num - start_num
+  ) %>%
+  group_by(pid, title_id, cluster) |> 
+  slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |> 
+  ungroup() %>%
+  mutate(duration = dur_sec / 60) %>%
+  select(pid, title_id, session_start, session_end, duration) |> 
+  filter(duration <= 600) |> 
+  as_tibble()
+
+third_party_prop <- paste0(print_num((1-median(intake$nintendo_first_party_prop, na.rm = T))*100, 1), "%")
+
+```
+
+```{r}
+#| label: aggregate-session-hourly-daily
+
+tz_map <- intake |>
+  transmute(pid = as.character(pid), off = offset_secs(local_timezone)) |>
+  distinct(pid, .keep_all = TRUE)
+
+# --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
+sessions_all <- bind_rows(
+  xbox_clean %>%
+    transmute(pid = as.character(pid), platform = "Xbox",
+              start_utc = session_start, end_utc = session_end),
+  nintendo_clean %>%
+    transmute(pid = as.character(pid), platform = "Nintendo",
+              start_utc = session_start, end_utc = session_end)
+) %>%
+  left_join(tz_map, by = "pid") %>%
+  mutate(
+    start_local = start_utc + off,
+    end_local   = end_utc   + off,
+    duration_min = as.numeric(difftime(end_utc, start_utc, units = "mins"))
+  ) %>%
+  filter(!is.na(start_utc), !is.na(end_utc), end_utc > start_utc, duration_min >= 1)
+
+# --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
+# expand sessions into local-hour bins, compute overlap minutes, and add UTC hour
+hourly_from_sessions <- sessions_all %>%
+  filter(!is.na(off)) |> 
+  mutate(
+    h0_local = floor_date(start_local, "hour"),
+    h1_local = floor_date(end_local - seconds(1), "hour"),
+    n_hours  = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
+  ) %>%
+  tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |> 
+  mutate(
+    hour_start_local = h0_local + hours(k - 1),
+    minutes = pmax(
+      0,
+      as.numeric(difftime(pmin(end_local, hour_start_local + hours(1)),
+                          pmax(start_local, hour_start_local),
+                          units = "mins"))
+    ),
+    hour_start_utc = hour_start_local - off
+  ) %>%
+  select(pid, platform, hour_start_local, hour_start_utc, minutes) %>%
+  group_by(pid, platform, hour_start_local, hour_start_utc) %>%
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+hourly_from_steam <- steam_clean %>%
+  select(pid, datetime_hour_start, minutes) %>%
+  mutate(pid = as.character(pid)) %>%
+  left_join(tz_map, by = "pid") %>%
+  transmute(
+    pid, platform = "Steam",
+    hour_start_utc   = datetime_hour_start,
+    hour_start_local = datetime_hour_start + off,
+    minutes
+  ) %>%
+  group_by(pid, platform, hour_start_local, hour_start_utc) %>%
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+hourly_all <- bind_rows(hourly_from_sessions, hourly_from_steam)
+
+# --- 3) DAILY (Nintendo + Xbox + Steam; collapse hourly to days) -----------
+daily_all <- hourly_all |>
+  mutate(
+    day_local = as.Date(hour_start_local),
+  ) |>
+  group_by(pid, platform, day_local) |>
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+# --- (optional) MOBILE PLACEHOLDERS ----------------------------------------
+# When iOS/Android daily datasets are ready, bind_rows() their daily tables here.
+# ios_daily <- ios_df |>
+#   transmute(pid = as.character(pid), platform = "iOS",
+#             day_local = <local_date>, day_utc = <utc_date>, minutes = <minutes>)
+# android_daily <- android_df |>
+#   transmute(pid = as.character(pid), platform = "Android",
+#             day_local = <local_date>, day_utc = <utc_date>, minutes = <minutes>)
+# daily_all <- bind_rows(daily_all, ios_daily, android_daily)
+
+
+telemetry_spans <- hourly_all |>
+  group_by(pid, platform) |>
+  summarise(
+    telemetry_start = min(hour_start_local, na.rm = TRUE),
+    telemetry_end   = max(hour_start_local, na.rm = TRUE) + hours(1), # end of last hour bin
+    week = floor_date(telemetry_end, "week"),
+    .groups = "drop"
+  )
+
 
 ```
 
@@ -256,11 +476,11 @@ nintendo_clean <- nintendo |>
 n_participants <- print_num(length(unique(panel$pid)))
 n_daily <- print_num(nrow(diary))
 n_biweekly <- print_num(nrow(panel))
-n_sessions <- print_num(nrow(nintendo) + nrow(xbox) + nrow(steam_sum))
+n_sessions <- print_num(nrow(nintendo) + nrow(xbox) + nrow(steam_clean))
 n_hours <- print_num(
   (sum(nintendo$duration, na.rm = TRUE) +
     sum(xbox$duration, na.rm = TRUE) +
-    sum(steam_sum$minutes, na.rm = TRUE)) /
+    sum(steam_clean$minutes, na.rm = TRUE)) /
     60
 )
 
@@ -387,69 +607,29 @@ education_uk <- read_csv(here(
 
 # Introduction
 
-Scientists widely agree that digital trace data---behavioral logs
-automatically collected by online platforms---are necessary to
-understand the effects of technology on varied outcomes such as health,
-wellbeing, academic achievement, and cognition. Users struggle to
-accurately self-report even high-level measures of use (e.g., total
-screentime) [@ParryEtAl2021systematic], and these high-level metrics are
-generally poorly predictive of outcomes [@Orben2019Teens]. To
-systematically understand the effects of technology, we therefore need
-data that captures nuanced factors we now know to be much more
-impactful: the frequency, duration, and time of day of each session, the
-specific content engaged, and the trajectory of user behavior over time.
-Digital trace data is well-suited to address this need.
+Scientists widely agree that digital trace data---behavioral logs automatically collected by online platforms---are necessary to understand the nuances of technology use [@Freelon2014Interpretation; @GriffioenEtAl2020improveda], and thereby its effects on varied outcomes such as health, wellbeing, academic achievement, and cognition [@BurgessEtAl2024Potential]. Users struggle to accurately self-report even high-level measures of use (e.g., total screentime) [@ParryEtAl2021systematic], and these high-level metrics are generally poorly predictive of outcomes [@Orben2019Teens]. To systematically understand the effects of technology, we therefore need data that captures nuanced factors we now know to be more impactful. Beyond screentime, the next layer of granularity includes the frequency, duration, and time of day of each session; the specific content engaged; and the trajectory of user behavior over time. Digital trace data is well-suited to deliver these elements.
 
-As one of the world's foremost leisure activities, video games are a key
-Digital trace data has been widely implemented in many studies of social
-media and wellbeing, but in studies of video games has been much more
-limited. In part, this is a function of availability: video game
-consoles are restrictive and typically do not allow third party tracking
-software; most video game platforms do not have a 1-click "download my
-data" option offered by several social media platforms (e.g., TikTok,
-Instagram); and there are thousands of individual games whose data may
-be relevant for a given study or population.
+As one of the world's foremost leisure activities among youth and adults alike [@Ofcom2023Online; @EntertainmentSoftwareAssociation20242024], video games are a key medium for which digital trace data is needed. Digital trace data has been widely implemented in many studies of social media and wellbeing, but in studies of video games has been much more limited. Trace data in video games primarily falls under the field of game analytics or game data science, but (1) the majority of these studies involve the use of proprietary data that is not publicly shared, and (2) the focus of this field tends to be more on player behavior metrics with clear industry value .
 
-Where trace data has been used in video games studies, it has largely
-been limited to a single game [@VuorreEtAl2022Time;
-@JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly]
-or platform [@BallouEtAl2023Gaming; @BallouEtAl2025Perceived] per user.
-Previous studies that secured video game telemetry was widely limited to
-a single game or a single gaming platform. However, as the data we
-present here shows, players commonly use a wide range of games and
-platforms. Capturing just one game or one gaming platform among
-potentially many that the person may be engaging with---and affected by.
-For example, a player may
+i In part, this is a function of availability: video game consoles are restrictive and typically do not allow third party tracking software; most video game platforms do not have a 1-click "download my data" option offered by several social media platforms (e.g., TikTok, Instagram); and there are thousands of individual games whose data may be relevant for a given study or population.
 
-Digital trace data on its own is limited however; without additional
-information from users about how their lives are going, we will struggle
-to understand the causal network. In the field of game analytics, a
-number of studies have digital trace data to explore social networks, We
-therefore see particular value in longitudinal studies that combine
-comprehensive digital trace data with repeated surveys, in both
-experimental and observational contexts. Ideally, surveys should be
-frequent enough to capture short-term effects (e.g., playing a game to
-recover from a stressful workday) and longer-term development (e.g., a
-pattern of increasing play over time displacing sleep).
+Where trace data has been used in video games studies, it has largely been limited to a single game [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or platform [@BallouEtAl2023Gaming; @BallouEtAl2025Perceived] per user. Previous studies that secured video game telemetry was widely limited to a single game or a single gaming platform. However, as the data we present here shows, players commonly use a wide range of games and platforms. Capturing just one game or one gaming platform among potentially many that the person may be engaging with---and affected by. For example, a player may
+
+Digital trace data on its own is limited however; without additional information from users about how their lives are going, we will struggle to understand the causal network. In the field of game analytics, a number of studies have digital trace data to explore social networks, We therefore see particular value in longitudinal studies that combine comprehensive digital trace data with repeated surveys, in both experimental and observational contexts. Ideally, surveys should be frequent enough to capture short-term effects (e.g., playing a game to recover from a stressful workday) and longer-term development (e.g., a pattern of increasing play over time displacing sleep).
 
 # Overview
 
-This paper addresses this need for longitudinal digital trace data
-across multiple gaming platforms. Here, we present a dataset consisting
-of `r n_participants` participants, `r n_daily` daily surveys,
-`r n_biweekly` surveys, and a total of `r n_hours` of gameplay
-distributed across `r n_sessions`.
+This paper addresses this need for longitudinal digital trace data across multiple gaming platforms. Here, we present a dataset consisting of `r n_participants` participants, `r n_daily` daily surveys, `r n_biweekly` surveys, and a total of `r n_hours` of gameplay distributed across `r n_sessions`.
 
-Digital trace data was sourced for five distinct platforms—Xbox,
-Nintendo, Steam, iOS, and Android—through distinct piplines detailed
-below.
+Digital trace data was sourced for five distinct platforms—Xbox, Nintendo, Steam, iOS, and Android—through distinct piplines detailed below.
 
-The dataset is openly available at \[LINK\] under a CC0 license for
-unrestricted reuse.
+The dataset is openly available at \[LINK\] under a CC0 license for unrestricted reuse.
 
-highlight that data collection methods are preregistered 
+highlight that data collection methods are preregistered
 
-# Design
+# Method
+
+## Design
 
 ```{r}
 #| label: fig-sankey
@@ -534,236 +714,55 @@ ggplot(
 
 The study consisted of four stages (@fig-sankey).
 
-## Stage 1: Screening
+### Stage 1: Screening
 
-In the first stage, we screened participants in order to find people
-aged 18-40 who (1) self-report playing video games, (2) self-report that
-at least 50% of their total video game play takes place on the platforms
-included in the study, and (3) were willing to link their gaming
-accounts to provide digital trace data. We screened participants from
-two panel sources: PureProfile and Prolific.
+In the first stage, we screened participants in order to find people aged 18-40 who (1) self-report playing video games, (2) self-report that at least 50% of their total video game play takes place on the platforms included in the study, and (3) were willing to link their gaming accounts to provide digital trace data. We screened participants from two panel sources: PureProfile and Prolific.
 
-Participants were recruited under an initial set of ethnicity‐based
-quotas designed to mirror the general population’s demographic
-composition. After we reached approximately 50% of our target sample
-under quota constraints and found that further quota‐eligible recruits
-were scarce, we suspended the quotas for the remainder of data
-collection; all subsequent participants were enrolled on a first‐come,
-first‐served basis. Final sample characteristic reflect both
-quota‐driven and open‐enrollment phases (see below).
+Participants were recruited under an initial set of ethnicity‐based quotas designed to mirror the general population’s demographic composition. After we reached approximately 50% of our target sample under quota constraints and found that further quota‐eligible recruits were scarce, we suspended the quotas for the remainder of data collection; all subsequent participants were enrolled on a first‐come, first‐served basis. Final sample characteristic reflect both quota‐driven and open‐enrollment phases (see below).
 
-## Stage 2: Account Linking
+### Stage 2: Account Linking
 
-Participants who were deemed eligible during screening proceeded
-directly to an account linking survey wherein they provided details of
-the gaming platforms they actively use. For UK participants, this
-includes Nintendo Switch, Steam, Android and iOS. For US participants,
-this includes the same four alongside Xbox. Details of how participants
-linked each type of account are shown in @tbl-platforms.
+Participants who were deemed eligible during screening proceeded directly to an account linking survey wherein they provided details of the gaming platforms they actively use. For UK participants, this includes Nintendo Switch, Steam, Android and iOS. For US participants, this includes the same four alongside Xbox. Details of how participants linked each type of account are shown in @tbl-platforms.
 
-+--------------+--------------+--------------+--------------+
-| Platform     | Data Source  | Account      | Type of Data |
-|              |              | Linking      | Collected    |
-|              |              | Process      |              |
-+==============+==============+==============+==============+
-| Nintendo     | Data-sharing | Participants | Session      |
-|              | agreements   | share an     | records      |
-|              | with         | identifier   | (what game   |
-|              | Nintendo of  | contained    | was played,  |
-|              | America (US) | within a QR  | at what      |
-|              | and Nintendo | code on      | time, for    |
-|              | of Europe    | Nintendo web | how long)    |
-|              | (UK)         | interface\[\ | for 1st      |
-|              |              | [1           | party games  |
-|              |              | \]](#_ftn1). | (games       |
-|              |              | Nintendo of  | published in |
-|              |              | A            | whole or in  |
-|              |              | m            | part by      |
-|              |              | erica/Europe | Nintendo,    |
-|              |              | uses this    | but not by   |
-|              |              | identifier   | third party  |
-|              |              | to retrieve  | publishers   |
-|              |              | gameplay     | such as      |
-|              |              | data and     | Electronic   |
-|              |              | share it     | Arts). In    |
-|              |              | with the     | previous     |
-|              |              | research     | research,    |
-|              |              | team.        | Nint e       |
-|              |              |              | n            |
-|              |              | \[\[1\       | do-published |
-|              |              | \]\]         | games        |
-|              |              | (#\_ftnref1) | accounted    |
-|              |              | \<https://a  | for 65% of   |
-|              |              | c            | Switch       |
-|              |              | c            | playtime     |
-|              |              | ounts.ninten | [@BallouEtAl2025Perceived]  |
-|              |              | do           |             |
-|              |              | .            |             |
-|              |              | com/qrcode\> |  |
-+--------------+--------------+--------------+--------------+
-| Xbox (US     | Data-sharing | Participants | Session      |
-| only)        | agreement    | consent to   | records      |
-|              | with         | data sharing | (what game   |
-|              | Microsoft    | by opting in | was played,  |
-|              |              | to the study | at what      |
-|              |              | on Xbox      | time, for    |
-|              |              | Insiders\[\  | how long).   |
-|              |              | [            | The name of  |
-|              |              | 1\]](#_ftn1) | the game     |
-|              |              | with their   | replaced     |
-|              |              | Xbox         | with a       |
-|              |              | account.     | random       |
-|              |              | Microsoft    | persistent   |
-|              |              | retrieved    | identifier   |
-|              |              | gameplay     | for all      |
-|              |              | data for all | third-party  |
-|              |              | consented    | games (i.e., |
-|              |              | accounts,    | those not    |
-|              |              | and shares   | published by |
-|              |              | it with the  | Xbox Game    |
-|              |              | research     | Studios),    |
-|              |              | team in      | but genre(s) |
-|              |              | p            | and age      |
-|              |              | seudonymized | ratings are  |
-|              |              | form.        | shared.      |
-|              |              |              |              |
-|              |              | \[\[1\       |              |
-|              |              | \]\]         |              |
-|              |              | (#\_ftnref1) |              |
-|              |              | \<https://s  |              |
-|              |              | u            |              |
-|              |              | p            |              |
-|              |              | port.xbox.co |              |
-|              |              | m            |              |
-|              |              | /            |              |
-|              |              | en-US/help/a |              |
-|              |              | c            |              |
-|              |              | c            |              |
-|              |              | ount-profile |              |
-|              |              | /            |              |
-|              |              | m            |              |
-|              |              | anage-accoun |              |
-|              |              | t            |              |
-|              |              | /            |              |
-|              |              | guide-to-ins |              |
-|              |              | i            |              |
-|              |              | d            |              |
-|              |              | er-program\> |              |
-+--------------+--------------+--------------+--------------+
-| Steam        | Custom web   | Participants | Incremental  |
-|              | app (Gam e   | sign up for  | playtime per |
-|              | p            | Ga m         | game (every  |
-|              | lay.Science) | e            | hour, the    |
-|              |              | play.Science | total time   |
-|              |              | ( \<         | spent        |
-|              |              | h            | playing      |
-|              |              | ttps://gamep | during the   |
-|              |              | la           | previous     |
-|              |              | y            | hour)        |
-|              |              | .science),\> |              |
-|              |              | an           |              |
-|              |              | open-source  |              |
-|              |              | platform for |              |
-|              |              | tracking     |              |
-|              |              | Steam        |              |
-|              |              | gameplay.    |              |
-|              |              | Participants |              |
-|              |              | consent to   |              |
-|              |              | have their   |              |
-|              |              | gameplay     |              |
-|              |              | data         |              |
-|              |              | monitored    |              |
-|              |              | for the      |              |
-|              |              | duration of  |              |
-|              |              | the study.   |              |
-|              |              | Their Steam  |              |
-|              |              | ID is        |              |
-|              |              | a            |              |
-|              |              | uthenticated |              |
-|              |              | using the    |              |
-|              |              | official     |              |
-|              |              | Steam a      |              |
-|              |              | u            |              |
-|              |              | thentication |              |
-|              |              | API          |              |
-|              |              | (OpenID).    |              |
-+--------------+--------------+--------------+--------------+
-| iOS          | iOS Screen   | At each      | Total weekly |
-|              | Time         | biweekly     | playtime per |
-|              | Screenshots  | survey,      | game (e.g.,  |
-|              |              | participants | 2 hours on   |
-|              |              | submit       | game X, 5    |
-|              |              | screenshots  | hours on     |
-|              |              | from the     | game Y)      |
-|              |              | built-in iOS |              |
-|              |              | Screen Time  |              |
-|              |              | app. These   |              |
-|              |              | show details |              |
-|              |              | of the       |              |
-|              |              | previous 3   |              |
-|              |              | weeks’ of    |              |
-|              |              | gaming app   |              |
-|              |              | use (whats   |              |
-|              |              | games were   |              |
-|              |              | played and   |              |
-|              |              | for how      |              |
-|              |              | long). Data  |              |
-|              |              | was          |              |
-|              |              | extracted    |              |
-|              |              | using OCR.   |              |
-+--------------+--------------+--------------+--------------+
-| Android      | Digital      | At each      | Total weekly |
-|              | Wellbeing    | biweekly     | playtime per |
-|              | Screenshots  | survey,      | game (e.g.,  |
-|              |              | participants | 2 hours on   |
-|              |              | submitted    | game X, 5    |
-|              |              | screenshots  | hours on     |
-|              |              | from the     | game Y)      |
-|              |              | Digital      |              |
-|              |              | Screen Time  |              |
-|              |              | app, if      |              |
-|              |              | available on |              |
-|              |              | their        |              |
-|              |              | Android OS.  |              |
-|              |              | These show   |              |
-|              |              | details of   |              |
-|              |              | the previous |              |
-|              |              | 3 weeks’ of  |              |
-|              |              | phone use    |              |
-|              |              | (what app    |              |
-|              |              | categories   |              |
-|              |              | are used and |              |
-|              |              | for how      |              |
-|              |              | long). Data  |              |
-|              |              | was          |              |
-|              |              | extracted    |              |
-|              |              | using OCR.   |              |
-+--------------+--------------+--------------+--------------+
++----------------+-----------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| **Platform**   | **Data Source**                                                                   | **Account Linking Process**                                                                                                                                                                                                                                                                                 | **Type of Data Collected**                                                                                                                                                                                                                                 |
++----------------+-----------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Nintendo       | Data-sharing agreements with Nintendo of America (US) and Nintendo of Europe (UK) | Participants share an identifier contained within a QR code on Nintendo web interface.[^data-ms-1] Nintendo of America/Europe uses this identifier to retrieve gameplay data and share it with the research team.\                                                                                          | Session records (what game was played, at what time, for how long) for 1st party games (games published in whole or in part by Nintendo, but not by third party publishers such as Electronic Arts).[^data-ms-2]                                           |
++----------------+-----------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Xbox (US only) | Data-sharing agreement with Microsoft                                             | Participants consent to data sharing by opting in to the study on Xbox Insiders[^data-ms-3] with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in pseudonymized form.                                                              | Session records (what game was played, at what time, for how long). The name of the game replaced with a random persistent identifier for all third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared. |
++----------------+-----------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Steam          | Custom web app (Gameplay.Science)                                                 | Participants sign up for Gameplay.Science (https://gameplay.science), an o pen-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID). | Incremental playtime per game (every hour, the total time spent playing during the previous hour)                                                                                                                                                          |
++----------------+-----------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| iOS            | iOS Screen Time Screenshots                                                       | In each biweekly survey, participants submitted screenshots from the built-in iOS Screen Time app. These show details of the previous 3 weeks’ of gaming app use (what games were played and for how long). Data was extracted using OCR.                                                                   | Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)                                                                                                                                                                                |
++----------------+-----------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Android        | Digital Wellbeing Screenshots                                                     | In each biweekly survey, participants submitted screenshots from the Digital Screen Time app, if available on their Android OS. These show details of the previous 3 weeks’ of phone use (what app categories are used and for how long). Data was extracted using OCR.                                     | Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)                                                                                                                                                                                |
++----------------+-----------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 : : Platform Details {#tbl-platforms}
 
-## Stage 3: Account Validation
+[^data-ms-1]: https://accounts.nintendo.com/qrcode
 
-After players completed the account linking process, we . Participants
-needed to have valid telemetry from at least one platform in order to be
-eligible for the next stage of the study. Participants who did not have
-valid telemetry were excluded from the study
+[^data-ms-2]: In previous research, Nint endo -published games accounted for 65% of Switch playtime [@BallouEtAl2025Perceived]
 
-## Stage 4: Surveys
+[^data-ms-3]: https://support.xbox.com/en-US/help/account-profile/manage-account/guide-to-insider-program
 
-Eligible participants were invited to complete 6 waves of biweekly surveys,
-one every two weeks. Eligible US participants will additionally be
-invited to complete daily diary surveys for 30 days, concurrently with
-the first biweekly surveys. Running survey types concurrently allows us to
-harmonize distribution across regions without delaying the UK sample on
-the US sample’s account, and to minimize attrition.
+### Stage 3: Account Validation
 
-Diary survey links were sent every day at 2pm local time for the
-participant and remained available until 3am. Biweekly survey links were
-sent every second week from the first day of the study at 12pm and
-remained available for 96 hours.
+After players completed the account linking process, we checked each account for evidence of valid gaming—specifically, records of active gameplay sessions on one or more of Steam, Xbox, and Nintendo within the 2 weeks before survey completion. Participants who did not have recent, valid telemetry on any console platform were excluded from the rest of the study.
 
-# Participants
+### Stage 4: Surveys
+
+```{r}
+#| label: fig-design
+
+knitr::include_graphics(here("manuscripts/data-ms/design.png"))
+```
+
+Eligible participants were invited to complete 6 waves of biweekly surveys, one every two weeks (@fig-design). US participants were additionally invited to complete daily surveys for 30 days, concurrently with the first biweekly surveys. During waves 1, 3, and 5, a cognitive task was also administered within the biweekly survey.
+
+Daily survey links were sent every day at 2pm local time for the participant and remained available until 3am. Biweekly survey links were sent every second week from the first day of the study at 12pm and remained available for 96 hours.
+
+## Participants
 
 ```{r}
 #| label: participant-gender
@@ -780,7 +779,7 @@ gender_counts <- intake |>
   )
 
 gender_text_all <- with(
-  gender_counts,
+  gender_counts |> group_by(gender) |> summarize(n = sum(n), prop = prop[1]),
   paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
 )
 
@@ -923,160 +922,181 @@ ggplot(ethnicity_combined, aes(x = group, y = value, fill = ethnicity)) +
 
 ```
 
-Our final sample consists of `r nrow(intake[intake$qualified,])`
-qualified participants, selected from a pool of `r nrow(intake)`
-screened participants. Of the `r nrow(intake[intake$qualified,])` with
-recent telemetry, `r nrow(panel)` also completed at least one survey.
+Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(panel$pid))` also completed at least one survey.
 
-Our screening sample was roughly representative of the general
-population of the US and UK by ethnicity (@fig-representative) and
-gender identity: `r gender_text_all`.
+Our screening sample was roughly representative of the general population of the US and UK by ethnicity (@fig-representative) and gender identity: `r gender_text_all`.
 
-The sample of qualified participants is less representative of the
-general population, containing more men and non-binary participants
-(`r gender_text_all`), as well as fewer black participants
-(@fig-representative)
+The sample of qualified participants is less representative of the general population, containing more men and non-binary participants: `r gender_text_qualified`, as well as fewer black participants (@fig-representative). However, the demographics of console video game players are not well-understood; it is likely that our sample more closely represents this population than the general population.
 
 ## Ethics and Compensation
 
-This study received ethical approval from the Social Sciences and
-Humanities Inter-Divisional Research Ethics Committee at the University
-of Oxford (OII_CIA_23_107). All participants provided informed consent
-at the start of the study, including consent to their data being shared
-openly for reanalysis.
+This study received ethical approval from the Social Sciences and Humanities Inter-Divisional Research Ethics Committee at the University of Oxford (OII_CIA_23_107). All participants provided informed consent at the start of the study, including consent to their data being shared openly for reanalysis.
 
-Prolific participants were paid at a rate of £12/hour for all study
-components, which equates to: £0.20 for a 1-minute screening (plus £5
-for linking at least one account with recent data), £2 for a 10-minute
-intake survey, £0.80 for each 4-minute daily survey, and £2 for each
-10-minute biweekly survey. Participants received £10 bonus payments for
-completing at least 24 out of 30 daily surveys and/or 5 out of 6
-biweekly surveys.
+Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening, £2 for the 10-minute intake survey (plus £5 for linking at least one account with recent data), £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.
 
-# Deviations from Preregistration
+## Deviations from Preregistration
 
-Due to challenges in the recruitment process, we made several deviations
-from our preregistration. These changes were made to ensure we could
-recruit enough participants to meet our sample size goals and to improve
-the quality of the data collected, but in our view do not threaten the
-validity of the study. The following deviations were made:
+We made several deviations from our preregistration to ensure we could recruit enough high-quality participants to meet our sample size goals. In our view, none are so severe enough to threaten the validity of the study. Deviations are summarised in @tbl-trait.
 
-TODO: convert to table
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Preregistered                                                                                                                      | Actual                                                                                                                                                                         | Justification for Deviation                                                                                                                                                                        |
++====================================================================================================================================+================================================================================================================================================================================+====================================================================================================================================================================================================+
+| All participants sourced from PureProfile                                                                                          | Participants sourced from both PureProfile and Prolific                                                                                                                        | Exhausted PureProfile participant pool before reaching required sample size                                                                                                                        |
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Screening sample would be nationally representative by ethnicity and gender                                                        | Approximately 50% of screening was done using quotas for national representativeness by ethnicity and gender; all subsequent sampling used convenience sampling with no quotas | Exhausted participant pools of smaller demographic categories on both Prolific and PureProfile before reaching required sample size                                                                |
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Sample consists of participants aged 18--30 in the US and 18--75 in the UK                                                         | Sample consists of participants aged 18-40 in both regions                                                                                                                     | \(1\) Unable to recruit enough participants in the US aged 18--30; (2) near-zero qualification rates from UK adults over 50; (3) desire for results from both regions to be more easily comparable |
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| To qualify, ≥75% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch) | To qualify, ≥50% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)                                             | Low rates of study qualification at 75% threshold, in large part due to substantial uncaptured Playstation play                                                                                    |
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Qualification contingent upon valid telemetry within last 7 days                                                                   | Qualification contingent upon valid telemetry within last 14 days                                                                                                              | Feedback from participants indicating that play during a 7-day period was subject to too many fluctuations (e.g., a busy workweek)                                                                 |
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Daily and biweekly surveys sent at 7pm local time                                                                                  | Daily and biweekly surveys sent at 2pm local time                                                                                                                              | Feedback from participants indicating that evening plans often interfered with survey completion and thus adversely affected response rate                                                         |
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Session-level Android data captured via the ActivityWatch app                                                                      | Daily-level Android data captured using screenshots of the Digital Wellbeing interface                                                                                         | Restrictions in PureProfile's privacy policy preventing installation of 3rd party apps; technical challenges in supporting users with the installation and data export                             |
++------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
--   After exhausting the PureProfile participant pool, we recruited
-    additional participants through the Prolific platform.
--   After exhausting available participants when screening for
-    representative samples for ethnicity and gender, we later removed
-    quotas and allowed participants from all backgrounds
--   Instead of recruiting participants aged 18--30 in the US and 18--75
-    in the UK, we recruited participants in both regions from 18--40.
-    This was done because (1) we were unable to recruit enough
-    participants in the US aged 18--30, and (2) we wanted results from
-    both regions to be comparable.
--   Instead of requiring 75% of total gameplay to take place on the
-    platforms included in the study, we instead required 50%
--   Rather than requiring valid play data from the 7-day baseline
-    period, we required valid play data from the previous 14-days after
-    feedback from participants indicated that play during a 7-day period
-    was too easily disrupted by real-world events.
--   Instead of sending surveys at 7pm local time, we sent them at 2pm to
-    increase our response rate after feedback from participants
-    indicated that evening plans often interfered with survey
-    completion.
--   Due to restrictions in the privacy policy of PureProfile, we were
-    not able to install third-party apps on users' phones, and therefore
-    could not capture Android trace data using ActivityWatch. Instead,
-    we used a similar process as iOS by leveraging the Digital Wellbeing
-    interface present on many Android models
+: : Summary of deviations from preregistration {#tbl-trait}
+
+## Demographic measures
+
+We collected the following demographic variables:
+
+-   age
+-   gender
+
+For all participants who were eligible based on self-reported video game play (but who did not always successfully linked accounts), we additionally collected the following
+
+-   ethnicity
+-   educational attainment
+-   employment status
+-   height and weight
+-   self-identified neurodivergence (e.g., ASD, ADHD, dyslexia)
+-   political party affiliation
+-   diagnosed neurodivergence
+-   marital status
+-   caretaking responsibilities (children, family members)
+-   postal geography (general area only; first three digits of the five-digit US ZIP Code; UK outward code)
+
+## Self-report measures
+
+### Trait or traitlike measures
+
++--------------------------------------+-----------------------------------------------------------+----------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| Construct                            | Measure                                                   | Example Item                                                                     | Response Format                                                    |
++:=====================================+:==========================================================+:=================================================================================+====================================================================+
+| Chronotype                           | Munich Chronotype Questionnaire [@RoennebergEtAl2003Life] | *I go to bed at...*                                                              | Times and numbers of minutes                                       |
++--------------------------------------+-----------------------------------------------------------+----------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| Big 5 Personality                    | BFI-2-XS [@SotoJohn2017short]                             | *I am someone who...is compassionate, has a soft heart.*                         | 5-pt Likert scale from 1 (Disagree strongly) to 5 (Agree strongly) |
++--------------------------------------+-----------------------------------------------------------+----------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| Player Trait Typology                | Trojan Player Typology [@KahnEtAl2015trojan]              | *It's important to me to play with a tightly knit group.*                        | 5-pt Likert scale from 1 (Strongly disagree) to 5 (Strongly agree) |
++--------------------------------------+-----------------------------------------------------------+----------------------------------------------------------------------------------+--------------------------------------------------------------------+
+| Gaming Disorder Symptoms[^data-ms-4] | Gaming Disorder Test [@PontesEtAl2019measurement]         | *In the past 3 months...I have had difficulties controlling my gaming activity*. | 5-pt Likert scale from 1 (Never) to 5 (Very often)                 |
++--------------------------------------+-----------------------------------------------------------+----------------------------------------------------------------------------------+--------------------------------------------------------------------+
+
+[^data-ms-4]: Measured twice, at biweekly waves 1 and 6
+
+: Trait or traitlike measures assessed only once {#tbl-trait}
+
+### Daily measures
+
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| **Construct**                                                           | **Measure**                                                                                                                 | **Example Item**                                                                                                                                        | **Response format**                                                                         |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| Basic psychological need satisfaction and frustration - life in general | Basic Psychological Need Satisfaction and Frustration Scale [@ChenEtAl2015Basic], brief version [@MartelaRyan2024Assessing] | *In the last 24 hours...I was able to do things I really want and value in life.*                                                                       | 7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)                |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| Basic psychological need satisfaction and frustration - video games     | Basic Needs in Games scale [@BallouEtAl2024Basic], brief session-level version                                              | *In my most recent session of \[X\]...I felt disappointed with my performance.*                                                                         | 7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)                |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| Life satisfaction                                                       | Cantril Self-anchoring Scale [@Cantril1965pattern], daily version                                                           | *I was satisfied with my life today.*                                                                                                                   | Visual Analogue Scale from 1 (Strongly disagree) to 100 (Strongly agree)                    |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| Affective valence                                                       | ad hoc                                                                                                                      | How are you feeling right now?                                                                                                                          | Visual Analogue Scale from 1 (very bad) to 100 (very good)                                  |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| Sleep Quality                                                           | Sleep quality item (Item 9) from Consensus Sleep Diary [@CarneyEtAl2012Consensus]                                           | How do you rate the quality of your sleep?                                                                                                              | 5-pt Likert scale from 1 (very poor) to 5 (very good)                                       |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| Stressors                                                               | Daily Inventory of Stressful Events [@AlmeidaEtAl2002Daily], modified for digital delivery                                  | *\[In the last 24 hours\], what kinds of stressful event(s) occurred? \[Participant selects among 7 options, including e.g. argument or disagreement\]* | Yes/No, followed by a 4-pt Likert scale from 1 (Not at all stressful) to 4 (Very stressful) |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+| Self-reported displacement                                              | ad hoc                                                                                                                      | *Think back to your most recent gaming session. If you hadn't played a game, what would you most likely have done instead?*                             | Open response                                                                               |
++-------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------+
+
+: : Self-report measures in the daily surveys {#tbl-daily}
+
+### Biweekly measures
+
++---------------------------------------------------------------------+------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+| **Construct**                                                       | **Measure**                                                                  | **Example Item**                                                                                                                                                  | **Response format**                                                          |
++---------------------------------------------------------------------+------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+| General Mental Wellbeing                                            | Warwick-Edinburgh Mental Wellbeing Scale [@TennantEtAl2007warwickedinburgh]  | *I’ve been feeling optimistic about the future*                                                                                                                   | 5-pt Likert scale from 1 (none of the time) to 5 (all of the time)           |
++---------------------------------------------------------------------+------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+| Depression symptoms                                                 | PROMIS Short Form 8a Adult Depression Scale [@PilkonisEtAl2011item]          | *In the past 7 days...I felt that I had nothing to look forward to.*                                                                                              | 5-pt Likert scale from 1 (Never) to 5 (Always)                               |
++---------------------------------------------------------------------+------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+| Life satisfaction                                                   | Cantril Self-anchoring Scale [@Cantril1965pattern]                           | *On which step of \[a ladder from 0 to 10 representing the best possible life\] would you say you personally feel you stood over the past two weeks?*             | 10-pt unlabeled scale from 0 to 10                                           |
++---------------------------------------------------------------------+------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+| Basic psychological need satisfaction and frustration - video games | Basic Needs in Games scale [@BallouEtAl2024Basic], gaming in general version | *When playing video games during the last 2 weeks...I could play in the way I wanted.*                                                                            | 7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree) |
++---------------------------------------------------------------------+------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+| Subjective displacement                                             | ad hoc                                                                       | *Over the last two weeks, to what extent has the time you spend playing video games influenced the following areas of your life? \[...\] Work/school performance* | 7-pt Likert scale from 1 (greatly interfered) to 7 (greatly supported)       |
++---------------------------------------------------------------------+------------------------------------------------------------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+
+: Self-report measures in the biweekly surveys {#tbl-daily}
+
+### Monthly measures
+
++------------------------------+------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------+
+| **Construct**                | **Measure**                                                | **Example Item**                                                                                                                      | **Response format**                                                         |
++------------------------------+------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------+
+| Sleep quality                | Pittsburgh Sleep Quality Index [@BuysseEtAl1989Pittsburgh] | *During the past month, what time have you usually gotten up in the morning?*                                                         | Various                                                                     |
++------------------------------+------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------+
+| Daytime sleepiness           | Epworth Sleepiness Scale [@Johns1991New]                   | *How likely are you to doze off or fall asleep in the following situations, in comparison to feeling just tired? \[...\] Watching TV* | 4-pt Likert scale from 1 (No chance of dozing) to 4 (High chance of dozing) |
++------------------------------+------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------+
+| Harms and benefits of gaming | 2 free text questions                                      | Do you feel that gaming is sometimes a problem for you? Please describe.                                                              | Open text                                                                   |
++------------------------------+------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------+
+
+: Self-report measures in alternating biweekly surveys {#tbl-daily}
+
+### Self-reported play
+
+*Social context of play*: Participants reported which types of social play they engaged in during the last 24 hours (single-player games only, multiplayer with real-world friends, multiplayer with online-only friends, multiplayer with strangers). Participants could select more than one option.
+
+*Self-reported Playtime*: In each biweekly survey, participants estimated the time they spent playing games on platforms they had linked during the study (e.g., excluding other platforms such as Playstation) in each of the following periods: last 24 hours, last 7 days, and last 14 days.
+
+*Self-reported recent sessions:* In each biweekly survey, participants reported details of at least 1 and up to 3 of their most recent gaming sessions (game, date, and start/end time).
+
+## Digital Trace Data
+
+As described above, we collected video game play data from five platforms: Xbox, Nintendo Switch, Steam, iOS, and Android (full details in @tbl-platforms). To recap, on Xbox and Nintendo, we have *session-level* data, characterized by the following fields: a game ID (Xbox) or title (Nintendo), a start and end time, and genre(s). On Steam we have *hourly aggregates* - every hour, how much time people spent playing for all games they played in that hour. On iOS and Android, we have *daily aggregates* - every day, how much time people spent playing each game. We describe each platform in more detail below. For concision, we do not repeat the details of @tbl-platforms in here, but direct readers to that table or our supplementary materials for the exact variables in each platform's trace data.
+
+All telemetry timestamps are stored as UTC, but can be converted to the participant's local time using the `local_timezone` variable.
+
+## Executive Function
+
+TODO
+
+## Time Use
+
+TODO
+
+## Data Quality Checks
+
+We implemented a variety of data quality checks.
+
+1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding.
+2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, 3 or more games being played simultaneously \[TODO: other heuristics\]
+3.  In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any
+
+## Missingness
+
+TODO - figure
+
+TODO - text
 
 # Dataset
 
-```{r}
-#| label: stack-playtime
+Here we visualize key aspects of the data to provide an overview of its contents and properties.
 
-# TODO: daily aggregate stacked bar plots
-# subplots: self-reported survey data, time use data, telemetry data
-# side-by-side stacked bar plot
+@fig-stacked-playtime compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of player's true gaming is systematically uncaptured, due to factors such as missing platforms (e.g., Playstation), missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam).
 
-sr_pid <- intake |>
-  mutate(
-    pid,
-    qualified,
-    self_reported_weekly_play,
-    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
-    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
-    PlayStation = self_reported_weekly_play *
-      coalesce(prop_playstation / 100, 0),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
-    iOS = self_reported_weekly_play * coalesce(prop_ios / 100, 0),
-    Android = self_reported_weekly_play * coalesce(prop_android / 100, 0),
-    .keep = "none"
-  ) |>
-  pivot_longer(
-    cols = c(Steam, Xbox, PlayStation, Nintendo, iOS, Android),
-    names_to = "platform",
-    values_to = "minutes"
-  ) |>
-  filter(!is.na(minutes))
-
-sr_long <- sr_pid |>
-  group_by(qualified, platform) |>
-  summarise(minutes = mean(minutes, na.rm = TRUE), .groups = "drop") |>
-  mutate(source = "Self-report")
-
-steam_weekly <- steam_sum |>
-  filter(timestamp > as.Date("2025-06-01")) |>
-  mutate(week = floor_date(timestamp, "week")) |>
-  group_by(week) |>
-  summarise(
-    total_minutes = sum(minutes, na.rm = TRUE),
-    minutes_per_player = sum(minutes, na.rm = TRUE) /
-      n_distinct(intake$pid[intake$qualified])
-  ) |>
-  summarise(
-    minutes = mean(minutes_per_player, na.rm = TRUE)
-  ) |>
-  mutate(platform = "Steam", source = "Telemetry")
-
-xbox_weekly <- xbox_clean |>
-  filter(session_start > as.Date("2025-06-01")) |>
-  mutate(week = floor_date(session_start, "week")) |>
-  group_by(week) |>
-  summarise(
-    total_minutes = sum(duration, na.rm = TRUE),
-    minutes_per_player = sum(duration, na.rm = TRUE) /
-      n_distinct(intake$pid[intake$qualified])
-  ) |>
-  summarise(
-    minutes = mean(minutes_per_player, na.rm = TRUE)
-  ) |>
-  mutate(platform = "Xbox", source = "Telemetry")
-
-xbox_pid <- xbox_clean |>
-  filter(session_start > as.Date("2025-06-01")) |>
-  filter(title_placement == "Full") |>
-  filter(genres != "Video") |>
-  mutate(day = floor_date(session_start, "day")) |>
-  group_by(pid, day) |>
-  summarise(
-    total_minutes = sum(duration, na.rm = TRUE)
-  )
-
-nintendo_weekly <- nintendo_clean |>
-  filter(session_start > as.Date("2025-06-01")) |>
-  mutate(week = floor_date(session_start, "week")) |>
-  group_by(week) |>
-  summarise(
-    total_minutes = sum(duration, na.rm = TRUE),
-    minutes_per_player = sum(duration, na.rm = TRUE) /
-      n_distinct(intake$pid[intake$qualified])
-  ) |>
-  summarise(
-    minutes = mean(minutes_per_player, na.rm = TRUE)
-  ) |>
-  mutate(platform = "Nintendo", source = "Telemetry")
-
-```
+::: {.callout-warning}
+I'm halfway through making changes to the stacked bar chart preprocessing, ignore the actual values.
+:::
 
 ```{r}
 #| label: fig-stacked-playtime
@@ -1085,313 +1105,239 @@ nintendo_weekly <- nintendo_clean |>
 # TODO: week-to-week variance? 
 # violin plot / side by side - comparison of 5 specific individuals - by quantiles 
 
-weekly_by_platform <-  bind_rows(
-    sr_long,
-    steam_weekly,
-    xbox_weekly,
-    nintendo_weekly
-  ) |> 
-  group_by(source) |> 
-  mutate(prop = minutes / sum(minutes)) |> 
-  filter(source == "Telemetry" | qualified) |> 
-  mutate(platform = fct_reorder(platform, minutes))
+# --- counts ---
+n_qualified <- intake |> filter(qualified) |> summarise(n = n_distinct(pid)) |> pull()
 
-stack_order <- weekly_by_platform %>%
-  filter(source == "Self-report") %>%
-  count(platform, wt = minutes, name = "sr") %>%
-  arrange(sr) %>%
+# --- Self-report per platform (as before; drop the temporary Xbox-only filter) ---
+sr_long <- intake |>
+  filter(qualified) |>
+  mutate(
+    Steam       = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
+    Xbox        = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
+    PlayStation = self_reported_weekly_play * coalesce(prop_playstation / 100, 0),
+    Nintendo    = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
+    iOS         = self_reported_weekly_play * coalesce(prop_ios / 100, 0),
+    Android     = self_reported_weekly_play * coalesce(prop_android / 100, 0)
+  ) |>
+  pivot_longer(c(Steam, Xbox, PlayStation, Nintendo, iOS, Android),
+               names_to = "platform", values_to = "minutes") |>
+  group_by(platform) |>
+  summarise(minutes = mean(minutes, na.rm = TRUE), .groups = "drop") |>
+  mutate(source = "Self-report")
+
+# --- Telemetry per platform PER QUALIFIED PERSON (new denominator) ---
+telemetry_weekly_A <- daily_all |>
+  mutate(week = floor_date(day_local, "week")) |>
+  group_by(platform, week) |>
+  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+  group_by(platform) |>
+  summarise(minutes = mean(total_minutes, na.rm = TRUE) / n_qualified, .groups = "drop") |>
+  mutate(source = "Telemetry")
+
+# --- Combine + order (unchanged) ---
+weekly_by_platform <- bind_rows(sr_long, telemetry_weekly_A) |>
+  mutate(source = factor(source, levels = c("Self-report", "Telemetry")))
+
+stack_order <- weekly_by_platform |>
+  filter(source == "Self-report") |>
+  arrange(minutes) |>
   pull(platform)
 
-weekly_by_platform <- weekly_by_platform %>%
-  mutate(
-    source = factor(source, levels = c("Self-report", "Telemetry")),
-    platform = factor(platform, levels = stack_order)
-  )
+weekly_by_platform <- weekly_by_platform |>
+  mutate(platform = factor(platform, levels = stack_order))
 
-ghost <- weekly_by_platform %>%
-  select(platform, source, minutes) %>%
-  pivot_wider(names_from = source, values_from = minutes, values_fill = 0) %>%
-  mutate(gap = pmax(`Self-report` - Telemetry, 0)) %>%
-  arrange(desc(gap)) %>% # largest bottom → smallest top
+# --- Ghost overlay (unchanged) ---
+ghost <- weekly_by_platform |>
+  select(platform, source, minutes) |>
+  pivot_wider(names_from = source, values_from = minutes, values_fill = 0) |>
+  mutate(gap = pmax(`Self-report` - Telemetry, 0)) |>
+  arrange(desc(gap)) |>
   mutate(
-    tele_top = sum(Telemetry, na.rm = TRUE)[1], # SINGLE anchor = top of Telemetry bar
+    tele_top = sum(Telemetry, na.rm = TRUE),
     ymin = tele_top + lag(cumsum(gap), default = 0),
     ymax = ymin + gap,
     xmid = match("Telemetry", levels(weekly_by_platform$source)),
-    xmin = xmid - 0.9 / 2,
-    xmax = xmid + 0.9 / 2,
-    ymid = (ymin + ymax) / 2,
-    reason = dplyr::case_match(
-      platform,
-      "iOS" ~ "Missing or low quality screenshots",
-      "PlayStation" ~ "No PlayStation telemetry method",
-      "Android" ~ "Missing or low-quality screenshots",
-      "Nintendo" ~ "Missing 3rd party play",
-      "Steam" ~
-        "Uncaptured Steam play\n(e.g., invisible mode, account sharing)",
-      .default = NA_character_
-    )
+    xmin = xmid - 0.45, xmax = xmid + 0.45,
+    ymid = (ymin + ymax) / 2
   ) |>
   filter(gap > 0)
 
-ggplot(weekly_by_platform, aes(x = source, y = minutes, fill = platform)) +
-  geom_bar(stat = "identity", position = "stack", width = 0.9) +
-  scale_fill_viridis_d(
-    option = "magma",
-    begin = .1,
-    end = .8,
-    limits = stack_order
-  ) +
-  labs(x = "Data Source", y = "Weekly Playtime (minutes)", fill = "Platform") +
+# --- Panel A plot (your original plot code works as-is) ---
+gA <- ggplot(weekly_by_platform, aes(x = source, y = minutes, fill = platform)) +
+  geom_col(width = 0.9) +
+  scale_fill_viridis_d(option = "magma", begin = .1, end = .8, limits = stack_order) +
+  labs(x = "Data Source", y = "Weekly minutes per qualified person", fill = "Platform") +
   theme(legend.position = "bottom") +
-  geom_text(
-    aes(label = ifelse(minutes < 10, "", round(minutes, 0))),
-    position = position_stack(vjust = 0.5),
-    color = "white",
-    family = "serif"
-  ) +
-  # dotted ghost rectangles that fill Telemetry up to Self-report
-  geom_rect(
-    data = ghost,
-    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-    inherit.aes = FALSE,
-    linetype = "dotted",
-    linewidth = 0.6,
-    color = "black",
-    fill = NA
-  ) +
-  geom_text(
-    data = ghost,
-    aes(x = xmid, y = ymid, label = paste0("+", round(gap, 0))),
-    inherit.aes = FALSE,
-    family = "serif"
-  ) +
-  # optional arrows + brief reasons (remove if not needed)
-  geom_text_repel(
-    data = ghost %>% filter(!is.na(reason)),
-    aes(x = xmid + .05, y = ymid, label = reason),
-    nudge_x = 1,
-    hjust = 1,
-    direction = "y",
-    arrow = arrow(length = unit(6, "pt"), type = "closed"),
-    min.segment.length = 0,
-    box.padding = 0.25,
-    point.padding = 0.25,
-    inherit.aes = FALSE,
-    family = "serif"
-  ) +
-  coord_cartesian(
-    clip = "off",
-    ylim = c(0, max(ghost$ymax) * 1.08),
-    xlim = c(1, max(ghost$xmax) * 1.08)
+  geom_text(aes(label = ifelse(minutes < 10, "", round(minutes, 0))),
+            position = position_stack(vjust = 0.5), color = "white", family = "serif") +
+  geom_rect(data = ghost, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            inherit.aes = FALSE, linetype = "dotted", linewidth = 0.6, color = "black", fill = NA) +
+  geom_text(data = ghost, aes(x = xmid, y = ymid, label = paste0("+", round(gap, 0))),
+            inherit.aes = FALSE, family = "serif")
+
+# --- how many qualified users per platform ---
+n_users <- intake |>
+  filter(qualified) |>
+  transmute(
+    pid = as.character(pid),
+    Steam    = str_detect(linked_platforms %||% "", "Steam"),
+    Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
+    Xbox     = str_detect(linked_platforms %||% "", "Xbox")
+  ) |>
+  summarise(
+    Steam    = sum(Steam, na.rm = TRUE),
+    Nintendo = sum(Nintendo, na.rm = TRUE),
+    Xbox     = sum(Xbox, na.rm = TRUE)
+  ) |>
+  pivot_longer(everything(), names_to = "platform", values_to = "n_users")
+
+# --- SR per platform among users of that platform ---
+sr_users <- intake |>
+  filter(qualified) |>
+  mutate(
+    Steam    = self_reported_weekly_play * coalesce(prop_steam/100, 0),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo/100, 0),
+    Xbox     = self_reported_weekly_play * coalesce(prop_xbox/100,  0),
+    uses_Steam    = str_detect(linked_platforms %||% "", "Steam"),
+    uses_Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
+    uses_Xbox     = str_detect(linked_platforms %||% "", "Xbox")
+  ) |>
+  select(pid, Steam, Nintendo, Xbox, uses_Steam, uses_Nintendo, uses_Xbox) |>
+  pivot_longer(c(Steam, Nintendo, Xbox), names_to = "platform", values_to = "sr_minutes") |>
+  mutate(uses = case_when(
+    platform == "Steam"    ~ uses_Steam,
+    platform == "Nintendo" ~ uses_Nintendo,
+    platform == "Xbox"     ~ uses_Xbox,
+    TRUE ~ FALSE
+  )) |>
+  filter(uses) |>
+  group_by(platform) |>
+  summarise(sr = mean(sr_minutes, na.rm = TRUE), .groups = "drop")
+
+# --- Telemetry per platform PER USER OF THAT PLATFORM ---
+tele_users <- daily_all |>
+  filter(platform %in% c("Steam","Nintendo","Xbox")) |>
+  mutate(week = floor_date(day_local, "week")) |>
+  group_by(platform, week) |>
+  summarise(total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+  group_by(platform) |>
+  summarise(avg_weekly_total = mean(total, na.rm = TRUE), .groups = "drop") |>
+  left_join(n_users, by = "platform") |>
+  mutate(tele = ifelse(n_users > 0, avg_weekly_total / n_users, NA_real_)) |>
+  select(platform, tele)
+
+# --- tidy + facet plot ---
+bcd <- sr_users |>
+  left_join(tele_users, by = "platform") |>
+  pivot_longer(c(sr, tele), names_to = "source", values_to = "minutes") |>
+  mutate(
+    source = recode(source, sr = "Self-report", tele = "Telemetry"),
+    source = factor(source, levels = c("Self-report","Telemetry")),
+    platform = factor(platform, levels = c("Steam","Nintendo","Xbox"))
   )
+
+gBCD <- ggplot(bcd, aes(source, minutes, fill = source)) +
+  geom_col(width = 0.8) +
+  scale_fill_viridis_d(option = "magma", begin = .15, end = .7, guide = "none") +
+  labs(x = NULL, y = "Weekly minutes per user of platform") +
+  geom_text(aes(label = round(minutes, 0)), vjust = -0.35, family = "serif") +
+  facet_wrap(~ platform, nrow = 1)
+
+# --- combine if desired ---
+gA / gBCD
 ```
 
-TODO: single case study plot
+In @fig-heatmap, we visualize the distribution of play across days and times. As expected, we find that the likelihood of play peaks on weekends from 8-11pm, and is lowest in the early morning.
 
-## Demographic measures
+```{r}
+#| label: fig-heatmap
 
-We collected the following demographic variables:
+# expected number of occurrences of each slot in telemetry span
+slot_exposure <- telemetry_spans |>
+  rowwise() |>
+  mutate(n_weeks = interval(telemetry_start, telemetry_end) %/% weeks(1) + 1) |>
+  ungroup() |>
+  crossing(dow = 1:7, hour = 0:23) |>
+  mutate(n_occurrences = n_weeks)  # each slot appears once per week
 
--   age
--   gender
--   ethnicity
--   educational attainment
--   employment status
--   height
--   weight
--   self-identified neurodivergence (e.g., ASD, ADHD, dyslexia)
--   diagnosed neurodivergence
--   marital status
--   caretaking responsibilities (children, family members)
--   postal geography (general area only; first three digits of the
-    five-digit US ZIP Code; UK outward code)
+# total minutes actually played per slot
+slot_play <- hourly_all |>
+  mutate(
+    dow  = lubridate::wday(hour_start_local, week_start = 1),
+    hour = hour(hour_start_local)
+  ) |>
+  group_by(pid, platform, dow, hour) |>
+  summarise(minutes = pmin(sum(minutes, na.rm = TRUE), 60 * n()), .groups = "drop")
 
-## Self-report measures
+# combine: per-player–platform average minutes per occurrence
+slot_per_player <- slot_exposure |>
+  left_join(slot_play, by = c("pid","platform","dow","hour")) |>
+  mutate(minutes = replace_na(minutes, 0),
+         avg_minutes = minutes / n_occurrences)
 
-### Trait measures
+# final: probability across players (avg minutes / 60)
+slot_summary <- slot_per_player |>
+  group_by(dow, hour) |>
+  summarise(
+    prob_playing = mean(avg_minutes / 60),
+    n_active = n(),
+    .groups = "drop"
+  ) |>
+  mutate(dow = factor(dow, levels = 1:7,
+                      labels = c("Mon","Tue","Wed","Thu","Fri","Sat","Sun"),
+                      ordered = TRUE))
 
-| Construct  | Measure | Example Item |
-|:-----------|:--------|:-------------|
-| Chronotype |         |              |
-|            |         |              |
-|            |         |              |
 
-### Daily measures
+ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
+  geom_tile(color = "grey40") +
+  scale_x_continuous(breaks = 0:23) +
+  scale_fill_viridis_c(option = "magma",
+                       labels = scales::percent_format(accuracy = .1),
+                       # limits = c(0, .028), breaks = seq(0, .028, .007),
+                       name = "Probability of active play") +
+  labs(x = "Hour (local)", y = "Day",
+       title = "Diurnal play across Xbox, Nintendo, Steam") +
+  theme(panel.grid.major.y = element_blank())
 
-+----------------+----------------+----------------+----------------+
-| Construct      | Measure        | Example Item   | Internal       |
-|                |                |                | consistency    |
-|                |                |                | (**McDonald's  |
-|                |                |                | ω_h)**         |
-+:===============+:===============+:===============+:===============+
-| Basic          | *Basic         | I was able to  |                |
-| psychological  | Psychological  | do things that |                |
-| need           | Need           | I really want  |                |
-| satisfaction   | Satisfaction   | and value in   |                |
-| and            | and            | life.          |                |
-| frustration    | Frustration    |                |                |
-|                | Scale* [@ChenEtAl2015Basic]   |                |                |
-|                |               |                |                |
-|                |  |                |                |
-|                | brief version  |                |                |
-|                | @MartelaRyan2024Assessing     |                |                |
-|                |               |                |                |
-|                |  |                |                |
-+----------------+----------------+----------------+----------------+
-|                |                |                |                |
-+----------------+----------------+----------------+----------------+
-|                |                |                |                |
-+----------------+----------------+----------------+----------------+
+```
 
-: *Daily self-report measures*
+Finally, @fig-case-study descriptively visualizes three participants' (in the 25th, 50th, and 75th percentiles of playtime) playtime and wellbeing throughout the study.
 
-Consensus Sleep Diary (https://doi.org/10.5665/sleep.1642)
+```{r}
+#| label: fig-case-study
 
-Basic Needs in Games Scale (https://doi.org/10.31234/osf.io/4965z7)
 
-Daily Inventory of Stressful Events
-(https://doi.org/10.1177/1073191102091006)
 
-Life satisfaction - Cantril Self-anchoring Scale (Cantril, 1965)
-
-Affective valence
-
-### Biweekly measures
-
-### Monthly measures
-
-### Self-reported play
-
-*Social context of play*: Participants reported which types of social
-play they engaged in during the last 24 hours (single-player games only,
-multiplayer with real-world friends, multiplayer with online-only
-friends, multiplayer with strangers). Participants could select more
-than one option.
-
-## Digital Trace Data
-
-TODO: distribution across platforms
-
-Digital trace data from games is collected from five platforms: Xbox,
-Nintendo Switch, Steam, iOS, and Android. Each platform differs in its
-data structure and collection method. On Xbox and Nintendo, we have
-*session-level* data, comprised includes the following fields: . On
-Steam we have *hourly aggregates* - every hour, how much time people
-spent playing each game. On iOS and Android, we have *daily
-aggregates* - every day, how much time people spent playing each game.
-We describe each platform in more detail below.
-
-### Xbox
-
-Xbox data is comprised of session histories---that is, a record of the
-start and end times when a user plays a game on Xbox. Data was provided
-via a data-sharing agreement with Microsoft.
-
-<!-- - `user_id`: A unique identifier for the user -->
-
-<!-- - `game_id`: A unique identifier for the game (typically the title) -->
-
-<!-- - `start_time`: The start time of the session -->
-
-<!-- - `end_time`: The end time of the session -->
-
-<!-- - `duration`: The duration of the session in minutes -->
-
-<!-- - `genre`: The genre(s) of the game (e.g., action, strategy, etc.) -->
-
-Due to restrictions in our data-sharing agreement, game titles are
-anonymized and only the game ID is provided alongside information about
-its genre(s) and age rating. The game ID is a unique identifier for each
-game title, allowing us to analyze gameplay without identifying specific
-games.
-
-### Nintendo Switch
-
-### Steam
-
-### iOS
-
-### Android
-
-### Discord
-
-## Executive Function
-
-## Time Use
-
-## Data Quality Checks
-
-We implemented a variety of data quality checks.
-
-1.  In each daily and biweekly survey, one item from the BANGS (daily)
-    and BPNSFS (biweekly) was duplicated to assess response consistency
-    [@MeadeCraig2012identifying]; participants whose responses to the
-    two identical items differed by more than one scale point were
-    flagged for potential careless responding.
-2.  In the telemetry, we use several heuristics to identify potential
-    unreliable sessions: sessions beginning or ending in the future
-    (indicative of clock manipulation or other errors), sessions longer
-    than 12 hours long, and \[TODO: other heuristics\]
-
-## Missingness
+```
 
 # Discussion
 
-We believe this dataset has potential to address a wide variety of
-common research questions in the field.
+We believe this dataset has potential to address a wide variety of common research questions in the field.
 
-Some of these questions will be addressed in forthcoming registered
-reports: specifically, we have plans to test (1) key hypotheses from the
-Basic Needs in Games model [@BallouDeterding2024Basic] about how gaming
-relates to basic psychological needs over time, (2) the relationship
-between late-night gaming and sleep, and (3) the relationship between
-playtime in different genres and wellbeing.
+Some of these questions will be addressed in forthcoming registered reports: specifically, we have plans to test (1) key hypotheses from the Basic Needs in Games model [@BallouDeterding2024Basic] about how gaming relates to basic psychological needs over time, (2) the relationship between late-night gaming and sleep, and (3) the relationship between playtime in different genres and wellbeing.
 
-Nonetheless, the richness of this data means that researchers can
-explore numerous other questions (or, indeed, conduct and compare
-alternative analysis approaches to the above questions). To stimulate
-ideas, we present a few questions we think the data are well-suited to
-answering.
+Nonetheless, the richness of this data means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). To stimulate ideas, we present a few questions we think the data are well-suited to answering.
 
-*How do seasons and weather impact playtime?* Because we capture
-timestamped play sessions alongside participants’ geographic locations,
-researchers can merge in high‐resolution weather and daylight data to
-examine how environmental factors causally influence gaming behavior.
-Causal inference techniques such as inverse probability weighting can
-enable precise estimates of how, when, and how much people play in
-response to seasonal and meteorological changes. By quantifying these
-effects, researchers can better distinguish weather‐related demand from
-other drivers (like work schedules or weekend routines), improving the
-precision of studies on gaming’s impact on wellbeing, motivation, and
-cognition.
+*How do seasons and weather impact playtime?* Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. By quantifying these effects, researchers can better distinguish weather‐related demand from other drivers (like work schedules or weekend routines), improving the precision of studies on gaming’s impact on wellbeing, motivation, and cognition.
 
-*How do neurotypical and neurodiverse players differ in their gaming
-behavior?* Using the neurodivergence data we collected (which includes,
-for example, `r table(intake$neuroIdenCondition_1)[1]` participants who
-identify as having autism and `r table(intake$neuroIdenCondition_2)[1]`
-who identify as having ADHD), researchers can. Neurodiversity in games
-has regularly been studied in the context of specific games and with
-qualitative methods
+*How do neurotypical and neurodiverse players differ in their gaming behavior?* Using the neurodivergence data we collected (which includes, for example, `r table(intake$neuroIdenCondition_1)[1]` participants who identify as having autism and `r table(intake$neuroIdenCondition_2)[1]` who identify as having ADHD), researchers can. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods
 
-Self-reported play accuracy - inference from other papers
+Accuracy of self-reported data - inference from other papers
+
+We encourage researchers from a wide range of disciplines to explore these or other questions using the data we present, which is freely available for reuse under a CC0 license.
+
+## Limitations
+
+While this dataset represents a substantial step forward in holistic coverage of video game play, it remains imperfect: we did not capture data on PlayStation (\~19% of gaming market) or computer games played outside the Steam platform (\~11% of gaming market); on Nintendo, we do not have access to third-party titles (`r third_party_prop` of Nintendo play), and our coverage of smartphone play is limited by the difficulties and inconsistencies of screenshot-based donation and OCR retrieval.
+
+We further are unable to identify idle time (when players have a game open but are not actively playing it) and account sharing (when players let friends or family use their account); some playtime values may therefore be overestimates of the person's true playtime, though we are unable to say by how much.
 
 ## Future Work
 
-The trace data presented here is wide-ranging, but shallow—we capture
-all gaming that happens on a particular platform or set of platforms,
-but have no insight into what the player is doing in-game. With previous
-work and theory clear that in-game behavior (e.g., what character role a
-player adopts) and experiences (e.g., performance in competitive modes)
-are key features of games' wellbeing impacts,
+The trace data presented here is broad in scope but limited in granularity: we capture all gaming activity on a given platform, but not what happens within individual games. Prior work and theory make clear that in-game behaviors (e.g., what role a player adopts, whether they compete or cooperate, or how they perform in competitive modes) are critical determinants of player experience and thereby wellbeing (see e.g., @ElsonEtAl2014More for a review of how in-game contexts shape effects). This highlights a fundamental trade-off in digital trace research between breadth—how comprehensively play can be captured across platforms—and depth—the granularity of in-game behaviors and experiences. At present, our dataset emphasizes breadth, but we see strong potential in future study designs that combine platform-level telemetry with targeted in-game behavioral data to provide a more complete picture.
 
-There is an inherent trade-off between breadth (how widely telemetry can
-be captured) and depth (the level of detail about in-game behaviours).
-At present, we areWe see strong potential in study designs that capture
-platform-level contextual data, combined with
+We also see strong potential in combining digital trace data with experimental designs that enable stronger causal inference—for example, randomizing players to single-player games only, or restricting play to certain times of day, to examine effects on social wellbeing or sleep. Previous researchers have noted a dearth of digital trace data-backed field experiments, while highlighting their potential [@StierEtAl2020Integrating]: Trace data not only captures naturalistic gaming behavior but also allows researchers to assess *substitution* (what games or platforms participants switch to under intervention) and *adherence* (how closely they follow assigned play patterns).
 
 ## Data Availability
 
-All data, materials, and code related to this dataset are available on
-the Open Science Framework \[TODO: LINK\], and the data is archived on
-Zenodo \[TODO: LINK\].
+All data, materials, and code related to this dataset are available on the Open Science Framework \[TODO: LINK\], and the data is archived on Zenodo \[TODO: LINK\].
