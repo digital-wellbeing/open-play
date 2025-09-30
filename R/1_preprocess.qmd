@@ -1,0 +1,615 @@
+---
+title: "Preprocess Data"
+output: html_document
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+## Load Libraries and Data
+
+```{r}
+#| label: load-libraries
+#| code-summary: "Show the code (libraries)"
+
+if (!require("pacman")) install.packages("pacman")
+library(pacman)
+
+p_load(tidyverse, mctq, data.table, pwr)
+
+set.seed(8675309)
+```
+
+```{r}
+#| label: load-data
+#| code-summary: "Show the code (load data)"
+
+synDiary <- read_csv("data/data-synthetic-raw/synDiary.csv.gz")
+
+# for unknown reasons, read_csv imports some columns incorrectly, so we use data.table::fread
+synPanel <- fread("data/data-synthetic-raw/synPanel.csv.gz") 
+synIntake <- read_csv("data/data-synthetic-raw/synIntake.csv.gz")
+
+synNintendo <- read_csv("data/data-synthetic-raw/synNintendo.csv.gz") |>
+  mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
+synXbox <- read_csv("data/data-synthetic-raw/synXbox.csv.gz") |>
+  mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
+synSteam <- read_csv("data/data-synthetic-raw/synSteam.csv.gz")
+syniOS <- read_csv("data/data-synthetic-raw/syniOS.csv.gz")
+synAndroid <- read_csv("data/data-synthetic-raw/synAndroid.csv.gz")
+```
+
+## Clean intake
+
+Here we: 
+
+- define a socio-economic status (SES) index 
+- calculate total height in inches 
+- calculate BMI using the formula `(weight / (total_inches^2)) * 703`
+
+These will be used as covariates in Study 3.
+
+```{r}
+#| label: clean-intake
+#| code-summary: "Show the code (clean intake)"
+
+synIntakeClean <- synIntake |>
+  # define socio-economic status (SES) index
+  mutate(
+    # Assigning scores to employment categories
+    empScore = case_when(
+      employment == "Full-Time" ~ 5,
+      employment == "Part-Time" ~ 4,
+      employment == "Due to start a new job within the next month" ~ 3,
+      employment == "Not in paid work (e.g. homemaker', 'retired or disabled)" ~ 2,
+      employment == "Unemployed (and job seeking)" ~ 1,
+      employment == "Other" ~ NA_real_ ,  # Adjust based on context if necessary
+      TRUE ~ NA_real_  # Handle any other cases
+    ),
+    
+    # Assigning scores to education levels
+    eduScore = case_when(
+      eduLevel == "Graduate or professional degree (MA, MS, MBA, PhD, etc)" ~ 7,
+      eduLevel == "University Bachelors Degree" ~ 6,
+      eduLevel == "Some University but no degree" ~ 5,
+      eduLevel == "Vocational or Similar" ~ 4,
+      eduLevel == "Completed Secondary School" ~ 3,
+      eduLevel == "Some Secondary" ~ 2,
+      eduLevel == "Completed Primary School" ~ 1,
+      eduLevel == "Some Primary" ~ 1,
+      eduLevel == "Prefer not to say" ~ NA_real_,  # Treat as missing
+      TRUE ~ NA_real_  # Handle any other cases
+    ),
+    
+    # Combining the scores into a SES index
+    SES_index = empScore + eduScore
+  ) |> 
+  mutate(
+    # Calculate total height in inches
+    total_inches = `height#1_1_1` * 12 + `height#1_1_2`,
+    
+    # Calculate BMI using the formula
+    bmi = (weight / (total_inches^2)) * 703,
+
+    age_scaled = as.numeric(scale(age, center = TRUE, scale = TRUE)),
+    bmi_scaled = as.numeric(scale(bmi, center = TRUE, scale = TRUE)),
+    SES_index_scaled = as.numeric(scale(SES_index, center = TRUE, scale = TRUE))
+  )
+
+```
+
+## Clean diary
+
+Here we:
+
+-   recode the diary data to numeric values
+-   calculate mean scores of relevant variables
+-   calculate within- and between-person centered variables
+-   recode the displaced activity data into categories (randomly
+    assigned, for now)
+-   calculate some variables based on the telemetry
+
+```{r}
+#| label: clean-diary-self-report
+#| code-summary: "Show the code (clean diary)"
+
+synDiaryClean <- synDiary |>
+  mutate(
+    across(starts_with(c("bpnsfs", "bangs")), ~ case_when(
+      . %in% c("1 \nStrongly Disagree", "1 - Not at all true", "1 - very strongly disagree") ~ 1,
+      . %in% c("2", "2 - strongly disagree") ~ 2,
+      . %in% c("3", "3 - disagree") ~ 3,
+      . %in% c("4Neither Agree nor Disagree", "4", "4 - neither disagree nor agree") ~ 4,
+      . %in% c("5", "5 - Completely true", "5 - agree") ~ 5,
+      . %in% c("6") ~ 6,
+      . %in% c("7 Strongly agree") ~ 7,
+      TRUE ~ NA_integer_
+    ))
+  ) %>%
+  # calculate mean scores of relevant variables (there is no missing data within waves)
+  mutate(
+    globalNS = rowMeans(select(., bpnsfs_1:bpnsfs_3), na.rm = TRUE),
+    globalNF = rowMeans(select(., bpnsfs_4:bpnsfs_6), na.rm = TRUE),
+    gameNS = rowMeans(select(., bangs_1:bangs_3), na.rm = TRUE),
+    gameNF = rowMeans(select(., bangs_4:bangs_6), na.rm = TRUE)
+  ) |>
+  # Calculate within- and between-person centered variables
+  group_by(pid) %>%
+  mutate(across(
+    c(globalNS, globalNF, gameNS, gameNF),
+    list(
+      cw = ~ . - mean(., na.rm = TRUE),
+      cb = ~ mean(., na.rm = TRUE)
+    )
+  )) %>%
+  ungroup() %>%
+  mutate(across(
+    ends_with("cb"),
+    ~ . - mean(., na.rm = TRUE)
+  )) |>
+  # to understand displaced activities, we will manually code the true
+  # participant activity data into categories. We pre-define 5 problematic
+  # displacement categories (work/school, social engagements, sleep, eating,
+  # fitness, caretaking) and one catch-all category (other), which may later be
+  # broken down into subcategories.
+  mutate(
+    displacedActivityCategory = ifelse(!is.na(displacedActivity),
+      sample(c("work/school", "social engagements", "sleep", "eating", "fitness", "caretaking", "other"),
+        n(),
+        prob = c(.05, .05, .05, .05, .05, .05, .75),
+        replace = TRUE
+      ),
+      NA_character_
+    ),
+    displacedCoreDomain = ifelse(displacedActivityCategory %in% c(
+      "work/school", "social engagements",
+      "sleep", "eating", "fitness", "caretaking", "other"
+    ),
+    TRUE,
+    FALSE
+    ),
+    .after = displacedActivity
+  )
+```
+
+## Clean panel
+
+Here we want to: - recode the panel data to numeric values - calculate
+mean scores of relevant variables - calculate within- and between-person
+centered variables
+
+### Chronotype
+
+Chronotype or sleep-corrected local time of mid-sleep on work-free days
+msf_sc() allows you to compute the chronotype, or corrected local time
+of mid-sleep on work-free days. It takes five arguments: msf (local time
+of mid-sleep on work-free days), sd_w (sleep duration on workdays), sd_f
+(sleep duration on work-free days), sd_week(average weekly sleep
+duration), and alarm_f (a logical object indicating if the respondent
+uses an alarm clock to wake up on work-free days).
+
+If sd_f is less or equal than sd_w, the output must be msf. Else, it
+must return msf minus the difference between sd_f and sd_week divided by
+2. msf_sc can only be computed if alarm_f is equal to FALSE (the
+function will return NA when alarm_f == TRUE).
+
+`msf_sc` applies a correction to msf, removing an estimation of the
+effect from accumulated sleep debt on workdays that usually is
+compensated on work-free days. See `?msf_sc` to learn more.
+
+```{r}
+#| label: clean-panel-self-report
+#| code-summary: "Show the code (clean panel)"
+
+synPanelClean <- synPanel |>
+  mutate(
+    across(starts_with(c("bangs", "wemwbs", "promis", "trojan", "BFI", "eps")), ~ case_when(
+      . %in% c("Greatly interfered") ~ -3,
+      . %in% c("Moderately interfered") ~ -2,
+      . %in% c("Slightly interfered") ~ -1,
+      . %in% c("No impact","No chance of dozing") ~ 0,
+      . %in% c(
+        "1 \nStrongly Disagree", "1 - Not at all true", "1 - None of the time", "Never", "1 - Strongly disagree",
+        "Disagree strongly", "Slightly supported", "Slight chance of dozing"
+      ) ~ 1,
+      . %in% c("2", "2 - Rarely", "Rarely", "Disagree a little", "Moderately supported", "Moderate chance of dozing") ~ 2,
+      . %in% c("3", "3 - Some of the time", "Sometimes", "Neutral; no opinion", "Greatly supported", "High chance of dozing") ~ 3,
+      . %in% c("4Neither Agree nor Disagree", "4", "4 - Often", "Often", "Agree a little") ~ 4,
+      . %in% c("5", "5 - Completely true", "5 - All of the time", "Always", "5 - Strongly agree", "Agree strongly") ~ 5,
+      . %in% c("6") ~ 6,
+      . %in% c("7 Strongly agree") ~ 7,
+      TRUE ~ NA_integer_
+    ))
+  ) %>%
+  # calculate mean/sum scores of relevant variables (there is no missing data within waves)
+  mutate(
+    wemwbs = rowMeans(select(., wemwbs_1:wemwbs_7), na.rm = TRUE),
+    promis = rowMeans(select(., promis_1:promis_8), na.rm = TRUE),
+    gameNS = rowMeans(select(., bangs_1:bangs_3, bangs_7:bangs_9, bangs_13:bangs_15), na.rm = TRUE),
+    gameNF = rowMeans(select(., bangs_4:bangs_6, bangs_10:bangs_12, bangs_16:bangs_18), na.rm = TRUE),
+    epsTotal = rowSums(select(., eps_1_1:eps_1_8), na.rm = TRUE),
+  ) |>
+  # Calculate within- and between-person centered variables
+  group_by(pid) %>%
+  mutate(across(
+    c(wemwbs, promis, gameNS, gameNF),
+    list(
+      cw = ~ . - mean(., na.rm = TRUE),
+      cb = ~ mean(., na.rm = TRUE)
+    )
+  )) %>%
+  ungroup() %>%
+  mutate(across(
+    ends_with("cb"),
+    ~ . - mean(., na.rm = TRUE)
+  )) |> 
+
+  # calculate amount of sleep
+  mutate(
+    psqi_4_1_1_1_hours = as.numeric(`psqi_4#1_1_1`), # Convert hours to numeric
+    psqi_4_1_1_2_hours = as.numeric(`psqi_4#1_1_2`) / 60, # Convert minutes to numeric hours
+    total_hours_sleep = psqi_4_1_1_1_hours + psqi_4_1_1_2_hours, # Compute total hours of sleep
+    .keep = "unused"
+  ) |> 
+
+  # ~~~~~~~~~~~~~~~~~~~~~~~~~
+  # calculate chronotype ####
+  # ~~~~~~~~~~~~~~~~~~~~~~~~
+  
+  # rename mctq_1 to work  and turn it into a logical variable where 1 is 1 and 2 is 0, other is NA
+   mutate(work = case_when(
+    mctq_1 == 1 ~ 1,
+    mctq_1 == 2 ~ 0,
+    TRUE ~ NA_real_
+   )) |> 
+   rename(
+    wd = mctq_2_1, 
+    bt_w = mctq_3_1, 
+    sprep_w = mctq_3_3, 
+    slat_w = mctq_3_4, 
+    se_w = mctq_3_5, 
+    si_w = mctq_3_6,
+    bt_f = mctq_6_1, 
+    sprep_f = mctq_6_3, 
+    slat_f = mctq_6_4, 
+    se_f = mctq_6_5, 
+    si_f = mctq_6_6,
+    reasons_why_f = mctq_8_1
+  ) |> 
+  mutate(
+    alarm_w = case_when(
+      mctq_4_1 == "Yes" ~ 1,
+      mctq_4_1 == "No" ~ 0,
+      TRUE ~ NA_real_),
+    wake_before_w = case_when(
+      mctq_5_1 == "Yes" ~ 1,
+      mctq_5_1 == "No" ~ 0,
+      TRUE ~ NA_real_
+    ),
+    alarm_f = case_when(
+      mctq_7_1 == "Yes" ~ 1,
+      mctq_7_1 == "No" ~ 0,
+      TRUE ~ NA_real_
+    ),
+    reasons_f = case_when(
+      mctq_7_2 == "Yes" ~ 1,
+      mctq_7_2 == "No" ~ 0,
+      TRUE ~ NA_real_
+    ),
+  ) |>
+  mutate(
+    across("wd", as.integer),
+    across(matches("^work$|^alarm_|^wake_|^reasons_f$"), as.logical),
+    across(matches("^bt_|^sprep_|^se_"), hms::parse_hm),
+    across(matches("^slat_|^si_"), ~ dminutes(as.numeric(.x)))
+  ) |> 
+  # Calculate sleep onset
+  mutate(
+    so_w = mctq::so(sprep_w, slat_w),
+    so_f = mctq::so(sprep_f, slat_f)
+  ) |>
+  # Calculate sleep duration
+  mutate(
+    sd_w = mctq::sdu(so_w, se_w),
+    sd_f = mctq::sdu(so_f, se_f)
+  ) |>
+  # Calculate midsleep time
+  mutate(
+    msw = mctq::msl(so_w, sd_w),
+    msf = mctq::msl(so_f, sd_f)
+  ) |>
+  # Calculate weekly sleep duration
+  mutate(
+    sd_week = mctq::sd_week(sd_w, sd_f, wd)
+  ) |> 
+  # Calculate chronotype
+  mutate(
+    msf_sc = mctq::msf_sc(msf, sd_w, sd_f, sd_week, alarm_f),
+    msf_sc_numeric = as.numeric(msf_sc) / 3600
+  )
+
+```
+
+## Process telemetry
+
+Here we: - join the survey data to each telemetry table - filter for
+only the sessions/rows that happened immediately after the survey was
+completed - join these back together with a binary indicator of whether
+at least one session occurred
+
+```{r}
+#| label: process-telemetry
+#| code-summary: "Show the code (process telemetry)"
+
+# TODO: make sure that sessions happening as late as 6 hours later are still included, even if this isn't on the same day
+
+# in the below, we join the survey data to each telemetry table,
+# and filter for only the sessions/rows that happened immediately after the survey was completed.
+# after, we join these back together with a binary indicator of whether at least one session occurred
+
+nintendoOverlaps <- synDiaryClean %>%
+  left_join(synNintendo, by = c("pid", "day", "date")) |>
+  filter(
+    sessionEnd >= surveyCompletionTime | # Session ended after the survey time
+      sessionStart <= surveyCompletionTime + days(1) # Session started before the end of the time window
+  ) |>
+  group_by(pid, day, date) |>
+  summarize(playedLaterNintendo = TRUE, .groups = "drop")
+
+xboxOverlaps <- synDiaryClean %>%
+  left_join(synXbox, by = c("pid", "day", "date")) |>
+  filter(
+    sessionEnd >= surveyCompletionTime | # Session ended after the survey time
+      sessionStart <= surveyCompletionTime + days(1) # Session started before the end of the time window
+  ) |>
+  group_by(pid, day, date) |>
+  summarize(playedLaterXbox = TRUE, .groups = "drop")
+
+steamOverlaps <- synDiaryClean %>%
+  left_join(synSteam, by = c("pid", "day", "date")) |>
+  filter(
+    sessionStart <= surveyCompletionTime + days(1) # Session started before the end of the time window
+  ) |>
+  group_by(pid, day, date) |>
+  summarize(playedLaterSteam = TRUE, .groups = "drop")
+
+
+# Step 3: Determine if any Nintendo sessions occurred in the time window for each row in df
+synDiaryClean <- synDiaryClean |>
+  left_join(
+    nintendoOverlaps,
+    by = c("pid", "day", "date")
+  ) |>
+  left_join(
+    xboxOverlaps,
+    by = c("pid", "day", "date")
+  ) |>
+  left_join(
+    steamOverlaps,
+    by = c("pid", "day", "date")
+  ) |>
+  mutate(
+    playedLaterNintendo = if_else(is.na(playedLaterNintendo), FALSE, playedLaterNintendo),
+    playedLaterXbox = if_else(is.na(playedLaterXbox), FALSE, playedLaterXbox),
+    playedLaterSteam = if_else(is.na(playedLaterSteam), FALSE, playedLaterSteam),
+    playedLaterAny = ifelse(playedLaterNintendo | playedLaterXbox | playedLaterSteam, TRUE, FALSE)
+  )
+```
+
+## Exclusion criteria
+
+We will exclude any telemetry rows wherein players have logged more than
+24 hours of playtime on one platform in any single day, or where
+sessions have taken place in the future, indicating a technical problem
+or manipulation of the system clock for in-game benefits.
+
+We will further include an attention check in the panel surveys whereby
+participants are given a random duplicated item from the need
+satisfaction and frustration measure. Responses where the two duplicate
+items differ by more than 1 scale point will be flagged for manual
+inspection of potential careless responding.
+
+We have 4 exclusion criteria total:
+
+-   No telemetry rows wherein players have logged more than 16 hours of
+    playtime across linked platforms in any single day
+-   No sessions longer than 8 hours
+-   No sessions taking place in the future, relative to when data is
+    collected
+-   No responses failing the attention check (\> 1 scale point
+    difference between two duplicated items)
+
+```{r}
+#| label: exclusion-criteria
+#| code-summary: "Show the code (exclusion criteria)"
+
+# TODO: update exclusion criteria
+
+excluded <- bind_rows(synNintendo, synXbox, synSteam) |> 
+  group_by(pid, day) |> 
+  summarise(dailyPlay = sum(duration)) |> 
+  filter(dailyPlay >= 1440)
+
+synNintendoClean <- synNintendo |> 
+  filter(sessionStart <= Sys.time()) |> # no future sessions
+  anti_join(excluded, by = c("pid", "day"))
+
+synSteamClean <- synSteam |> 
+  filter(sessionStart <= Sys.time()) |> # no future sessions
+  anti_join(excluded, by = c("pid", "day"))
+
+synXboxClean <- synXbox |>
+  filter(sessionStart <= Sys.time()) |> # no future sessions
+  anti_join(excluded, by = c("pid", "day"))
+
+synAndroidClean <- synAndroid |>
+  filter(category == "Games") |> 
+  mutate(sessionStart = as_datetime(paste(date, sessionStart)),
+         sessionEnd = as_datetime(paste(date, sessionEnd))) |>
+  rename(titleID = app)
+
+```
+
+## Positive Control Power
+
+In the manuscript, we specify a variety of positive controls---tests
+that must be passed in order to justify adhering to our proposed
+analysis strategy.
+
+It is important that our design has sufficient statistical power to
+detect such effects if they exist. Here we calculate the power for each
+of our positive controls.
+
++----------------------+----------------------+----------------------+
+| **Applicable Study** | **Test**             | **Statistical        |
+|                      |                      | Power**              |
++----------------------+----------------------+----------------------+
+| All studies          | A significant        | Assuming n = 9,300   |
+|                      | positive correlation | panel surveys (after |
+|                      | between              | 10% wave-on-wave     |
+|                      | self-reported video  | attrition), a true   |
+|                      | game play and        | population value of  |
+|                      | digital trace        | r = .2, an alpha of  |
+|                      | playtime during the  | .05, and a one-sided |
+|                      | previous 2 weeks     | test, power \> 99%   |
++----------------------+----------------------+----------------------+
+| All studies          | There will be no     | (N/A; fails if a     |
+|                      | overlapping sessions | single case occurs)  |
+|                      | for a given          |                      |
+|                      | individual on        |                      |
+|                      | Nintendo or Xbox (we |                      |
+|                      | allow for possible   |                      |
+|                      | overlap across       |                      |
+|                      | different platforms, |                      |
+|                      | in case the user has |                      |
+|                      | two devices active   |                      |
+|                      | simultaneously) AND  |                      |
+|                      | there will be no     |                      |
+|                      | cases where a player |                      |
+|                      | logs more than 60    |                      |
+|                      | minutes of playtime  |                      |
+|                      | on Steam between     |                      |
+|                      | adjacent hourly      |                      |
+|                      | measurements         |                      |
++----------------------+----------------------+----------------------+
+| Study 1              | Significant positive | Assuming n = 21,000  |
+|                      | correlation between  | diary surveys (after |
+|                      | need satisfaction in | 30% total            |
+|                      | general and daily    | attrition), a true   |
+|                      | life satisfaction    | population value of  |
+|                      |                      | r = .2, and an alpha |
+|                      |                      | of .05, power \> 99% |
++----------------------+----------------------+----------------------+
+| Study 2              | Significant positive | Assuming n = 4,440   |
+|                      | correlation between  | panel surveys with   |
+|                      | social jetlag as     | sleep measures       |
+|                      | calculated by the    | (Waves 2, 4, 6       |
+|                      | Munich Chronotype    | only + 10%           |
+|                      | Questionnaire and    | wave-on-wave         |
+|                      | daytime sleepiness.  | attrition), a true   |
+|                      |                      | population value of  |
+|                      |                      | Spearman’s rho = .1, |
+|                      |                      | an alpha of .05, and |
+|                      |                      | a one-sided test,    |
+|                      |                      | power \> 99%         |
++----------------------+----------------------+----------------------+
+| Study 2              | Significant negative | Assuming n =         |
+|                      | correlation between  | 4,440
+|                      | (Pittsburgh Sleep    | panel surveys with   |
+|                      | Quality Index sleep  | sleep measures       |
+|                      | quality component)   | (Waves 2, 4, 6       |
+|                      | and                  | only + 10%           |
+|                      | Warwick-Edinburgh    | wave-on-wave         |
+|                      | Mental Well-being    | attrition), a true   |
+|                      | Scale (WEMWBS).      | population value of  |
+|                      |                      | Spearman’s rho =     |
+|                      |                      | -.1, an alpha of     |
+|                      |                      | .05, and a one-sided |
+|                      |                      | test, power \> 99%   |
++----------------------+----------------------+----------------------+
+| Study 3              | Significantly higher | Assuming telemetry   |
+|                      | playtime in shooter  | data for n = 1,000   |
+|                      | games for men as     | (as attrition during |
+|                      | compared to women    | surveys does not     |
+|                      | (Lange et al., 2021) | prevent us from      |
+|                      |                      | collecting gameplay  |
+|                      |                      | data), a true        |
+|                      |                      | population           |
+|                      |                      | difference of d =    |
+|                      |                      | .3, and an alpha of  |
+|                      |                      | .05, power \> 99%    |
++----------------------+----------------------+----------------------+
+
+```{r}
+#| label: positive-control-power
+#| code-summary: "Show the code (positive control power)"
+
+# Positive control 1: A significant positive correlation between self-reported video game play and digital trace playtime during the previous 2 weeks
+pwr.r.test(n = 9300, r = .2, sig.level = .05, alternative = "greater")
+
+# Positive control 3: Significant positive correlation between need satisfaction in general and daily life satisfaction
+pwr.r.test(n = 9300, r = .2, sig.level = .05, alternative = "greater")
+
+# Positive control 4: Significant positive correlation between need satisfaction in general and daily life satisfaction
+# This will be tested as a spearman's rho correlation, but with no easy package for power calculation we simply calculate this as pearson's r here; these will not differ substantially.
+pwr.r.test(n = 4400, r = .1, sig.level = .05, alternative = "greater")
+
+# Postive control 5: Significant negative correlation between sleep quality (Pittsburgh Sleep Quality Index sleep quality component) and Warwick-Edinburgh Mental Well-being Scale (WEMWBS).
+# This will be tested as a spearman's rho correlation, but with no easy package for power calculation we simply calculate this as pearson's r here; these will not differ substantially.
+pwr.r.test(n = 400, r = -.1, sig.level = .05, alternative = "greater")
+
+# Positive control 5: Men should have significantly higher playtime in 1st person shooters than women 
+pwr.t.test(n = 1000, d = .2, sig.level = .05, type = "one.sample", alternative = "greater")
+```
+
+## Impute missing data
+
+Here we give an indicative example of how multiple imputation will be
+performed. As this is computationally demanding and will ultimately
+depend on the parameters of the true data, we do not exhaustively
+simulate imputation here. Broadly, we:
+
+-   Pivot the data to wide format
+-   Select relevant predictors for imputation so as to reduce the data
+    size (which would otherwise include thousands of columns)
+-   Perform multiple imputation using predictive mean match
+
+We will evaluate this imputation model for performance and adjust as
+necessary.
+
+```{r}
+#| label: multiple-imputation
+#| eval: false
+#| code-summary: "Show the code (multiple imputation)"
+
+diaryWide <- diary |>
+  select(-date) |>
+  pivot_wider(
+    names_from = day,
+    values_from = -pid,
+    names_sep = "_w"
+  ) |>
+  select(-starts_with(c("day", "missing", "surveyCompletion", "sd", "timeUse", "displacedActivity", "playedLater")))
+
+quickpred(diaryWide)
+
+mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, seed = 8675309)
+mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, parallelseed = 8675309) # alternatively, try to parallelize
+```
+
+## Save data
+
+```{r}
+#| label: save-data
+#| code-summary: "Show the code (save data)"
+
+write_csv(synIntakeClean, "data/data-synthetic-clean/synIntakeClean.csv.gz")
+write_csv(synDiaryClean, "data/data-synthetic-clean/synDiaryClean.csv.gz")
+write_csv(synPanelClean, "data/data-synthetic-clean/synPanelClean.csv.gz")
+write_csv(synNintendoClean, "data/data-synthetic-clean/synNintendoClean.csv.gz")
+write_csv(synXboxClean, "data/data-synthetic-clean/synXboxClean.csv.gz")
+write_csv(synSteamClean, "data/data-synthetic-clean/synSteamClean.csv.gz")
+write_csv(syniOS, "data/data-synthetic-clean/syniOSClean.csv.gz")
+write_csv(synAndroidClean, "data/data-synthetic-clean/synAndroidClean.csv.gz")
+
+```
