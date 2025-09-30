@@ -4,15 +4,12 @@ project:
   output-dir: docs
 
 book:
-  title: "Psychological Wellbeing, Sleep, and Video Gaming: Analyses of Comprehensive Digital Traces"
+  title: "A multi-platform dataset of digital trace data from video games"
   author: "Digital Wellbeing Lab"
-  date: "2024-10-06"
+  date: "2025-09-30"
   chapters:
     - index.qmd
-    - scripts/1_preprocess.qmd
-    - scripts/2_basicNeeds.qmd
-    - scripts/3_sleep.qmd
-    - scripts/4_genres.qmd
+
   search: true
   repo-url: https://digital-wellbeing.github.io/platform-study-rr/
   downloads: [pdf]
