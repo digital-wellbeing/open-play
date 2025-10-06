@@ -184,7 +184,7 @@ source("R/helpers.R")
 
 # Arrange data to calculate differences correctly
 steam_clean <- steam |>
-  filter(!title_id %in% idle_games & !title_id %in% non_games) |> 
+  filter(!title_id %in% idle_games & !title_id %in% non_games) |>
   mutate(
     steam_id = as.character(steam_id),
     pid = as.character(pid)
@@ -226,11 +226,11 @@ steam_clean <- steam |>
       tz = "UTC"
     )
   ) |>
-    # filter out rows where 3+ games are being played simultaneously
+  # filter out rows where 3+ games are being played simultaneously
   group_by(pid, datetime_hour_start) |>
   mutate(concurrent_titles = n_distinct(steam_id[minutes > 0])) |>
   ungroup() |>
-  mutate(minutes = ifelse(concurrent_titles >= 3, 0, minutes)) |> 
+  mutate(minutes = ifelse(concurrent_titles >= 3, 0, minutes)) |>
   group_by(pid, steam_id) |>
   # Calculate difference from previous hour and identify new sessions
   mutate(
@@ -251,19 +251,23 @@ steam_clean <- steam |>
 ```{r}
 #| label: preprocess-xbox
 
-# Clean Xbox data and keep only active gaming sessions 
+# Clean Xbox data and keep only active gaming sessions
 # In particular, canonicalize overlapping Xbox sessions per pid:
 # - at most one title at any instant
 # - handoff tolerance 'tol_sec' (short overlaps => later-starting title wins)
 # - ≥3 concurrent titles => drop that slice
 
-xbox_clean <- xbox |> 
+xbox_clean <- xbox |>
   filter(title_placement == "Full") |>
-  filter(genres != "Video") |> 
-  filter(!is.na(session_start), !is.na(session_end), session_end > session_start) |> 
-  filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |>  # something weird with this title, almost every player has played it and it accounts for 4x the playtime of the next-highest game - and it's unrated. I suspect it's the home screen or something.
-  filter(duration <= 600) |> 
-  arrange(pid, session_start, session_end) |> 
+  filter(genres != "Video") |>
+  filter(
+    !is.na(session_start),
+    !is.na(session_end),
+    session_end > session_start
+  ) |>
+  filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |> # something weird with this title, almost every player has played it and it accounts for 4x the playtime of the next-highest game - and it's unrated. I suspect it's the home screen or something.
+  filter(duration <= 600) |>
+  arrange(pid, session_start, session_end) |>
   canonicalize_xbox_sessions(tol_sec = 60)
 
 ```
@@ -275,30 +279,33 @@ tol <- dseconds(60)
 
 nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
   filter(
-    !is.na(session_start), 
-    !is.na(session_end), 
+    !is.na(session_start),
+    !is.na(session_end),
     session_end > session_start,
     session_start < time_of_pull
-  ) |> 
-  arrange(pid, title_id, session_start, session_end) |> 
+  ) |>
+  arrange(pid, title_id, session_start, session_end) |>
   group_by(pid, title_id) %>%
   mutate(
     start_num = as.numeric(session_start),
-    end_num   = as.numeric(session_end),
+    end_num = as.numeric(session_end),
     prev_max_end = lag(cummax(end_num), default = -Inf),
     new_cluster = start_num > (prev_max_end + as.numeric(tol)),
     cluster = cumsum(new_cluster),
     dur_sec = end_num - start_num
   ) %>%
-  group_by(pid, title_id, cluster) |> 
-  slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |> 
+  group_by(pid, title_id, cluster) |>
+  slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |>
   ungroup() %>%
   mutate(duration = dur_sec / 60) %>%
-  select(pid, title_id, session_start, session_end, duration) |> 
-  filter(duration <= 600) |> 
+  select(pid, title_id, session_start, session_end, duration) |>
+  filter(duration <= 600) |>
   as_tibble()
 
-third_party_prop <- paste0(print_num((1-median(intake$nintendo_first_party_prop, na.rm = T))*100, 1), "%")
+third_party_prop <- paste0(
+  print_num((1 - median(intake$nintendo_first_party_prop, na.rm = T)) * 100, 1),
+  "%"
+)
 
 ```
 
@@ -312,37 +319,52 @@ tz_map <- intake |>
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
 sessions_all <- bind_rows(
   xbox_clean %>%
-    transmute(pid = as.character(pid), platform = "Xbox",
-              start_utc = session_start, end_utc = session_end),
+    transmute(
+      pid = as.character(pid),
+      platform = "Xbox",
+      start_utc = session_start,
+      end_utc = session_end
+    ),
   nintendo_clean %>%
-    transmute(pid = as.character(pid), platform = "Nintendo",
-              start_utc = session_start, end_utc = session_end)
+    transmute(
+      pid = as.character(pid),
+      platform = "Nintendo",
+      start_utc = session_start,
+      end_utc = session_end
+    )
 ) %>%
   left_join(tz_map, by = "pid") %>%
   mutate(
     start_local = start_utc + off,
-    end_local   = end_utc   + off,
+    end_local = end_utc + off,
     duration_min = as.numeric(difftime(end_utc, start_utc, units = "mins"))
   ) %>%
-  filter(!is.na(start_utc), !is.na(end_utc), end_utc > start_utc, duration_min >= 1)
+  filter(
+    !is.na(start_utc),
+    !is.na(end_utc),
+    end_utc > start_utc,
+    duration_min >= 1
+  )
 
 # --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
 # expand sessions into local-hour bins, compute overlap minutes, and add UTC hour
 hourly_from_sessions <- sessions_all %>%
-  filter(!is.na(off)) |> 
+  filter(!is.na(off)) |>
   mutate(
     h0_local = floor_date(start_local, "hour"),
     h1_local = floor_date(end_local - seconds(1), "hour"),
-    n_hours  = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
+    n_hours = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
   ) %>%
-  tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |> 
+  tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
   mutate(
     hour_start_local = h0_local + hours(k - 1),
     minutes = pmax(
       0,
-      as.numeric(difftime(pmin(end_local, hour_start_local + hours(1)),
-                          pmax(start_local, hour_start_local),
-                          units = "mins"))
+      as.numeric(difftime(
+        pmin(end_local, hour_start_local + hours(1)),
+        pmax(start_local, hour_start_local),
+        units = "mins"
+      ))
     ),
     hour_start_utc = hour_start_local - off
   ) %>%
@@ -355,8 +377,9 @@ hourly_from_steam <- steam_clean %>%
   mutate(pid = as.character(pid)) %>%
   left_join(tz_map, by = "pid") %>%
   transmute(
-    pid, platform = "Steam",
-    hour_start_utc   = datetime_hour_start,
+    pid,
+    platform = "Steam",
+    hour_start_utc = datetime_hour_start,
     hour_start_local = datetime_hour_start + off,
     minutes
   ) %>%
@@ -383,12 +406,11 @@ daily_all <- hourly_all |>
 #             day_local = <local_date>, day_utc = <utc_date>, minutes = <minutes>)
 # daily_all <- bind_rows(daily_all, ios_daily, android_daily)
 
-
 telemetry_spans <- hourly_all |>
   group_by(pid, platform) |>
   summarise(
     telemetry_start = min(hour_start_local, na.rm = TRUE),
-    telemetry_end   = max(hour_start_local, na.rm = TRUE) + hours(1), # end of last hour bin
+    telemetry_end = max(hour_start_local, na.rm = TRUE) + hours(1), # end of last hour bin
     week = floor_date(telemetry_end, "week"),
     .groups = "drop"
   )
@@ -1030,26 +1052,33 @@ I'm halfway through making changes to the stacked bar chart preprocessing, ignor
 ```{r}
 #| label: fig-stacked-playtime
 
-# TODO: blur or fuzzy lines? 
-# TODO: week-to-week variance? 
-# violin plot / side by side - comparison of 5 specific individuals - by quantiles 
+# TODO: blur or fuzzy lines?
+# TODO: week-to-week variance?
+# violin plot / side by side - comparison of 5 specific individuals - by quantiles
 
 # --- counts ---
-n_qualified <- intake |> filter(qualified) |> summarise(n = n_distinct(pid)) |> pull()
+n_qualified <- intake |>
+  filter(qualified) |>
+  summarise(n = n_distinct(pid)) |>
+  pull()
 
 # --- Self-report per platform (as before; drop the temporary Xbox-only filter) ---
 sr_long <- intake |>
   filter(qualified) |>
   mutate(
-    Steam       = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
-    Xbox        = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
-    PlayStation = self_reported_weekly_play * coalesce(prop_playstation / 100, 0),
-    Nintendo    = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
-    iOS         = self_reported_weekly_play * coalesce(prop_ios / 100, 0),
-    Android     = self_reported_weekly_play * coalesce(prop_android / 100, 0)
+    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
+    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
+    PlayStation = self_reported_weekly_play *
+      coalesce(prop_playstation / 100, 0),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
+    iOS = self_reported_weekly_play * coalesce(prop_ios / 100, 0),
+    Android = self_reported_weekly_play * coalesce(prop_android / 100, 0)
   ) |>
-  pivot_longer(c(Steam, Xbox, PlayStation, Nintendo, iOS, Android),
-               names_to = "platform", values_to = "minutes") |>
+  pivot_longer(
+    c(Steam, Xbox, PlayStation, Nintendo, iOS, Android),
+    names_to = "platform",
+    values_to = "minutes"
+  ) |>
   group_by(platform) |>
   summarise(minutes = mean(minutes, na.rm = TRUE), .groups = "drop") |>
   mutate(source = "Self-report")
@@ -1060,7 +1089,10 @@ telemetry_weekly_A <- daily_all |>
   group_by(platform, week) |>
   summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
   group_by(platform) |>
-  summarise(minutes = mean(total_minutes, na.rm = TRUE) / n_qualified, .groups = "drop") |>
+  summarise(
+    minutes = mean(total_minutes, na.rm = TRUE) / n_qualified,
+    .groups = "drop"
+  ) |>
   mutate(source = "Telemetry")
 
 # --- Combine + order (unchanged) ---
@@ -1086,37 +1118,65 @@ ghost <- weekly_by_platform |>
     ymin = tele_top + lag(cumsum(gap), default = 0),
     ymax = ymin + gap,
     xmid = match("Telemetry", levels(weekly_by_platform$source)),
-    xmin = xmid - 0.45, xmax = xmid + 0.45,
+    xmin = xmid - 0.45,
+    xmax = xmid + 0.45,
     ymid = (ymin + ymax) / 2
   ) |>
   filter(gap > 0)
 
 # --- Panel A plot (your original plot code works as-is) ---
-gA <- ggplot(weekly_by_platform, aes(x = source, y = minutes, fill = platform)) +
+gA <- ggplot(
+  weekly_by_platform,
+  aes(x = source, y = minutes, fill = platform)
+) +
   geom_col(width = 0.9) +
-  scale_fill_viridis_d(option = "magma", begin = .1, end = .8, limits = stack_order) +
-  labs(x = "Data Source", y = "Weekly minutes per qualified person", fill = "Platform") +
+  scale_fill_viridis_d(
+    option = "magma",
+    begin = .1,
+    end = .8,
+    limits = stack_order
+  ) +
+  labs(
+    x = "Data Source",
+    y = "Weekly minutes per qualified person",
+    fill = "Platform"
+  ) +
   theme(legend.position = "bottom") +
-  geom_text(aes(label = ifelse(minutes < 10, "", round(minutes, 0))),
-            position = position_stack(vjust = 0.5), color = "white", family = "serif") +
-  geom_rect(data = ghost, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-            inherit.aes = FALSE, linetype = "dotted", linewidth = 0.6, color = "black", fill = NA) +
-  geom_text(data = ghost, aes(x = xmid, y = ymid, label = paste0("+", round(gap, 0))),
-            inherit.aes = FALSE, family = "serif")
+  geom_text(
+    aes(label = ifelse(minutes < 10, "", round(minutes, 0))),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    family = "serif"
+  ) +
+  geom_rect(
+    data = ghost,
+    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+    inherit.aes = FALSE,
+    linetype = "dotted",
+    linewidth = 0.6,
+    color = "black",
+    fill = NA
+  ) +
+  geom_text(
+    data = ghost,
+    aes(x = xmid, y = ymid, label = paste0("+", round(gap, 0))),
+    inherit.aes = FALSE,
+    family = "serif"
+  )
 
 # --- how many qualified users per platform ---
 n_users <- intake |>
   filter(qualified) |>
   transmute(
     pid = as.character(pid),
-    Steam    = str_detect(linked_platforms %||% "", "Steam"),
+    Steam = str_detect(linked_platforms %||% "", "Steam"),
     Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
-    Xbox     = str_detect(linked_platforms %||% "", "Xbox")
+    Xbox = str_detect(linked_platforms %||% "", "Xbox")
   ) |>
   summarise(
-    Steam    = sum(Steam, na.rm = TRUE),
+    Steam = sum(Steam, na.rm = TRUE),
     Nintendo = sum(Nintendo, na.rm = TRUE),
-    Xbox     = sum(Xbox, na.rm = TRUE)
+    Xbox = sum(Xbox, na.rm = TRUE)
   ) |>
   pivot_longer(everything(), names_to = "platform", values_to = "n_users")
 
@@ -1124,28 +1184,34 @@ n_users <- intake |>
 sr_users <- intake |>
   filter(qualified) |>
   mutate(
-    Steam    = self_reported_weekly_play * coalesce(prop_steam/100, 0),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo/100, 0),
-    Xbox     = self_reported_weekly_play * coalesce(prop_xbox/100,  0),
-    uses_Steam    = str_detect(linked_platforms %||% "", "Steam"),
+    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
+    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
+    uses_Steam = str_detect(linked_platforms %||% "", "Steam"),
     uses_Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
-    uses_Xbox     = str_detect(linked_platforms %||% "", "Xbox")
+    uses_Xbox = str_detect(linked_platforms %||% "", "Xbox")
   ) |>
   select(pid, Steam, Nintendo, Xbox, uses_Steam, uses_Nintendo, uses_Xbox) |>
-  pivot_longer(c(Steam, Nintendo, Xbox), names_to = "platform", values_to = "sr_minutes") |>
-  mutate(uses = case_when(
-    platform == "Steam"    ~ uses_Steam,
-    platform == "Nintendo" ~ uses_Nintendo,
-    platform == "Xbox"     ~ uses_Xbox,
-    TRUE ~ FALSE
-  )) |>
+  pivot_longer(
+    c(Steam, Nintendo, Xbox),
+    names_to = "platform",
+    values_to = "sr_minutes"
+  ) |>
+  mutate(
+    uses = case_when(
+      platform == "Steam" ~ uses_Steam,
+      platform == "Nintendo" ~ uses_Nintendo,
+      platform == "Xbox" ~ uses_Xbox,
+      TRUE ~ FALSE
+    )
+  ) |>
   filter(uses) |>
   group_by(platform) |>
   summarise(sr = mean(sr_minutes, na.rm = TRUE), .groups = "drop")
 
 # --- Telemetry per platform PER USER OF THAT PLATFORM ---
 tele_users <- daily_all |>
-  filter(platform %in% c("Steam","Nintendo","Xbox")) |>
+  filter(platform %in% c("Steam", "Nintendo", "Xbox")) |>
   mutate(week = floor_date(day_local, "week")) |>
   group_by(platform, week) |>
   summarise(total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
@@ -1161,16 +1227,21 @@ bcd <- sr_users |>
   pivot_longer(c(sr, tele), names_to = "source", values_to = "minutes") |>
   mutate(
     source = recode(source, sr = "Self-report", tele = "Telemetry"),
-    source = factor(source, levels = c("Self-report","Telemetry")),
-    platform = factor(platform, levels = c("Steam","Nintendo","Xbox"))
+    source = factor(source, levels = c("Self-report", "Telemetry")),
+    platform = factor(platform, levels = c("Steam", "Nintendo", "Xbox"))
   )
 
 gBCD <- ggplot(bcd, aes(source, minutes, fill = source)) +
   geom_col(width = 0.8) +
-  scale_fill_viridis_d(option = "magma", begin = .15, end = .7, guide = "none") +
+  scale_fill_viridis_d(
+    option = "magma",
+    begin = .15,
+    end = .7,
+    guide = "none"
+  ) +
   labs(x = NULL, y = "Weekly minutes per user of platform") +
   geom_text(aes(label = round(minutes, 0)), vjust = -0.35, family = "serif") +
-  facet_wrap(~ platform, nrow = 1)
+  facet_wrap(~platform, nrow = 1)
 
 # --- combine if desired ---
 gA / gBCD
@@ -1187,22 +1258,27 @@ slot_exposure <- telemetry_spans |>
   mutate(n_weeks = interval(telemetry_start, telemetry_end) %/% weeks(1) + 1) |>
   ungroup() |>
   crossing(dow = 1:7, hour = 0:23) |>
-  mutate(n_occurrences = n_weeks)  # each slot appears once per week
+  mutate(n_occurrences = n_weeks) # each slot appears once per week
 
 # total minutes actually played per slot
 slot_play <- hourly_all |>
   mutate(
-    dow  = lubridate::wday(hour_start_local, week_start = 1),
+    dow = lubridate::wday(hour_start_local, week_start = 1),
     hour = hour(hour_start_local)
   ) |>
   group_by(pid, platform, dow, hour) |>
-  summarise(minutes = pmin(sum(minutes, na.rm = TRUE), 60 * n()), .groups = "drop")
+  summarise(
+    minutes = pmin(sum(minutes, na.rm = TRUE), 60 * n()),
+    .groups = "drop"
+  )
 
 # combine: per-player–platform average minutes per occurrence
 slot_per_player <- slot_exposure |>
-  left_join(slot_play, by = c("pid","platform","dow","hour")) |>
-  mutate(minutes = replace_na(minutes, 0),
-         avg_minutes = minutes / n_occurrences)
+  left_join(slot_play, by = c("pid", "platform", "dow", "hour")) |>
+  mutate(
+    minutes = replace_na(minutes, 0),
+    avg_minutes = minutes / n_occurrences
+  )
 
 # final: probability across players (avg minutes / 60)
 slot_summary <- slot_per_player |>
@@ -1212,20 +1288,30 @@ slot_summary <- slot_per_player |>
     n_active = n(),
     .groups = "drop"
   ) |>
-  mutate(dow = factor(dow, levels = 1:7,
-                      labels = c("Mon","Tue","Wed","Thu","Fri","Sat","Sun"),
-                      ordered = TRUE))
+  mutate(
+    dow = factor(
+      dow,
+      levels = 1:7,
+      labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
+      ordered = TRUE
+    )
+  )
 
 
 ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
   geom_tile() +
   scale_x_continuous(breaks = 0:23) +
-  scale_fill_viridis_c(option = "magma",
-                       labels = scales::percent_format(accuracy = .1),
-                       # limits = c(0, .028), breaks = seq(0, .028, .007),
-                       name = "Probability of active play") +
-  labs(x = "Hour (local)", y = "Day",
-       title = "Diurnal play across Xbox, Nintendo, Steam") +
+  scale_fill_viridis_c(
+    option = "magma",
+    labels = scales::percent_format(accuracy = .1),
+    # limits = c(0, .028), breaks = seq(0, .028, .007),
+    name = "Probability of active play"
+  ) +
+  labs(
+    x = "Hour (local)",
+    y = "Day",
+    title = "Diurnal play across Xbox, Nintendo, Steam"
+  ) +
   theme(panel.grid.major.y = element_blank())
 
 ```
@@ -1234,8 +1320,6 @@ Finally, @fig-case-study descriptively visualizes three participants' (in the 25
 
 ```{r}
 #| label: fig-case-study
-
-
 
 ```
 
