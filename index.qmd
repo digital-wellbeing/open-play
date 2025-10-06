@@ -121,6 +121,10 @@ if (!require("ggsankey")) {
   devtools::install_github("davidsjoberg/ggsankey")
 }
 
+if (!require("tinytable")) {
+  devtools::install_github("vincentarelbundock/tinytable")
+}
+
 p_load(
   tidyverse,
   lubridate,
@@ -137,7 +141,9 @@ p_load(
   here,
   ggrepel,
   ggstream,
-  patchwork
+  patchwork,
+  tinytable,
+  sparkline
 )
 
 here::i_am("index.qmd")
@@ -158,15 +164,17 @@ options(scipen = 999)
 
 ```{r}
 #| label: load-data
-#| cache.extra: !expr file.mtime("data/raw-minimal-pseudo/survey_intake.csv.gz")
+#| cache.extra: !expr file.mtime("data/raw-minimal-pseudo/survey_intake_raw.csv.gz")
 
-intake <- read_csv(here("data/raw-minimal-pseudo/survey_intake.csv.gz"))
-diary <- read_csv(here("data/raw-minimal-pseudo/survey_diary.csv.gz"))
-panel <- read_csv(here("data/raw-minimal-pseudo/survey_panel.csv.gz"))
+intake <- read_csv(here("data/raw-minimal-pseudo/survey_intake_raw.csv.gz"))
+diary <- read_csv(here("data/raw-minimal-pseudo/survey_diary_raw.csv.gz"))
+panel <- read_csv(here("data/raw-minimal-pseudo/survey_panel_raw.csv.gz"))
 
-nintendo <- read_csv(here("data/raw-minimal-pseudo/telemetry_nintendo.csv.gz"))
-steam <- read_csv(here("data/raw-minimal-pseudo/telemetry_steam.csv.gz"))
-xbox <- read_csv(here("data/raw-minimal-pseudo/telemetry_xbox.csv.gz"))
+nintendo <- read_csv(here("data/raw-minimal-pseudo/telemetry_nintendo_raw.csv.gz"))
+steam <- read_csv(here("data/raw-minimal-pseudo/telemetry_steam_raw.csv.gz"))
+xbox <- read_csv(here("data/raw-minimal-pseudo/telemetry_xbox_raw.csv.gz"))
+
+cog <- read_csv(here("data/raw-minimal-pseudo/cognitive_tasks_raw.csv.gz"))
 
 ```
 
@@ -244,7 +252,8 @@ steam_clean <- steam |>
     session_start = datetime_hour_start,
     session_end = datetime_hour_start + hours(1) # Session ends at the end of the last hour block played
   ) |>
-  filter(minutes > 0 & minutes < 120)
+  filter(minutes > 0 & minutes < 120) |> 
+  ungroup()
 
 ```
 
@@ -264,7 +273,8 @@ xbox_clean <- xbox |>
   filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |>  # something weird with this title, almost every player has played it and it accounts for 4x the playtime of the next-highest game - and it's unrated. I suspect it's the home screen or something.
   filter(duration <= 600) |> 
   arrange(pid, session_start, session_end) |> 
-  canonicalize_xbox_sessions(tol_sec = 60)
+  canonicalize_xbox_sessions(tol_sec = 60) |> 
+  ungroup()
 
 ```
 
@@ -303,32 +313,53 @@ third_party_prop <- paste0(print_num((1-median(intake$nintendo_first_party_prop,
 ```
 
 ```{r}
+#| preprocess-cog
+
+# Move aggregate data columns to own table
+dat_cog_total <- dat_cog |>
+  filter(practice == 0 & pid %in% intake$pid) |>
+  summarise(
+    score = mean(score_final),
+    meanrt = mean(meanrt_final),
+    n = n(),
+    .by = c(pid, wave, task)
+  ) |>
+  pivot_wider(
+    names_from = task,
+    values_from = c(score, meanrt, n)
+  )
+```
+
+
+```{r}
 #| label: aggregate-session-hourly-daily
 
+# merge with the local time zone offsets from intake
 tz_map <- intake |>
   transmute(pid = as.character(pid), off = offset_secs(local_timezone)) |>
   distinct(pid, .keep_all = TRUE)
 
+# aggregate data at each level of granularity (session, hourly, daily)
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
 sessions_all <- bind_rows(
-  xbox_clean %>%
+  xbox_clean |> 
     transmute(pid = as.character(pid), platform = "Xbox",
               start_utc = session_start, end_utc = session_end),
-  nintendo_clean %>%
+  nintendo_clean |> 
     transmute(pid = as.character(pid), platform = "Nintendo",
               start_utc = session_start, end_utc = session_end)
-) %>%
-  left_join(tz_map, by = "pid") %>%
+) |> 
+  left_join(tz_map, by = "pid") |> 
   mutate(
     start_local = start_utc + off,
     end_local   = end_utc   + off,
     duration_min = as.numeric(difftime(end_utc, start_utc, units = "mins"))
-  ) %>%
+  ) |> 
   filter(!is.na(start_utc), !is.na(end_utc), end_utc > start_utc, duration_min >= 1)
 
 # --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
 # expand sessions into local-hour bins, compute overlap minutes, and add UTC hour
-hourly_from_sessions <- sessions_all %>%
+hourly_from_sessions <- sessions_all |> 
   filter(!is.na(off)) |> 
   mutate(
     h0_local = floor_date(start_local, "hour"),
@@ -345,15 +376,15 @@ hourly_from_sessions <- sessions_all %>%
                           units = "mins"))
     ),
     hour_start_utc = hour_start_local - off
-  ) %>%
+  ) |> 
   select(pid, platform, hour_start_local, hour_start_utc, minutes) %>%
   group_by(pid, platform, hour_start_local, hour_start_utc) %>%
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
-hourly_from_steam <- steam_clean %>%
-  select(pid, datetime_hour_start, minutes) %>%
-  mutate(pid = as.character(pid)) %>%
-  left_join(tz_map, by = "pid") %>%
+hourly_from_steam <- steam_clean |> 
+  select(pid, datetime_hour_start, minutes) |> 
+  mutate(pid = as.character(pid)) |> 
+  left_join(tz_map, by = "pid") |> 
   transmute(
     pid, platform = "Steam",
     hour_start_utc   = datetime_hour_start,
@@ -552,6 +583,132 @@ Digital trace data was sourced for five distinct platforms—Xbox, Nintendo, Ste
 The dataset is openly available at \[LINK\] under a CC0 license for unrestricted reuse.
 
 highlight that data collection methods are preregistered
+
+```{r}
+#| label: tbl-overview
+#| tbl-cap: "Overview of data sources"
+
+# ===== tuning knobs =====
+CAP_PROB  <- 0.99   # winsorize at global 99th percentile (after per-dataset caps)
+USE_LOG   <- TRUE
+THUMB_W   <- 180
+THUMB_H   <- 44
+LINEWIDTH <- 1.0
+
+# ---- helpers ----
+avg_days_platform <- function(pltf) {
+  daily_all |>
+    filter(platform == pltf) |>
+    group_by(pid) |>
+    summarise(days = sum(minutes > 0, na.rm = TRUE), .groups = "drop") |>
+    summarise(avg = mean(days, na.rm = TRUE), .groups = "drop") |>
+    pull(avg) %||% NA_real_
+}
+
+total_hours <- function(df) {
+  mm <- if ("duration" %in% names(df)) df$duration
+        else if ("minutes" %in% names(df)) df$minutes
+        else NULL
+  if (is.null(mm)) NA_real_ else sum(mm, na.rm = TRUE) / 60
+}
+
+# Cap events per participant at a per-dataset ceiling
+events_per_participant <- function(df, pid, cap = Inf) {
+  df |>
+    count({{pid}}, name = "events") |>
+    mutate(events = pmin(events, cap)) |>
+    pull(events)
+}
+
+summ_basic <- function(df, pid, label, avg_days = NA_real_) {
+  by_pid <- df |> count({{pid}}, name = "events")
+  tibble(
+    `Data type` = label,
+    `Unique participants` = n_distinct(pull(df, {{pid}})),
+    `Total events` = nrow(df),
+    `Total hours` = total_hours(df),
+    `Avg events / participant` = mean(by_pid$events, na.rm = TRUE),
+    `Avg active days` = avg_days,
+    `Sparklines` = ""  # plot_tt() will draw mini-plots here
+  )
+}
+
+# ---- table rows (order preserved) ----
+overview <- bind_rows(
+  summ_basic(intake,         pid, "Intake survey",       avg_days = 1),
+  summ_basic(diary,          pid, "Daily surveys",       avg_days = nrow(diary) / n_distinct(diary$pid)),
+  summ_basic(panel,          pid, "Biweekly surveys",    avg_days = nrow(panel) / n_distinct(panel$pid)),
+  summ_basic(steam_clean,    pid, "Steam",               avg_days = avg_days_platform("Steam")),
+  summ_basic(nintendo_clean, pid, "Nintendo",            avg_days = avg_days_platform("Nintendo")),
+  summ_basic(xbox_clean,     pid, "Xbox",                avg_days = avg_days_platform("Xbox"))
+) |>
+  mutate(
+    `Unique participants` = number(`Unique participants`, accuracy = 1, big.mark = ","),
+    `Total events`        = number(`Total events`,        accuracy = 1, big.mark = ",", scale_cut = cut_long_scale()),
+    `Total hours`         = number(`Total hours`,         accuracy = 1, big.mark = ",", scale_cut = cut_long_scale()),
+    `Avg events / participant` = number(`Avg events / participant`, accuracy = 0.1, big.mark = ",", scale_cut = cut_long_scale()),
+    `Avg active days`          = number(`Avg active days`,          accuracy = 0.1, big.mark = ",", scale_cut = cut_long_scale())
+  )
+
+plot_data <- list(
+  events_per_participant(intake,         pid, cap = 1),
+  events_per_participant(diary,          pid, cap = 30),
+  events_per_participant(panel,          pid, cap = 6),
+  events_per_participant(steam_clean,    pid, cap = Inf),
+  events_per_participant(nintendo_clean, pid, cap = Inf),
+  events_per_participant(xbox_clean,     pid, cap = Inf)
+)
+
+# ---- winsorize globally, then log-scale if requested ----
+all_events <- unlist(plot_data, use.names = FALSE)
+cap_global <- quantile(all_events, CAP_PROB, na.rm = TRUE)
+plot_data_w <- lapply(plot_data, \(v) pmin(v, cap_global))
+
+xf <- if (USE_LOG) \(x) log1p(x) else identity
+xmax_raw <- max(c(1, cap_global), na.rm = TRUE)
+xmax_t   <- xf(xmax_raw)
+
+spark_density <- function(d, xmax_t, ...) {
+  d <- data.frame(x = xf(d))
+  ggplot(d, aes(x = x)) +
+    geom_density(linewidth = LINEWIDTH, fill = "grey60", alpha = 0.35, adjust = 1) +
+    scale_x_continuous(
+      limits = c(0, xmax_t),
+      expand = c(0, 0),
+      breaks = c(0, xmax_t),
+      labels = c("0", number(xmax_raw, accuracy = 1, big.mark = ","))
+    ) +
+    labs(x = NULL, y = NULL) +
+    theme_minimal(base_size = 8) +
+    theme(
+      panel.grid = element_blank(),
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      plot.margin = margin(1, 1, 1, 1)
+    )
+}
+
+# If you want console preview reliability:
+options(tinytable_inline_images = TRUE)
+
+tt(
+  overview,
+  notes = paste0(
+    "Sparklines: per-participant events. Per-dataset caps applied (see code). ",
+    "Winsorized at ", round(CAP_PROB*100), "th percentile",
+    if (USE_LOG) "; x-axis uses log1p scale." else "."
+  )
+) |>
+  plot_tt(
+    j     = which(names(overview) == "Sparklines"),
+    fun   = spark_density,
+    data  = plot_data_w,
+    xmax_t = xmax_t,
+    width = THUMB_W,
+    height = THUMB_H
+  )
+
+```
 
 # Method
 
