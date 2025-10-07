@@ -168,6 +168,7 @@ nintendo <- read_csv(here("data/raw-minimal-pseudo/telemetry_nintendo.csv.gz"))
 steam <- read_csv(here("data/raw-minimal-pseudo/telemetry_steam.csv.gz"))
 xbox <- read_csv(here("data/raw-minimal-pseudo/telemetry_xbox.csv.gz"))
 
+simon <- read_csv(here("data/raw-minimal-pseudo/cog_simon_raw.csv.gz"))
 ```
 
 ```{r}
@@ -307,6 +308,40 @@ third_party_prop <- paste0(
   "%"
 )
 
+```
+
+```{r}
+#| label: preprocess-simon
+
+# Only include participants who qualified at intake
+simon <- simon |>
+  filter(pid %in% unique(intake$pid[intake$qualified]))
+
+# Take relevant variables and observations only
+# If panel_wave not recorded, data is invalid
+# `score_final` is automatically added to all rows so distinct works here
+simon <- simon |>
+  filter(practice == 0, task == "simon", !is.na(panel_wave)) |>
+  mutate(wave = panel_wave, .keep = "unused") |>
+  add_count(pid, wave, name = "n_trials") |>
+  distinct(
+    pid,
+    wave,
+    datetime,
+    device_type,
+    n_trials,
+    score_final,
+    meanrt_final
+  )
+
+# Merge unknown device type to the most common one
+# table(simon$device_type)
+simon <- simon |>
+  mutate(device_type = if_else(is.na(device_type), "NotMobile", device_type))
+
+simon <- simon |>
+  mutate(wave = factor(wave)) |>
+  arrange(wave, pid)
 ```
 
 ```{r}
@@ -1017,9 +1052,13 @@ As described above, we collected video game play data from five platforms: Xbox,
 
 All telemetry timestamps are stored as UTC, but can be converted to the participant's local time using the `local_timezone` variable.
 
-## Executive Function
+## Attention Control
 
-TODO
+We measured participants' attention control using the Simon Squared task of @burgoyneNatureMeasurementAttention2023, using modified code from @vrtliceraldeSquaredTasksAttention2023. Although the original Squared tasks consist of the Simon, Stroop, and Flanker Squared, due to limited participant time we chose to only use the Simon Squared task as it had the greatest factor loading on attention control in the original study [@burgoyneNatureMeasurementAttention2023].
+
+The Simon Squared task is a short and validated measure of attention control that follows the standard Simon task [@simonAuditorySRCompatibility1967] but is completed in about three minutes. Participants see a target arrow pointing either left or right, with response labels "LEFT" and "RIGHT" printed underneath the arrow. Participants then must select the response option (e.g. "LEFT") that matches the arrow's direction (e.g. ◀︎). However, the arrow and response options can appear on either side of the screen, and participants must then ignore the spatial configuration of the stimuli and attend only to the symbols' meanings.
+
+For a complete task description, see @burgoyneNatureMeasurementAttention2023 and Figure 6 therein.
 
 ## Time Use
 
@@ -1321,6 +1360,66 @@ Finally, @fig-case-study descriptively visualizes three participants' (in the 25
 ```{r}
 #| label: fig-case-study
 
+```
+
+## Attention control
+
+```{r}
+#| label: simon-calculate-summary
+
+simon_n <- simon |>
+  reframe(n = n(), .by = wave)
+simon_sdl <- simon |>
+  reframe(
+    mean_sdl(score_final, mult = 1),
+    .by = c(wave, device_type)
+  )
+```
+
+Overall, `{r} knitr::combine_words(simon_n$n)` participants completed the Simon task at panel waves 1, 3, 5, and 6. The average performances were lower but comparable to those of @burgoyneNatureMeasurementAttention2023 (Figure 16); with participants on mobile devices generally attaining lower scores than those not on mobile devices (@fig-simon).
+
+```{r}
+#| label: fig-simon
+#| fig-cap: Simon Squared task performance across study waves.
+#| fig-asp: 0.3
+
+simon |>
+  ggplot() +
+  aes(score_final) +
+  scale_y_continuous(
+    "Count",
+    expand = expansion(c(0.01, 0.1))
+  ) +
+  scale_x_continuous("Final score") +
+  geom_histogram(fill = "grey70") +
+  geom_pointrange(
+    data = simon_sdl,
+    aes(x = y, xmin = ymin, xmax = ymax, y = 0),
+    linewidth = 1,
+    shape = "square"
+  ) +
+  facet_grid(
+    device_type ~ wave,
+    labeller = labeller(.cols = as_labeller(~ str_glue("Wave {.}"))),
+    scales = "free_y"
+  )
+```
+
+```{r}
+library(ggdist)
+simon |>
+  ggplot() +
+  aes(
+    wave,
+    score_final,
+    fill = device_type,
+    side = if_else(device_type == "Mobile", "left", "right")
+  ) +
+  stat_histinterval(
+    breaks = 30,
+    alpha = .5,
+    position = position_dodge(width = -.15)
+  )
 ```
 
 # Discussion
