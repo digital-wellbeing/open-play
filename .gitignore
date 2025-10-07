@@ -21,3 +21,5 @@ raw/
 /3_sleep_cache/*
 renv/
 deprecated/
+
+**/*.quarto_ipynb
