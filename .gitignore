@@ -7,6 +7,7 @@
 data-synthetic/data-template/
 data/synthetic/data-template/
 *_cache/
+*_files/
 
 _freeze/
 outputs/
@@ -20,3 +21,5 @@ raw/
 /3_sleep_cache/*
 renv/
 deprecated/
+
+**/*.quarto_ipynb
