@@ -1,5 +1,7 @@
 ---
 title: "A multi-platform dataset of digital trace data from video games"
+description: |
+  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of X individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected over X months of fourteen daily assessments, six biweekly surveys, and three biweekly cognitive tests. The data include X hours of video game play across X titles, X survey responses from X instruments, and X attention ability measures to facilitate examining longitudinal associations between the different constructs. Data and codebook are available under LICENSE at LINK.
 author:
   - name: Nick Ballou
     corresponding: false
