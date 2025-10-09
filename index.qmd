@@ -628,8 +628,8 @@ highlight that data collection methods are preregistered
 # ===== tuning knobs =====
 CAP_PROB <- 0.99 # winsorize at global 99th percentile (after per-dataset caps)
 USE_LOG <- TRUE
-THUMB_W <- 180
-THUMB_H <- 44
+THUMB_W <- 400
+THUMB_H <- 200
 LINEWIDTH <- 1.0
 
 # ---- helpers ----
@@ -792,8 +792,8 @@ tt(
     fun = spark_density,
     data = plot_data_w,
     xmax_t = xmax_t,
-    width = THUMB_W,
-    height = THUMB_H
+    width_plot = THUMB_W,
+    height_plot = THUMB_H
   )
 
 ```
