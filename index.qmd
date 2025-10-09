@@ -32,15 +32,19 @@ author:
   - name: Matti Vuorre
     corresponding: false
     orcid: 0000-0001-5052-066X
+    email: mjvuorre@uvt.nl
     affiliations:
       - name: Tilburg University
       - name: University of Oxford
         department: Oxford Internet Institute
-    # roles:
-    #   - methodology
-    #   - funding acquisition
-    #   - formal analysis
-    #   - editing
+    roles:
+      - conceptualization
+      - methodology
+      - funding acquisition
+      - formal analysis
+      - supervision
+      - writing
+      - editing
 
   - name: Thomas Hakman
     corresponding: false
