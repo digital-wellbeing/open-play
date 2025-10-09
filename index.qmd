@@ -6,8 +6,7 @@ author:
     orcid: 0000-0003-4126-0696
     email: nick@nickballou.com
     affiliations:
-      - name: University of Oxford
-        department: Oxford Internet Institute
+      - ref: 1
     # roles:
     #   - conceptualization
     #   - data curation
@@ -20,8 +19,7 @@ author:
     orcid: 0000-0002-0623-9149
     email: tamas.foldes@oii.ox.ac.uk
     affiliations:
-      - name: University of Oxford
-        department: Oxford Internet Institute
+      - ref: 1
     # roles:
     #   - conceptualization
     #   - data curation
@@ -34,9 +32,8 @@ author:
     orcid: 0000-0001-5052-066X
     email: mjvuorre@uvt.nl
     affiliations:
-      - name: Tilburg University
-      - name: University of Oxford
-        department: Oxford Internet Institute
+      - ref: 2
+      - ref: 1
     roles:
       - conceptualization
       - methodology
@@ -51,8 +48,7 @@ author:
     orcid: 0009-0009-8292-2482
     email: nick@nickballou.com
     affiliations:
-      - name: University of Oxford
-        department: Oxford Internet Institute
+      - ref: 1
     # roles:
     #   - data curation
     #   - validation
@@ -62,9 +58,8 @@ author:
     corresponding: false
     orcid: 0000-0003-0713-0556
     affiliations:
-      - name: Karolinska Institute
-      - name: University of Oxford
-        department: Oxford Internet Institute
+      - ref: 3
+      - ref: 1
     # roles:
     #   - methodology
     #   - editing
@@ -74,40 +69,44 @@ author:
     email: andy.przybylski@oii.ox.ac.uk
     orcid: 0000-0001-5547-2185
     affiliations:
-      - name: University of Oxford
-        department: Oxford Internet Institute
+      - ref: 1
     # roles:
     #   - conceptualization
     #   - funding acquisition
     #   - project administration
     #   - editing
-output: html_document
-execute-dir: project
+affiliations:
+  - id: 1
+    name: University of Oxford
+    department: Oxford Internet Institute
+  - id: 2
+    name: Tilburg University
+    department: Department of Social Psychology
+  - id: 3
+    name: Karolinska Institute
 bibliography: references.bib
-format:
-  html:
-    toc: true
-    toc-depth: 2
-    code-fold: true
-    code-summary: "Show/Hide Code"
-    self-contained: false
-
 editor_options:
   chunk_output_type: console
   markdown:
     wrap: none
-execute:
-  warning: false
-  echo: false
-  cache: true
 freeze: auto
 knitr:
   opts_chunk:
     cache: true
+    warning: false
+    message: false
     fig-width: 6
     fig-asp: 0.618
     out-width: 80%
     fig-align: center
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    echo: true
+    code-fold: true
+    code-summary: "Show/Hide Code"
+    self-contained: false
 ---
 
 ```{r}
