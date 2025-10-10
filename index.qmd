@@ -1038,7 +1038,7 @@ tibble(
     "*How likely are you to doze off or fall asleep in the following situations, in comparison to feeling just tired? \\[...\\] Watching TV*",
     "Do you feel that gaming is sometimes a problem for you? Please describe."
   ),
-  `**Response format**` = c(
+  `Response format` = c(
     "Various",
     "4-pt Likert scale from 1 (No chance of dozing) to 4 (High chance of dozing)",
     "Open text"
