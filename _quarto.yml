@@ -1,50 +1,13 @@
 project:
-  type: book
+  type: website
   execute-dir: project
   output-dir: docs
-
-book:
-  title: "A multi-platform dataset of digital trace data from video games"
-  author: "Digital Wellbeing Lab"
-  date: "2025-09-30"
-  chapters:
+  render:
     - index.qmd
 
-  search: true
-  repo-url: https://digital-wellbeing.github.io/platform-study-rr/
-  downloads: [pdf]
-  sharing: [twitter, facebook]
+repo-url: https://github.com/digital-wellbeing/platform-study-rr
+site-url: https://digital-wellbeing.github.io/platform-study-rr/
 
-comments:
-  hypothesis: true
-
-toc: true
-editor_options:
-  chunk_output_type: console
-execute:
-  warning: false
-  message: false
-  output: true
-  echo: true
-knitr:
-  opts_chunk:
-    root.dir: .
-page-layout: full
-format:
-  html:
-    theme:
-      light: united
-      dark: darkly
-    code-fold: true
-    fontsize: 13pt
-    other-links:
-      - text: Stage 1 Manuscript (OSF)
-        href: https://osf.io/pb5nu
-        icon: file-pdf
-      - text: GitHub Repository
-        href: https://digital-wellbeing.github.io/platform-study-rr/
-        icon: github
-bibliography: references.bib
 publish:
   gh-pages:
     branch: main
