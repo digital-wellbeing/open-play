@@ -135,44 +135,41 @@ library(openxlsx)
 library(scales)
 library(ggsankey)
 library(tidycensus)
-library(here)
 library(ggrepel)
 library(ggstream)
 library(patchwork)
 library(tinytable)
 library(sparkline)
 
-here::i_am("index.qmd")
+set.seed(8675309)
+options(scipen = 999)
 
 theme_set(theme_minimal())
 theme_update(
   strip.background = element_rect(fill = "black"),
   strip.text = element_text(color = "white", size = 10),
   panel.grid.minor = element_blank(),
-  panel.border = element_rect(colour = "black", fill = NA, linewidth = 1),
+  panel.border = element_rect(
+    colour = "black",
+    fill = NA,
+    linewidth = 1
+  ),
 )
-
-set.seed(8675309)
-
-options(scipen = 999)
-
 ```
 
 ```{r}
 #| label: load-data
 #| cache.extra: !expr file.mtime("data/raw-minimal-pseudo/survey_intake_raw.csv.gz")
 
-intake <- read_csv(here("data/raw-minimal-pseudo/survey_intake_raw.csv.gz"))
-diary <- read_csv(here("data/raw-minimal-pseudo/survey_diary_raw.csv.gz"))
-panel <- read_csv(here("data/raw-minimal-pseudo/survey_panel_raw.csv.gz"))
+intake <- read_csv("data/raw-minimal-pseudo/survey_intake_raw.csv.gz")
+diary <- read_csv("data/raw-minimal-pseudo/survey_diary_raw.csv.gz")
+panel <- read_csv("data/raw-minimal-pseudo/survey_panel_raw.csv.gz")
 
-nintendo <- read_csv(here(
-  "data/raw-minimal-pseudo/telemetry_nintendo_raw.csv.gz"
-))
-steam <- read_csv(here("data/raw-minimal-pseudo/telemetry_steam_raw.csv.gz"))
-xbox <- read_csv(here("data/raw-minimal-pseudo/telemetry_xbox_raw.csv.gz"))
+nintendo <- read_csv("data/raw-minimal-pseudo/telemetry_nintendo_raw.csv.gz")
+steam <- read_csv("data/raw-minimal-pseudo/telemetry_steam_raw.csv.gz")
+xbox <- read_csv("data/raw-minimal-pseudo/telemetry_xbox_raw.csv.gz")
 
-dat_cog <- read_csv(here("data/raw-minimal-pseudo/cognitive_tasks_raw.csv.gz"))
+dat_cog <- read_csv("data/raw-minimal-pseudo/cognitive_tasks_raw.csv.gz")
 ```
 
 ```{r}
@@ -524,9 +521,7 @@ ethnicity_us <- get_decennial(
 ```{r}
 #| label: load-UK-census-data
 
-age_uk <- read_csv(here(
-  "data/census/TS009-2021-2-filtered-2025-03-05T23-18-32Z.csv"
-)) |>
+age_uk <- read_csv("data/census/TS009-2021-2-filtered-2025-03-05T23-18-32Z.csv") |>
   pivot_wider(
     id_cols = c(`Age (91 categories) Code`, `Age (91 categories)`),
     names_from = `Sex (2 categories)`,
@@ -536,9 +531,7 @@ age_uk <- read_csv(here(
   select(age = `Age (91 categories)`, female = Female, male = Male, total)
 
 # https://www.ons.gov.uk/datasets/TS021/editions/2021/versions/1/filter-outputs/f1addb18-dcb8-4adb-98a8-abeb9108c330#get-data
-ethnicity_uk <- read_csv(here(
-  "data/census/TS021-2021-1-filtered-2025-03-05T23-25-05Z.csv"
-)) |>
+ethnicity_uk <- read_csv("data/census/TS021-2021-1-filtered-2025-03-05T23-25-05Z.csv") |>
   # Optionally drop the row for "Does not apply"
   filter(`Ethnic group (20 categories)` != "Does not apply") %>%
   mutate(
@@ -562,9 +555,7 @@ ethnicity_uk <- read_csv(here(
     country = "UK"
   )
 
-education_uk <- read_csv(here(
-  "data/census/TS067-2021-3-filtered-2025-03-05T23-37-22Z.csv"
-)) |>
+education_uk <- read_csv("data/census/TS067-2021-3-filtered-2025-03-05T23-37-22Z.csv") |>
   select(4:5) |>
   rename_with(~ c("level", "gen_pop")) |>
   filter(level != "Does not apply") |>
@@ -922,7 +913,7 @@ After players completed the account linking process, we checked each account for
 ```{r}
 #| label: fig-design
 
-knitr::include_graphics(here("figures/design.png"))
+knitr::include_graphics("figures/design.png")
 ```
 
 Eligible participants were invited to complete 6 waves of biweekly surveys, one every two weeks (@fig-design). US participants were additionally invited to complete daily surveys for 30 days, concurrently with the first biweekly surveys. During waves 1, 3, and 5, a cognitive task was also administered within the biweekly survey.
