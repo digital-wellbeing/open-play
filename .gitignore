@@ -20,5 +20,6 @@ raw/
 /3_sleep_files
 /3_sleep_cache/*
 deprecated/
+tinytable_assets/
 
 **/*.quarto_ipynb

@@ -3,7 +3,10 @@ project:
   execute-dir: project
   output-dir: docs
   render:
+    - data-process.qmd
     - index.qmd
+
+freeze: auto
 
 repo-url: https://github.com/digital-wellbeing/platform-study-rr
 site-url: https://digital-wellbeing.github.io/platform-study-rr/
