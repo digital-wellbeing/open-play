@@ -88,6 +88,8 @@ affiliations:
   - id: 3
     name: Karolinska Institute
 bibliography: references.bib
+csl: https://www.zotero.org/styles/apa
+keywords: [dataset, video games, well-being, mental health, trace data, attention]
 editor_options:
   chunk_output_type: console
   markdown:
@@ -115,6 +117,12 @@ format:
       - text: Stage 1 Registered Report
         href: https://osf.io/pb5nu
         icon: file-pdf
+  preprint-typst:
+    wordcount: true
+    theme: jou
+    citeproc: true
+    include-before-body:
+      - text: "#show <refs>: set par(hanging-indent: 1.4em)"
   docx: default
 ---
 
