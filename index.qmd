@@ -92,7 +92,6 @@ editor_options:
   chunk_output_type: console
   markdown:
     wrap: none
-freeze: auto
 knitr:
   opts_chunk:
     echo: false
@@ -125,8 +124,6 @@ format:
 
 library(tidyverse)
 library(lubridate)
-library(data.table)
-library(dtplyr)
 library(jsonlite)
 library(qualtRics)
 library(sjlabelled)
@@ -134,12 +131,14 @@ library(hms)
 library(openxlsx)
 library(scales)
 library(ggsankey)
-library(tidycensus)
 library(ggrepel)
 library(ggstream)
 library(patchwork)
 library(tinytable)
 library(sparkline)
+
+# Load custom functions
+source("R/helpers.R")
 
 set.seed(8675309)
 options(scipen = 999)
@@ -158,188 +157,45 @@ theme_update(
 ```
 
 ```{r}
-#| label: load-data
-#| cache.extra: !expr file.mtime("data/raw-minimal-pseudo/survey_intake_raw.csv.gz")
+#| label: data-read
 
-intake <- read_csv("data/raw-minimal-pseudo/survey_intake_raw.csv.gz")
-diary <- read_csv("data/raw-minimal-pseudo/survey_diary_raw.csv.gz")
-panel <- read_csv("data/raw-minimal-pseudo/survey_panel_raw.csv.gz")
-
-nintendo <- read_csv("data/raw-minimal-pseudo/telemetry_nintendo_raw.csv.gz")
-steam <- read_csv("data/raw-minimal-pseudo/telemetry_steam_raw.csv.gz")
-xbox <- read_csv("data/raw-minimal-pseudo/telemetry_xbox_raw.csv.gz")
-
-dat_cog <- read_csv("data/raw-minimal-pseudo/cognitive_tasks_raw.csv.gz")
+intake <- read_csv("data/clean/intake.csv.gz")
+diary <- read_csv("data/clean/diary.csv.gz")
+panel <- read_csv("data/clean/panel.csv.gz")
+nintendo <- read_csv("data/clean/nintendo.csv.gz")
+steam <- read_csv("data/clean/steam.csv.gz")
+xbox <- read_csv("data/clean/xbox.csv.gz")
+simon <- read_csv("data/clean/simon.csv.gz")
+ethnicity_us <- read_csv("data/clean/ethnicity_us.csv.gz")
+ethnicity_uk <- read_csv("data/clean/ethnicity_uk.csv.gz")
 ```
 
 ```{r}
-#| label: custom-funcs
+#| label: summary-stats
 
-source("R/helpers.R")
+n_participants <- print_num(length(unique(panel$pid)))
+n_daily <- print_num(nrow(diary))
+n_biweekly <- print_num(nrow(panel))
+n_sessions <- print_num(nrow(nintendo) + nrow(xbox) + nrow(steam))
+n_hours <- print_num(
+  (sum(nintendo$duration, na.rm = TRUE) +
+    sum(xbox$duration, na.rm = TRUE) +
+    sum(steam$minutes, na.rm = TRUE)) /
+    60
+)
 
-```
-
-```{r}
-#| label: preprocess-steam
-
-# non- and idle games lists are in helpers.R
-
-# Arrange data to calculate differences correctly
-steam_clean <- steam |>
-  filter(!title_id %in% idle_games & !title_id %in% non_games) |>
-  mutate(
-    steam_id = as.character(steam_id),
-    pid = as.character(pid)
-  ) |>
-  arrange(pid, title_id, timestamp) |>
-  group_by(pid, steam_id) |>
-  mutate(
-    # Calculate time difference between consecutive polls for the same user/game
-    time_diff_hours = as.numeric(difftime(
-      timestamp,
-      lag(timestamp),
-      units = "hours"
-    )),
-    # Calculate playtime difference
-    playtime_diff = playtime_forever - lag(playtime_forever)
-  ) |>
-  ungroup() |>
-  # Filter out invalid calculations:
-  # - First entry for each user/game (lag is NA)
-  # - Negative playtime difference (data anomaly or reset?)
-  # - Large time gaps between polls (e.g., > 2 hours for hourly polling, indicates missed polls or stopped tracking)
-  filter(
-    !is.na(playtime_diff),
-    playtime_diff >= 0,
-    !is.na(time_diff_hours),
-    time_diff_hours > 0,
-    time_diff_hours < 2 # Assuming roughly hourly polls
-  ) |>
-  # If playtime_diff is large, it might span multiple hours.
-  # This calculation assumes playtime is evenly distributed over the polling interval.
-  # A more complex approach might be needed for precise hourly allocation if intervals vary widely.
-  # For simplicity here, we assign the entire playtime_diff to the hour the poll *ended*.
-  mutate(
-    minutes = playtime_diff,
-    date = as.Date(timestamp),
-    hour = hour(timestamp),
-    datetime_hour_start = ymd_hms(
-      paste0(date, " ", sprintf("%02d", hour), ":00:00"),
-      tz = "UTC"
-    )
-  ) |>
-  # filter out rows where 3+ games are being played simultaneously
-  group_by(pid, datetime_hour_start) |>
-  mutate(concurrent_titles = n_distinct(steam_id[minutes > 0])) |>
-  ungroup() |>
-  mutate(minutes = ifelse(concurrent_titles >= 3, 0, minutes)) |>
-  group_by(pid, steam_id) |>
-  # Calculate difference from previous hour and identify new sessions
-  mutate(
-    hour_diff = as.numeric(difftime(
-      datetime_hour_start,
-      lag(datetime_hour_start),
-      units = "hours"
-    )),
-    is_new_session = ifelse(is.na(hour_diff) | hour_diff > 1, 1, 0),
-    session_group_id = cumsum(is_new_session),
-    session_start = datetime_hour_start,
-    session_end = datetime_hour_start + hours(1) # Session ends at the end of the last hour block played
-  ) |>
-  filter(minutes > 0 & minutes < 120) |>
-  ungroup()
-
-```
-
-```{r}
-#| label: preprocess-xbox
-
-# Clean Xbox data and keep only active gaming sessions
-# In particular, canonicalize overlapping Xbox sessions per pid:
-# - at most one title at any instant
-# - handoff tolerance 'tol_sec' (short overlaps => later-starting title wins)
-# - ≥3 concurrent titles => drop that slice
-
-xbox_clean <- xbox |>
-  filter(title_placement == "Full") |>
-  filter(genres != "Video") |>
-  filter(
-    !is.na(session_start),
-    !is.na(session_end),
-    session_end > session_start
-  ) |>
-  filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |> # something weird with this title, almost every player has played it and it accounts for 4x the playtime of the next-highest game - and it's unrated. I suspect it's the home screen or something.
-  filter(duration <= 600) |>
-  arrange(pid, session_start, session_end) |>
-  canonicalize_xbox_sessions(tol_sec = 60)
-
-```
-
-```{r}
-#| label: preprocess-nintendo
-
-tol <- dseconds(60)
-
-nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
-  filter(
-    !is.na(session_start),
-    !is.na(session_end),
-    session_end > session_start,
-    session_start < time_of_pull
-  ) |>
-  arrange(pid, title_id, session_start, session_end) |>
-  group_by(pid, title_id) %>%
-  mutate(
-    start_num = as.numeric(session_start),
-    end_num = as.numeric(session_end),
-    prev_max_end = lag(cummax(end_num), default = -Inf),
-    new_cluster = start_num > (prev_max_end + as.numeric(tol)),
-    cluster = cumsum(new_cluster),
-    dur_sec = end_num - start_num
-  ) %>%
-  group_by(pid, title_id, cluster) |>
-  slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |>
-  ungroup() %>%
-  mutate(duration = dur_sec / 60) %>%
-  select(pid, title_id, session_start, session_end, duration) |>
-  filter(duration <= 600) |>
-  as_tibble()
+n_platforms <- table(
+  str_count(
+    intake$linked_platforms[!is.na(intake$linked_platforms)],
+    ","
+  ) +
+    1
+)
 
 third_party_prop <- paste0(
   print_num((1 - median(intake$nintendo_first_party_prop, na.rm = T)) * 100, 1),
   "%"
 )
-
-```
-
-```{r}
-#| label: preprocess-simon
-
-# Only include non-pilot-study participants who qualified at intake
-dat_cog <- dat_cog |>
-  filter(
-    pid %in%
-      unique(intake$pid[intake$qualified & intake$cohort != "Platform Pilot"])
-  )
-
-# Take relevant variables and observations only
-# `score_final` is automatically added to all rows so distinct works here
-dat_cog <- dat_cog |>
-  filter(practice == 0, task == "simon") |>
-  add_count(pid, wave, name = "n_trials") |>
-  distinct(
-    pid,
-    wave,
-    datetime,
-    device_type,
-    n_trials,
-    score_final,
-    meanrt_final
-  )
-
-dat_cog <- dat_cog |>
-  mutate(wave = factor(wave)) |>
-  arrange(wave, pid)
 ```
 
 ```{r}
@@ -353,14 +209,14 @@ tz_map <- intake |>
 # aggregate data at each level of granularity (session, hourly, daily)
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
 sessions_all <- bind_rows(
-  xbox_clean %>%
+  xbox %>%
     transmute(
       pid = as.character(pid),
       platform = "Xbox",
       start_utc = session_start,
       end_utc = session_end
     ),
-  nintendo_clean %>%
+  nintendo %>%
     transmute(
       pid = as.character(pid),
       platform = "Nintendo",
@@ -407,7 +263,7 @@ hourly_from_sessions <- sessions_all %>%
   group_by(pid, platform, hour_start_local, hour_start_utc) %>%
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
-hourly_from_steam <- steam_clean |>
+hourly_from_steam <- steam |>
   select(pid, datetime_hour_start, minutes) |>
   mutate(pid = as.character(pid)) |>
   left_join(tz_map, by = "pid") |>
@@ -449,138 +305,12 @@ telemetry_spans <- hourly_all |>
     week = floor_date(telemetry_end, "week"),
     .groups = "drop"
   )
-
-
 ```
 
-```{r}
-#| label: summary-stats
-
-n_participants <- print_num(length(unique(panel$pid)))
-n_daily <- print_num(nrow(diary))
-n_biweekly <- print_num(nrow(panel))
-n_sessions <- print_num(nrow(nintendo) + nrow(xbox) + nrow(steam_clean))
-n_hours <- print_num(
-  (sum(nintendo$duration, na.rm = TRUE) +
-    sum(xbox$duration, na.rm = TRUE) +
-    sum(steam_clean$minutes, na.rm = TRUE)) /
-    60
-)
-
-n_platforms <- table(
-  stringr::str_count(
-    intake$linked_platforms[!is.na(intake$linked_platforms)],
-    ","
-  ) +
-    1
-)
-
-```
-
-```{r}
-#| label: load-US-census-data
-
-# import ethnicity data using the census API and tidycensus
-ethnicity_vars <- load_variables(2020, "pl", cache = TRUE) |>
-  filter(name %in% paste0("P1_00", 3:9, "N"))
-
-ethnicity_us <- get_decennial(
-  geography = "us",
-  variables = ethnicity_vars$name,
-  year = 2020,
-) |>
-  left_join(ethnicity_vars, by = c("variable" = "name")) %>%
-  mutate(
-    label = map_chr(label, ~ str_trim(tail(str_split(.x, "!!")[[1]], 1)))
-  ) |>
-  select(label, gen_pop = value) |>
-  mutate(
-    label = case_match(
-      label,
-      c("White alone") ~ "White",
-      c("Black or African American alone", "Black or African American") ~
-        "Black",
-      c("Asian alone") ~ "Asian",
-      c("American Indian and Alaska Native alone") ~
-        "American Indian and Alaska Native",
-      c("Native Hawaiian and Other Pacific Islander alone") ~
-        "Native Hawaiian and Other Pacific Islander",
-      c("Some Other Race alone") ~ "Other",
-      c("Population of two or more races:") ~ "Two or More Races",
-      .default = "Other"
-    )
-  ) |>
-  mutate(
-    gen_prop = gen_pop / sum(gen_pop, na.rm = TRUE),
-    moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
-    country = "US"
-  )
-
-```
-
-```{r}
-#| label: load-UK-census-data
-
-age_uk <- read_csv("data/census/TS009-2021-2-filtered-2025-03-05T23-18-32Z.csv") |>
-  pivot_wider(
-    id_cols = c(`Age (91 categories) Code`, `Age (91 categories)`),
-    names_from = `Sex (2 categories)`,
-    values_from = Observation
-  ) %>%
-  mutate(total = Female + Male) %>%
-  select(age = `Age (91 categories)`, female = Female, male = Male, total)
-
-# https://www.ons.gov.uk/datasets/TS021/editions/2021/versions/1/filter-outputs/f1addb18-dcb8-4adb-98a8-abeb9108c330#get-data
-ethnicity_uk <- read_csv("data/census/TS021-2021-1-filtered-2025-03-05T23-25-05Z.csv") |>
-  # Optionally drop the row for "Does not apply"
-  filter(`Ethnic group (20 categories)` != "Does not apply") %>%
-  mutate(
-    label = case_when(
-      str_detect(`Ethnic group (20 categories)`, "^Asian") ~ "Asian",
-      str_detect(`Ethnic group (20 categories)`, "^Black") ~ "Black",
-      str_detect(`Ethnic group (20 categories)`, "^Mixed") ~
-        "Two or More Races",
-      str_detect(`Ethnic group (20 categories)`, "^White") ~ "White",
-      str_detect(`Ethnic group (20 categories)`, "^Other ethnic group") ~
-        "Other",
-      TRUE ~ "Other" # fallback if nothing matches
-    )
-  ) |>
-  group_by(label) |>
-  summarize(gen_pop = sum(Observation, na.rm = TRUE)) |>
-  ungroup() |>
-  mutate(
-    gen_prop = gen_pop / sum(gen_pop),
-    moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
-    country = "UK"
-  )
-
-education_uk <- read_csv("data/census/TS067-2021-3-filtered-2025-03-05T23-37-22Z.csv") |>
-  select(4:5) |>
-  rename_with(~ c("level", "gen_pop")) |>
-  filter(level != "Does not apply") |>
-  mutate(
-    level = case_when(
-      str_detect(level, "No qualifications") ~ "No formal qualifications",
-      str_detect(level, "Level 1") ~
-        "One to four GCSE passes (grade A* to C or grade 4 and above) and any other GCSEs at other grades, or equivalent qualifications",
-      str_detect(level, "Level 2") ~
-        "Five or more GCSE passes (grade A* to C or grade 4 and above) or equivalent qualifications",
-      str_detect(level, "Level 3") ~
-        "Two or more A Levels or equivalent qualifications",
-      str_detect(level, "Level 4") ~
-        "Higher National Certificate, Higher National Diploma, Bachelor's degree, or post-graduate qualifications",
-      str_detect(level, "Other:") ~ "Other qualifications",
-      str_detect(level, "Apprenticeship") ~ "Apprenticeships",
-      TRUE ~ "Other qualifications"
-    ),
-    level = factor(level, levels = unique(level)),
-    moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
-    gen_prop = gen_pop / sum(gen_pop),
-    country = "UK"
-  )
-
-```
+---
+abstract: |
+  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected over 12 weeks that included fourteen daily assessments, six biweekly surveys, three biweekly cognitive tests, and play telemetry for X months. The data include X hours of video game play across X titles, X responses to X survey instruments, and X attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
+---
 
 # Introduction
 
@@ -673,14 +403,14 @@ overview <- bind_rows(
     "Biweekly surveys",
     avg_days = nrow(panel) / n_distinct(panel$pid)
   ),
-  summ_basic(steam_clean, pid, "Steam", avg_days = avg_days_platform("Steam")),
+  summ_basic(steam, pid, "Steam", avg_days = avg_days_platform("Steam")),
   summ_basic(
-    nintendo_clean,
+    nintendo,
     pid,
     "Nintendo",
     avg_days = avg_days_platform("Nintendo")
   ),
-  summ_basic(xbox_clean, pid, "Xbox", avg_days = avg_days_platform("Xbox"))
+  summ_basic(xbox, pid, "Xbox", avg_days = avg_days_platform("Xbox"))
 ) |>
   mutate(
     `Unique participants` = number(
@@ -718,9 +448,9 @@ plot_data <- list(
   events_per_participant(intake, pid, cap = 1),
   events_per_participant(diary, pid, cap = 30),
   events_per_participant(panel, pid, cap = 6),
-  events_per_participant(steam_clean, pid, cap = Inf),
-  events_per_participant(nintendo_clean, pid, cap = Inf),
-  events_per_participant(xbox_clean, pid, cap = Inf)
+  events_per_participant(steam, pid, cap = Inf),
+  events_per_participant(nintendo, pid, cap = Inf),
+  events_per_participant(xbox, pid, cap = Inf)
 )
 
 # ---- winsorize globally, then log-scale if requested ----
@@ -1538,23 +1268,23 @@ Finally, @fig-case-study descriptively visualizes three participants' (in the 25
 ```{r}
 #| label: simon-calculate-summary
 
-dat_cog_n <- dat_cog |>
+simon_n <- simon |>
   reframe(n = n(), .by = wave)
-dat_cog_sdl <- dat_cog |>
+simon_sdl <- simon |>
   reframe(
     mean_sdl(score_final, mult = 1),
     .by = c(wave, device_type)
   )
 ```
 
-Overall, `{r} knitr::combine_words(dat_cog_n$n)` participants completed the Simon task at panel waves 1, 3, and 5. The average performances were approximately 10 points lower than in the in-person study of @burgoyneNatureMeasurementAttention2023 (Figure 16). Participants on mobile devices generally attained lower scores than those not on mobile devices (@fig-simon, rows), but performance was generally stable across the three waves (@fig-simon, columns).
+Overall, `{r} knitr::combine_words(simon_n$n)` participants completed the Simon task at panel waves 1, 3, and 5. The average performances were approximately 10 points lower than in the in-person study of @burgoyneNatureMeasurementAttention2023 (Figure 16). Participants on mobile devices generally attained lower scores than those not on mobile devices (@fig-simon, rows), but performance was generally stable across the three waves (@fig-simon, columns).
 
 ```{r}
 #| label: fig-simon
 #| fig-cap: Histograms of participants' Simon Squared task scores across study waves. Points and bars indicate means ±1 standard deviation.
 #| fig-asp: 0.3
 
-dat_cog |>
+simon |>
   ggplot() +
   aes(score_final) +
   scale_y_continuous(
@@ -1564,7 +1294,7 @@ dat_cog |>
   scale_x_continuous("Final score") +
   geom_histogram(fill = "grey70") +
   geom_pointrange(
-    data = dat_cog_sdl,
+    data = simon_sdl,
     aes(x = y, xmin = ymin, xmax = ymax, y = 0),
     linewidth = 3,
     fatten = 14,
