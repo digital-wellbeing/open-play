@@ -19,7 +19,6 @@ raw/
 /3_sleep.rmarkdown
 /3_sleep_files
 /3_sleep_cache/*
-renv/
 deprecated/
 
 **/*.quarto_ipynb

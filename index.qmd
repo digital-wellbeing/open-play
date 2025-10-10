@@ -121,43 +121,26 @@ format:
 
 ```{r}
 #| label: libraries
+#| cache: false
 
-if (!require("pacman")) {
-  install.packages("pacman")
-}
-if (!require("devtools")) {
-  install.packages("devtools")
-}
-library(pacman)
-
-if (!require("ggsankey")) {
-  devtools::install_github("davidsjoberg/ggsankey")
-}
-
-if (!require("tinytable")) {
-  devtools::install_github("vincentarelbundock/tinytable")
-}
-
-p_load(
-  tidyverse,
-  lubridate,
-  data.table,
-  dtplyr,
-  jsonlite,
-  qualtRics,
-  sjlabelled,
-  hms,
-  openxlsx,
-  scales,
-  ggsankey,
-  tidycensus,
-  here,
-  ggrepel,
-  ggstream,
-  patchwork,
-  tinytable,
-  sparkline
-)
+library(tidyverse)
+library(lubridate)
+library(data.table)
+library(dtplyr)
+library(jsonlite)
+library(qualtRics)
+library(sjlabelled)
+library(hms)
+library(openxlsx)
+library(scales)
+library(ggsankey)
+library(tidycensus)
+library(here)
+library(ggrepel)
+library(ggstream)
+library(patchwork)
+library(tinytable)
+library(sparkline)
 
 here::i_am("index.qmd")
 
