@@ -320,29 +320,21 @@ abstract: |
 
 # Introduction
 
-Scientists widely agree that digital trace data---behavioral logs automatically collected by online platforms---are necessary to understand the nuances of technology use [@Freelon2014Interpretation; @GriffioenEtAl2020improveda], and thereby its effects on varied outcomes such as health, wellbeing, academic achievement, and cognition [@BurgessEtAl2024Potential]. Users struggle to accurately self-report even high-level measures of use (e.g., total screentime) [@ParryEtAl2021systematic], and these high-level metrics are generally poorly predictive of outcomes [@Orben2019Teens]. To systematically understand the effects of technology, we therefore need data that captures nuanced factors we now know to be more impactful. Beyond screentime, the next layer of granularity includes the frequency, duration, and time of day of each session; the specific content engaged; and the trajectory of user behavior over time. Digital trace data is well-suited to deliver these elements.
+Digital trace data---behavioral logs automatically collected by digital devices and online platforms---are necessary to better understand technology use and its psychological and health effects [@BurgessEtAl2024Potential; @Freelon2014Interpretation; @GriffioenEtAl2020improveda]. Self-reports of technology use do not accurately reflect objective technology use [@ParryEtAl2021systematic; @sewallRoleDepressionDiscrepancy2021], and are unsuitable for examining many phenomena of interest, such as seasonal patterns over long temporal horizons; high-frequency behavioral analysis at the level of hours, minutes, or even seconds; historical content analysis; and others due to limited accuracy and temporal resolution. Moreover, when technology use's relations to psychological survey instruments are of interest, digital trace data removes the possibility of  common methods bias.
 
-As one of the world's foremost leisure activities among youth and adults alike [@Ofcom2023Online; @EntertainmentSoftwareAssociation20242024], video games are a key medium for which digital trace data is needed. Digital trace data has been widely implemented in many studies of social media and wellbeing, but in studies of video games has been much more limited. Trace data in video games primarily falls under the field of game analytics or game data science, but (1) the majority of these studies involve the use of proprietary data that is not publicly shared, and (2) the focus of this field tends to be more on player behavior metrics with clear industry value .
+To combat these issues, digital trace data is increasingly used in studies of smartphone and social media use [e.g. @sewallDoesObjectivelyMeasured2022], but less so in studies of video game play---one of the world's foremost leisure activities [@Ofcom2023Online; @EntertainmentSoftwareAssociation20242024]. Trace data in video games primarily falls under the field of game analytics or data science, but (1) the majority of these studies involve the use of proprietary data that is not publicly shared, and (2) the focus of this field tends to be more on player behavior metrics with clear industry value rather than academic inquiry for the common good.
 
-i In part, this is a function of availability: video game consoles are restrictive and typically do not allow third party tracking software; most video game platforms do not have a 1-click "download my data" option offered by several social media platforms (e.g., TikTok, Instagram); and there are thousands of individual games whose data may be relevant for a given study or population.
+Where trace data has been used in video games studies, it has largely been limited to a few games [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or single platform [@BallouEtAl2023Gaming; @BallouEtAl2025Perceived]. However, players commonly play many games on multiple platforms. Moreover, the scope of psychological attributes in these studies tends to be limited to e.g. a small set of well-being outcomes.
 
-Where trace data has been used in video games studies, it has largely been limited to a single game [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or platform [@BallouEtAl2023Gaming; @BallouEtAl2025Perceived] per user. Previous studies that secured video game telemetry was widely limited to a single game or a single gaming platform. However, as the data we present here shows, players commonly use a wide range of games and platforms. Capturing just one game or one gaming platform among potentially many that the person may be engaging with---and affected by. For example, a player may
+## Current dataset
 
-Digital trace data on its own is limited however; without additional information from users about how their lives are going, we will struggle to understand the causal network. In the field of game analytics, a number of studies have digital trace data to explore social networks, We therefore see particular value in longitudinal studies that combine comprehensive digital trace data with repeated surveys, in both experimental and observational contexts. Ideally, surveys should be frequent enough to capture short-term effects (e.g., playing a game to recover from a stressful workday) and longer-term development (e.g., a pattern of increasing play over time displacing sleep).
+Here, we present a longitudinal dataset of digital trace data across multiple gaming platforms consisting of `r n_participants` participants, `r n_daily` daily surveys, `r n_biweekly` surveys, and a total of `r n_hours` of gameplay distributed across `r n_sessions`. Digital trace data was sourced for five distinct platforms—Xbox, Nintendo, Steam, iOS, and Android—through distinct piplines detailed below. The data collection methods were preregistered as part of a Stage 1 registered report (<https://osf.io/pb5nu>).
 
-# Overview
-
-This paper addresses this need for longitudinal digital trace data across multiple gaming platforms. Here, we present a dataset consisting of `r n_participants` participants, `r n_daily` daily surveys, `r n_biweekly` surveys, and a total of `r n_hours` of gameplay distributed across `r n_sessions`.
-
-Digital trace data was sourced for five distinct platforms—Xbox, Nintendo, Steam, iOS, and Android—through distinct piplines detailed below.
-
-The dataset is openly available at \[LINK\] under a CC0 license for unrestricted reuse.
-
-highlight that data collection methods are preregistered
+The dataset is openly available under a {{< meta data-license >}} license at {{< meta data-url >}} for unrestricted reuse. @tbl-overview shows a high-level overview of the dataset.
 
 ```{r}
 #| label: tbl-overview
-#| tbl-cap: "Overview of data sources"
+#| tbl-cap: "Overview of the dataset and sources."
 
 # ===== tuning knobs =====
 CAP_PROB <- 0.99 # winsorize at global 99th percentile (after per-dataset caps)
@@ -385,12 +377,12 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
   by_pid <- df |> count({{ pid }}, name = "events")
   tibble(
     `Data type` = label,
-    `Unique participants` = n_distinct(pull(df, {{ pid }})),
-    `Total events` = nrow(df),
-    `Total hours` = total_hours(df),
-    `Avg events / participant` = mean(by_pid$events, na.rm = TRUE),
+    Participants = n_distinct(pull(df, {{ pid }})),
+    Events = nrow(df),
+    Hours = total_hours(df),
+    `Avg events / participants` = mean(by_pid$events, na.rm = TRUE),
     `Avg active days` = avg_days,
-    `Sparklines` = "" # plot_tt() will draw mini-plots here
+    Sparklines = "" # plot_tt() will draw mini-plots here
   )
 }
 
@@ -419,25 +411,25 @@ overview <- bind_rows(
   summ_basic(xbox, pid, "Xbox", avg_days = avg_days_platform("Xbox"))
 ) |>
   mutate(
-    `Unique participants` = number(
-      `Unique participants`,
+    Participants = number(
+      Participants,
       accuracy = 1,
       big.mark = ","
     ),
-    `Total events` = number(
-      `Total events`,
+    Events = number(
+      Events,
       accuracy = 1,
       big.mark = ",",
       scale_cut = cut_long_scale()
     ),
-    `Total hours` = number(
-      `Total hours`,
+    Hours = number(
+      Hours,
       accuracy = 1,
       big.mark = ",",
       scale_cut = cut_long_scale()
     ),
-    `Avg events / participant` = number(
-      `Avg events / participant`,
+    `Avg events / participants` = number(
+      `Avg events / participants`,
       accuracy = 0.1,
       big.mark = ",",
       scale_cut = cut_long_scale()
@@ -494,26 +486,30 @@ spark_density <- function(d, xmax_t, ...) {
 }
 
 # If you want console preview reliability:
-options(tinytable_inline_images = TRUE)
+# options(tinytable_inline_images = TRUE)
 
 tt(
-  overview,
+  overview |> select(-Sparklines),
   notes = paste0(
-    "Sparklines: per-participant events. Per-dataset caps applied (see code). ",
+    # "Sparklines: per-participant events. Per-dataset caps applied (see code). ",
     "Winsorized at ",
     round(CAP_PROB * 100),
-    "th percentile",
-    if (USE_LOG) "; x-axis uses log1p scale." else "."
+    "th percentile"
+    # if (USE_LOG) "; x-axis uses log1p scale." else "."
   )
 ) |>
-  plot_tt(
-    j = which(names(overview) == "Sparklines"),
-    fun = spark_density,
-    data = plot_data_w,
-    xmax_t = xmax_t,
-    width_plot = THUMB_W,
-    height_plot = THUMB_H
-  )
+  style_tt(fontsize = 0.8) |>
+  format_tt(replace = "")
+
+# Removed until makes sense
+# plot_tt(
+#   j = which(names(overview) == "Sparklines"),
+#   fun = spark_density,
+#   data = plot_data_w,
+#   xmax_t = xmax_t,
+#   width_plot = THUMB_W,
+#   height_plot = THUMB_H
+# )
 
 ```
 

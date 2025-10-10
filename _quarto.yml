@@ -10,6 +10,8 @@ freeze: auto
 
 repo-url: https://github.com/digital-wellbeing/platform-study-rr
 site-url: https://digital-wellbeing.github.io/platform-study-rr/
+data-url: https://example.com
+data-license: CC0
 
 publish:
   gh-pages:
