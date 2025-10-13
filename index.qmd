@@ -119,6 +119,8 @@ format:
     wordcount: true
     theme: jou
     citeproc: true
+    mainfont: "Liberation Serif"
+    sansfont: "Liberation Sans"
     include-before-body:
       - text: "#show <refs>: set par(hanging-indent: 1.4em)"
   docx: default
