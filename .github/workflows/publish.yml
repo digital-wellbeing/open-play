@@ -1,60 +1,25 @@
-name: Quarto Publish (freeze-only)
-
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: main
+
+name: Quarto Publish
 
 jobs:
-  # 1) PR/manual check: verify the site assembles using frozen results only
-  check:
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Quarto
-        uses: quarto-dev/quarto-actions/setup@v2
-        with:
-          version: "latest"
-
-      - name: Render (NO EXECUTION; must use _freeze/)
-        uses: quarto-dev/quarto-actions/render@v2
-        with:
-          args: |
-            --no-execute
-
-  # 2) Publish from main: assemble from _freeze/ and push to gh-pages
-  deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  build-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
-        with:
-          version: "latest"
 
-      # Render first (NO EXECUTION) so publish doesn't try to re-render
-      - name: Render (NO EXECUTION; must use _freeze/)
-        uses: quarto-dev/quarto-actions/render@v2
-        with:
-          args: |
-            --no-execute
-
-      - name: Publish to GitHub Pages (no render)
+      - name: Render and Publish
         uses: quarto-dev/quarto-actions/publish@v2
         with:
           target: gh-pages
-          render: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
