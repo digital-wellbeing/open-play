@@ -9,7 +9,6 @@ data/synthetic/data-template/
 *_cache/
 *_files/
 
-_freeze/
 outputs/
 /.quarto/
 .Renviron

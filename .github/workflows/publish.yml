@@ -1,4 +1,4 @@
-name: Quarto Publish
+name: Quarto Publish (freeze-only)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
     branches: [ main ]
 
 jobs:
-  # 1) Check that the project renders (PRs + manual runs)
+  # 1) PR/manual check: verify the site assembles using frozen results only
   check:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -16,35 +16,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-
-      # Install the R packages your docs need
-      - name: Install R dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          # If you have a DESCRIPTION, this installs Imports/Suggests.
-          # Otherwise, list extras you need explicitly:
-          # e.g. extra-packages: |
-          #   any::knitr
-          #   any::rmarkdown
-          #   any::tidyverse
-          extra-packages: any::knitr, any::rmarkdown
-
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
         with:
-          # turn this on if you render PDFs in CI
-          # tinytex: true
-          # optionally: version: "latest"
+          version: "latest"
 
-      - name: Render site (respects freeze)
+      - name: Render (NO EXECUTION; must use _freeze/)
         uses: quarto-dev/quarto-actions/render@v2
-        # You can scope output types:
-        # with:
-        #   to: html
+        with:
+          args: |
+            --no-execute
 
-  # 2) Render + publish from main
+  # 2) Publish from main: assemble from _freeze/ and push to gh-pages
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -54,26 +37,24 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # safer for publishing history
-
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-
-      - name: Install R dependencies
-        uses: r-lib/actions/setup-r-dependencies@v2
-        with:
-          extra-packages: any::knitr, any::rmarkdown
+          fetch-depth: 0
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
         with:
-          # enable if you publish PDF outputs
-          # tinytex: true
-          # version: "latest"
+          version: "latest"
 
-      - name: Render and Publish
+      # Render first (NO EXECUTION) so publish doesn't try to re-render
+      - name: Render (NO EXECUTION; must use _freeze/)
+        uses: quarto-dev/quarto-actions/render@v2
+        with:
+          args: |
+            --no-execute
+
+      - name: Publish to GitHub Pages (no render)
         uses: quarto-dev/quarto-actions/publish@v2
         with:
           target: gh-pages
+          render: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
