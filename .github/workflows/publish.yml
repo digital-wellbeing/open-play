@@ -8,8 +8,9 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-    if: github.event_name == 'pull_request'
+  # 1) Check that the project renders (PRs + manual runs)
+  check:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -18,15 +19,32 @@ jobs:
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
 
-      - name: Install rmarkdown
-        run: Rscript -e 'install.packages("rmarkdown", repos="https://cloud.r-project.org")'
+      # Install the R packages your docs need
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # If you have a DESCRIPTION, this installs Imports/Suggests.
+          # Otherwise, list extras you need explicitly:
+          # e.g. extra-packages: |
+          #   any::knitr
+          #   any::rmarkdown
+          #   any::tidyverse
+          extra-packages: any::knitr, any::rmarkdown
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          # turn this on if you render PDFs in CI
+          # tinytex: true
+          # optionally: version: "latest"
 
-      - name: Render site
+      - name: Render site (respects freeze)
         uses: quarto-dev/quarto-actions/render@v2
+        # You can scope output types:
+        # with:
+        #   to: html
 
+  # 2) Render + publish from main
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -35,9 +53,23 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # safer for publishing history
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Install R dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: any::knitr, any::rmarkdown
 
       - name: Set up Quarto
         uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          # enable if you publish PDF outputs
+          # tinytex: true
+          # version: "latest"
 
       - name: Render and Publish
         uses: quarto-dev/quarto-actions/publish@v2
