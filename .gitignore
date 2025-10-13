@@ -19,7 +19,8 @@ raw/
 /3_sleep.rmarkdown
 /3_sleep_files
 /3_sleep_cache/*
-renv/
 deprecated/
+tinytable_assets/
+docs/
 
 **/*.quarto_ipynb
