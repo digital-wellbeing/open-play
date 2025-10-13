@@ -1,4 +1,4 @@
-name: Quarto Publish
+name: Quarto Publish (docs on main, freeze-only)
 
 on:
   workflow_dispatch:
@@ -8,6 +8,7 @@ on:
     branches: [ main ]
 
 jobs:
+  # PR check: assemble from _freeze/ only
   build:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -22,7 +23,8 @@ jobs:
         with:
           args: |
             --no-execute
-  # Publish from main: assemble from _freeze/ and push to gh-pages
+
+  # Deploy: write to docs/ on main and commit
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -36,15 +38,28 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: "1.8.25"
-      - name: Render (NO EXECUTION; must use _freeze/)
+
+      # Optional: clear old docs to avoid stale files
+      - name: Clean docs/
+        run: |
+          rm -rf docs
+          mkdir -p docs
+
+      - name: Render to docs/ (NO EXECUTION)
         uses: quarto-dev/quarto-actions/render@v2
         with:
           args: |
             --no-execute
-      - name: Publish to GitHub Pages (no render)
-        uses: quarto-dev/quarto-actions/publish@v2
-        with:
-          target: gh-pages
-          render: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit docs/ if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs
+          if git diff --cached --quiet; then
+            echo "No changes to docs/"
+          else
+            git commit -m "Update site (rendered to docs/) [skip ci]"
+            git push
+          fi
