@@ -13,33 +13,31 @@ jobs:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Set up Quarto
+      - uses: actions/checkout@v4
+      - name: Set up Quarto (pinned stable)
         uses: quarto-dev/quarto-actions/setup@v2
         with:
-          version: "latest"
+          version: "1.8.25"
       - name: Render (NO EXECUTION; must use _freeze/)
         uses: quarto-dev/quarto-actions/render@v2
         with:
           args: |
             --no-execute
 
-  # Publish from main only (also freeze-only)
+  # Publish from main: assemble from _freeze/ and push to gh-pages
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Quarto
+      - name: Set up Quarto (pinned stable)
         uses: quarto-dev/quarto-actions/setup@v2
         with:
-          version: "latest"
+          version: "1.8.25"
       - name: Render (NO EXECUTION; must use _freeze/)
         uses: quarto-dev/quarto-actions/render@v2
         with:
