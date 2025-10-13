@@ -1,19 +1,16 @@
 project:
   type: website
   execute-dir: project
-  output-dir: docs
+  # Use Actions artifact, not docs/:
+  output-dir: _site
   render:
     - data-process.qmd
     - index.qmd
 
-freeze: auto
+execute:
+  freeze: auto
 
 repo-url: https://github.com/digital-wellbeing/platform-study-rr
 site-url: https://digital-wellbeing.github.io/platform-study-rr/
 data-url: https://example.com
 data-license: CC0
-
-publish:
-  gh-pages:
-    branch: main
-    folder: docs
