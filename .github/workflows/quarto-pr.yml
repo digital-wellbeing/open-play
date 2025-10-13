@@ -1,0 +1,21 @@
+name: Quarto PR Check
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  buildExpected:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Quarto (pinned)
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.8.25"
+      - name: Render (NO EXECUTION; must use _freeze/)
+        uses: quarto-dev/quarto-actions/render@v2
+        with:
+          args: |
+            --no-execute
