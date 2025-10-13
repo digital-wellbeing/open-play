@@ -8,8 +8,7 @@ on:
     branches: [ main ]
 
 jobs:
-  # PR + manual check: assemble from _freeze/ only
-  buildExpected:
+  build:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -23,7 +22,6 @@ jobs:
         with:
           args: |
             --no-execute
-
   # Publish from main: assemble from _freeze/ and push to gh-pages
   deploy:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
