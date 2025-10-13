@@ -1,0 +1,50 @@
+name: Quarto Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Quarto (pinned stable)
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.8.25"
+      - name: Render (NO EXECUTION; must use _freeze/)
+        uses: quarto-dev/quarto-actions/render@v2
+        with:
+          args: |
+            --no-execute
+  # Publish from main: assemble from _freeze/ and push to gh-pages
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Quarto (pinned stable)
+        uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: "1.8.25"
+      - name: Render (NO EXECUTION; must use _freeze/)
+        uses: quarto-dev/quarto-actions/render@v2
+        with:
+          args: |
+            --no-execute
+      - name: Publish to GitHub Pages (no render)
+        uses: quarto-dev/quarto-actions/publish@v2
+        with:
+          target: gh-pages
+          render: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
