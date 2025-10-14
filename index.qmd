@@ -215,27 +215,27 @@ tz_map <- intake |>
 # aggregate data at each level of granularity (session, hourly, daily)
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
 sessions_all <- bind_rows(
-  xbox %>%
+  xbox |> 
     transmute(
       pid = as.character(pid),
       platform = "Xbox",
       start_utc = session_start,
       end_utc = session_end
     ),
-  nintendo %>%
+  nintendo |> 
     transmute(
       pid = as.character(pid),
       platform = "Nintendo",
       start_utc = session_start,
       end_utc = session_end
     )
-) %>%
-  left_join(tz_map, by = "pid") %>%
+) |> 
+  left_join(tz_map, by = "pid") |> 
   mutate(
     start_local = start_utc + off,
     end_local = end_utc + off,
     duration_min = as.numeric(difftime(end_utc, start_utc, units = "mins"))
-  ) %>%
+  ) |> 
   filter(
     !is.na(start_utc),
     !is.na(end_utc),
@@ -245,13 +245,13 @@ sessions_all <- bind_rows(
 
 # --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
 # expand sessions into local-hour bins, compute overlap minutes, and add UTC hour
-hourly_from_sessions <- sessions_all %>%
+hourly_from_sessions <- sessions_all |> 
   filter(!is.na(off)) |>
   mutate(
     h0_local = floor_date(start_local, "hour"),
     h1_local = floor_date(end_local - seconds(1), "hour"),
     n_hours = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
-  ) %>%
+  ) |> 
   tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
   mutate(
     hour_start_local = h0_local + hours(k - 1),
@@ -265,8 +265,8 @@ hourly_from_sessions <- sessions_all %>%
     ),
     hour_start_utc = hour_start_local - off
   ) |>
-  select(pid, platform, hour_start_local, hour_start_utc, minutes) %>%
-  group_by(pid, platform, hour_start_local, hour_start_utc) %>%
+  select(pid, platform, hour_start_local, hour_start_utc, minutes) |> 
+  group_by(pid, platform, hour_start_local, hour_start_utc) |> 
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
 hourly_from_steam <- steam |>
@@ -279,8 +279,8 @@ hourly_from_steam <- steam |>
     hour_start_utc = datetime_hour_start,
     hour_start_local = datetime_hour_start + off,
     minutes
-  ) %>%
-  group_by(pid, platform, hour_start_local, hour_start_utc) %>%
+  ) |> 
+  group_by(pid, platform, hour_start_local, hour_start_utc) |> 
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
 hourly_all <- bind_rows(hourly_from_sessions, hourly_from_steam)
@@ -753,7 +753,7 @@ ethnicity_survey <- intake |>
             "Native Hawaiian and Other Pacific Islander alone"
           ))
   ) |>
-  group_by(country, ethnicity) %>%
+  group_by(country, ethnicity) |> 
   summarize(
     survey_count = n(),
     gamers_count = sum(!is.na(used_platforms), na.rm = TRUE),
