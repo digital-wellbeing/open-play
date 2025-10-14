@@ -13,7 +13,6 @@ outputs/
 /.quarto/
 .Renviron
 .Renviron.example
-raw/
 /mynotes.txt
 /3_sleep.rmarkdown
 /3_sleep_files
