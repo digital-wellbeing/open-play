@@ -21,5 +21,6 @@ raw/
 deprecated/
 tinytable_assets/
 docs/
+_site/
 
 **/*.quarto_ipynb
