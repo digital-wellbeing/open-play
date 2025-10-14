@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survey Administration Schedule</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            width: 100%;
+        }
+        
+        .chart-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            margin: 0 auto;
+        }
+        
+        .legend-container {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px 25px;
+            margin-top: 25px;
+            background-color: #fafafa;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #555;
+        }
+        
+        .legend-circle {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Figure 1. Survey Administration Schedule Across 12-Week Study Period</h1>
+        <div class="chart-wrapper">
+            <svg id="chart"></svg>
+        </div>
+        <div class="legend-container">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #4A90E2;"></div>
+                    <span>Daily Survey</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #F5A623;"></div>
+                    <span>Biweekly Survey</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #7ED321;"></div>
+                    <span>Cognitive Tests</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #C0C0C0;"></div>
+                    <span>No Survey</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Define the survey schedule data with updated format
+        const scheduleData = [
+            { 
+                week: 1, 
+                surveys: [
+                    ['daily', 'biweekly', 'cognitive'], // Day 1: all three types
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 100 
+            },
+            { 
+                week: 2, 
+                surveys: [
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 96 
+            },
+            { 
+                week: 3, 
+                surveys: [
+                    ['biweekly', 'daily'], // Day 1: biweekly and daily
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 91 
+            },
+            { 
+                week: 4, 
+                surveys: [
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 89 
+            },
+            { 
+                week: 5, 
+                surveys: [
+                    ['daily', 'biweekly', 'cognitive'], // Day 1: all three types
+                    ['daily'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 82 
+            },
+            { 
+                week: 6, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 79 
+            },
+            { 
+                week: 7, 
+                surveys: [
+                    ['biweekly'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 76 
+            },
+            { 
+                week: 8, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 74 
+            },
+            { 
+                week: 9, 
+                surveys: [
+                    ['biweekly', 'cognitive'], // Day 1: biweekly and cognitive
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 68 
+            },
+            { 
+                week: 10, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 65 
+            },
+            { 
+                week: 11, 
+                surveys: [
+                    ['biweekly'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 61 
+            },
+            { 
+                week: 12, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 58 
+            }
+        ];
+
+        // Set up dimensions
+        const margin = { top: 50, right: 80, bottom: 20, left: 80 };
+        const width = 750 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+        const cellSize = 30;
+        const cellPadding = 8;
+        const circleRadius = 12;
+
+        // Colors
+        const colors = {
+            daily: '#4A90E2',
+            biweekly: '#F5A623',
+            cognitive: '#7ED321',
+            none: '#C0C0C0'
+        };
+
+        // Create SVG
+        const svg = d3.select('#chart')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left}, ${margin.top})`);
+
+        // Add day labels
+        const days = ['1', '2', '3', '4', '5', '6', '7'];
+        g.selectAll('.day-label')
+            .data(days)
+            .enter()
+            .append('text')
+            .attr('x', (d, i) => i * (cellSize + cellPadding) + cellSize / 2)
+            .attr('y', -10)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '12px')
+            .style('font-weight', '600')
+            .text(d => d);
+
+        // Add "Day" label
+        g.append('text')
+            .attr('x', 3 * (cellSize + cellPadding))
+            .attr('y', -25)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '13px')
+            .style('font-weight', '600')
+            .text('Day');
+
+        // Add "Retention" label
+        g.append('text')
+            .attr('x', 7.8 * (cellSize + cellPadding) + 30)
+            .attr('y', -10)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '13px')
+            .style('font-weight', '600')
+            .text('Retention');
+
+        // Add week labels
+        g.append('text')
+            .attr('x', -50)
+            .attr('y', 5.5 * (cellSize + cellPadding))
+            .attr('text-anchor', 'middle')
+            .style('font-size', '13px')
+            .style('font-weight', '600')
+            .attr('transform', `rotate(-90, -50, ${5.5 * (cellSize + cellPadding)})`)
+            .text('Week');
+
+        // Create pie chart function
+        const pie = d3.pie()
+            .value(d => 1) // Equal slices for each survey type
+            .sort(null);
+
+        const arc = d3.arc()
+            .innerRadius(0)
+            .outerRadius(circleRadius);
+
+        // Create week groups
+        const weekGroups = g.selectAll('.week-group')
+            .data(scheduleData)
+            .enter()
+            .append('g')
+            .attr('class', 'week-group')
+            .attr('transform', (d, i) => `translate(0, ${i * (cellSize + cellPadding)})`);
+
+        // Add week numbers
+        weekGroups.append('text')
+            .attr('x', -25)
+            .attr('y', cellSize / 2 + 4)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '12px')
+            .style('font-weight', '600')
+            .text(d => d.week);
+
+        // Add survey circles/pie charts for each day
+        weekGroups.each(function(weekData) {
+            const group = d3.select(this);
+            
+            weekData.surveys.forEach((surveyTypes, dayIndex) => {
+                const xPos = dayIndex * (cellSize + cellPadding) + cellSize / 2;
+                const yPos = cellSize / 2;
+                
+                if (surveyTypes.length === 1) {
+                    // Single survey type - draw a circle
+                    let color = colors[surveyTypes[0]];
+                    
+                    group.append('circle')
+                        .attr('cx', xPos)
+                        .attr('cy', yPos)
+                        .attr('r', circleRadius)
+                        .attr('fill', color);
+                } else if (surveyTypes.length > 1) {
+                    // Multiple survey types - draw a pie chart
+                    const pieData = pie(surveyTypes);
+                    
+                    const pieGroup = group.append('g')
+                        .attr('transform', `translate(${xPos}, ${yPos})`);
+                    
+                    pieGroup.selectAll('path')
+                        .data(pieData)
+                        .enter()
+                        .append('path')
+                        .attr('d', arc)
+                        .attr('fill', d => colors[d.data])
+                        .attr('stroke', 'white')
+                        .attr('stroke-width', 0.5);
+                }
+            });
+            
+            // Add retention bar
+            const barWidth = 60;
+            const maxBarWidth = 60;
+            const barHeight = 20;
+            const barX = 7.3 * (cellSize + cellPadding);
+            
+            group.append('rect')
+                .attr('x', barX)
+                .attr('y', cellSize / 2 - barHeight / 2)
+                .attr('width', (weekData.retention / 100) * maxBarWidth)
+                .attr('height', barHeight)
+                .attr('fill', '#808080')
+                .attr('rx', 2);
+            
+            // Add retention percentage text
+            group.append('text')
+                .attr('x', barX + maxBarWidth + 10)
+                .attr('y', cellSize / 2 + 4)
+                .style('font-size', '11px')
+                .style('font-weight', '600')
+                .text(`${weekData.retention}%`);
+        });
+    </script>
+</body>
+</html>
