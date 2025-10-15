@@ -12,6 +12,19 @@
   // Add pagebreak before each level 1 heading in appendices and reset counters
   show heading.where(level: 1): it => {
     pagebreak(weak: true)
+    // Reset figure counters for Quarto-specific kinds
+    counter(figure.where(kind: "quarto-float-fig")).update(0)
+    counter(figure.where(kind: "quarto-float-tbl")).update(0)
+    counter(figure.where(kind: "quarto-float-lst")).update(0)
+
+    // Reset callout counters (for each callout type used)
+    counter(figure.where(kind: "quarto-callout-Note")).update(0)
+    counter(figure.where(kind: "quarto-callout-Warning")).update(0)
+    counter(figure.where(kind: "quarto-callout-Tip")).update(0)
+    counter(figure.where(kind: "quarto-callout-Important")).update(0)
+    counter(figure.where(kind: "quarto-callout-Caution")).update(0)
+
+    // Reset generic counters
     counter(figure.where(kind: image)).update(0)
     counter(figure.where(kind: table)).update(0)
     counter(math.equation).update(0)
@@ -142,12 +155,22 @@
     // Space between list items
     set par(leading: 0.48em)
     // Space around whole list
-    set block(spacing: spacing * 1.2, inset: (left: first-line-indent, right: first-line-indent))
+    set block(
+      spacing: spacing * 1.2,
+      inset: (left: first-line-indent, right: first-line-indent),
+    )
     it
   }
 
   // Number equations
   set math.equation(numbering: mathnumbering)
+  // Add space around math blocks
+  show math.equation.where(block: true): set block(spacing: spacing * 1.6)
+
+  // Define space around block quotes
+  show quote.where(block: true): set block(spacing: spacing * 1.8)
+  // Don't indent anything in block quotes
+  show quote.where(block: true): set par(first-line-indent: 0em)
 
   /* Improved figure display */
   // Add space above and below
