@@ -16,15 +16,15 @@ source("R/helpers.R")
 ```{r}
 #| label: load-data-raw
 
-intake <- read_csv("data/raw-minimal-pseudo/survey_intake_raw.csv.gz")
-diary <- read_csv("data/raw-minimal-pseudo/survey_diary_raw.csv.gz")
-panel <- read_csv("data/raw-minimal-pseudo/survey_panel_raw.csv.gz")
+intake <- read_csv("data/raw/survey_intake_raw.csv.gz")
+diary <- read_csv("data/raw/survey_diary_raw.csv.gz")
+panel <- read_csv("data/raw/survey_panel_raw.csv.gz")
 
-nintendo <- read_csv("data/raw-minimal-pseudo/telemetry_nintendo_raw.csv.gz")
-steam <- read_csv("data/raw-minimal-pseudo/telemetry_steam_raw.csv.gz")
-xbox <- read_csv("data/raw-minimal-pseudo/telemetry_xbox_raw.csv.gz")
+nintendo <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
+steam <- read_csv("data/raw/telemetry_steam_raw.csv.gz")
+xbox <- read_csv("data/raw/telemetry_xbox_raw.csv.gz")
 
-dat_cog <- read_csv("data/raw-minimal-pseudo/cognitive_tasks_raw.csv.gz")
+dat_cog <- read_csv("data/raw/cognitive_tasks_raw.csv.gz")
 ```
 
 ```{r}
@@ -135,7 +135,7 @@ nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
     session_start < time_of_pull
   ) |>
   arrange(pid, title_id, session_start, session_end) |>
-  group_by(pid, title_id) %>%
+  group_by(pid, title_id) |> 
   mutate(
     start_num = as.numeric(session_start),
     end_num = as.numeric(session_end),
@@ -143,11 +143,11 @@ nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
     new_cluster = start_num > (prev_max_end + as.numeric(tol)),
     cluster = cumsum(new_cluster),
     dur_sec = end_num - start_num
-  ) %>%
+  ) |> 
   group_by(pid, title_id, cluster) |>
   slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |>
-  ungroup() %>%
-  mutate(duration = dur_sec / 60) %>%
+  ungroup() |> 
+  mutate(duration = dur_sec / 60) |> 
   select(pid, title_id, session_start, session_end, duration) |>
   filter(duration <= 600) |>
   as_tibble()
@@ -195,7 +195,7 @@ ethnicity_us <- get_decennial(
   variables = ethnicity_vars$name,
   year = 2020,
 ) |>
-  left_join(ethnicity_vars, by = c("variable" = "name")) %>%
+  left_join(ethnicity_vars, by = c("variable" = "name")) |> 
   mutate(
     label = map_chr(label, ~ str_trim(tail(str_split(.x, "!!")[[1]], 1)))
   ) |>
@@ -233,8 +233,8 @@ age_uk <- read_csv(
     id_cols = c(`Age (91 categories) Code`, `Age (91 categories)`),
     names_from = `Sex (2 categories)`,
     values_from = Observation
-  ) %>%
-  mutate(total = Female + Male) %>%
+  ) |> 
+  mutate(total = Female + Male) |> 
   select(age = `Age (91 categories)`, female = Female, male = Male, total)
 
 # https://www.ons.gov.uk/datasets/TS021/editions/2021/versions/1/filter-outputs/f1addb18-dcb8-4adb-98a8-abeb9108c330#get-data
@@ -242,7 +242,7 @@ ethnicity_uk <- read_csv(
   "data/census/TS021-2021-1-filtered-2025-03-05T23-25-05Z.csv"
 ) |>
   # Optionally drop the row for "Does not apply"
-  filter(`Ethnic group (20 categories)` != "Does not apply") %>%
+  filter(`Ethnic group (20 categories)` != "Does not apply") |> 
   mutate(
     label = case_when(
       str_detect(`Ethnic group (20 categories)`, "^Asian") ~ "Asian",

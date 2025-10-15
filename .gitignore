@@ -13,7 +13,6 @@ outputs/
 /.quarto/
 .Renviron
 .Renviron.example
-raw/
 /mynotes.txt
 /3_sleep.rmarkdown
 /3_sleep_files
@@ -21,6 +20,7 @@ raw/
 deprecated/
 tinytable_assets/
 docs/
+_site/
 
 **/*.quarto_ipynb
 data/clean/*
