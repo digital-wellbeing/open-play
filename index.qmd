@@ -144,6 +144,7 @@ library(ggstream)
 library(patchwork)
 library(tinytable)
 library(sparkline)
+library(Hmisc)
 
 # Load custom functions
 source("R/helpers.R")
