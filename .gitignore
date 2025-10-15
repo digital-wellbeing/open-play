@@ -23,3 +23,5 @@ docs/
 _site/
 
 **/*.quarto_ipynb
+data/clean/*
+*.knit.md
