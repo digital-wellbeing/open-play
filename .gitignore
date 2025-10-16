@@ -27,3 +27,6 @@ data/clean/*
 *.knit.md
 
 /.luarc.json
+
+# Exclude missingness analysis script
+R/missingness_analysis.R
