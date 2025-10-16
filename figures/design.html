@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Survey Administration Schedule</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        
+        .chart-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            margin: 0 auto;
+        }
+        
+        .legend-container {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px 25px;
+            margin-top: 25px;
+            background-color: #fafafa;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #555;
+        }
+        
+        .legend-circle {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="chart-wrapper">
+            <svg id="chart"></svg>
+        </div>
+        <div class="legend-container">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #4A90E2;"></div>
+                    <span>Daily Survey</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #F5A623;"></div>
+                    <span>Biweekly Survey</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #7ED321;"></div>
+                    <span>Cognitive Tests</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-circle" style="background-color: #C0C0C0;"></div>
+                    <span>No Survey</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Define the survey schedule data with updated format
+        const scheduleData = [
+            { 
+                week: 1, 
+                surveys: [
+                    ['daily', 'biweekly', 'cognitive'], // Day 1: all three types
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 100.0 
+            },
+            { 
+                week: 2, 
+                surveys: [
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 99.9 
+            },
+            { 
+                week: 3, 
+                surveys: [
+                    ['biweekly', 'daily'], // Day 1: biweekly and daily
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 98.7 
+            },
+            { 
+                week: 4, 
+                surveys: [
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily'], 
+                    ['daily']
+                ], 
+                retention: 96.1 
+            },
+            { 
+                week: 5, 
+                surveys: [
+                    ['daily', 'biweekly', 'cognitive'], // Day 1: all three types
+                    ['daily'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 93.0 
+            },
+            { 
+                week: 6, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 88.5 
+            },
+            { 
+                week: 7, 
+                surveys: [
+                    ['biweekly'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 84.0 
+            },
+            { 
+                week: 8, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 79.3 
+            },
+            { 
+                week: 9, 
+                surveys: [
+                    ['biweekly', 'cognitive'], // Day 1: biweekly and cognitive
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 76.8 
+            },
+            { 
+                week: 10, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 72.9 
+            },
+            { 
+                week: 11, 
+                surveys: [
+                    ['biweekly'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 70.8 
+            },
+            { 
+                week: 12, 
+                surveys: [
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none'], 
+                    ['none']
+                ], 
+                retention: 66.6 
+            }
+        ];
+
+        // Set up dimensions
+        const margin = { top: 50, right: 80, bottom: 100, left: 80 };
+        const width = 750 - margin.left - margin.right;
+        const height = 600 - margin.top - margin.bottom;
+        const cellSize = 30;
+        const cellPadding = 8;
+        const circleRadius = 12;
+
+        // Colors
+        const colors = {
+            daily: '#4A90E2',
+            biweekly: '#F5A623',
+            cognitive: '#7ED321',
+            none: '#C0C0C0'
+        };
+
+        // Create SVG
+        const svg = d3.select('#chart')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        // Calculate content dimensions for centering
+        const contentWidth = 7 * (cellSize + cellPadding) + 150; // 7 days + retention section
+        const contentHeight = 12 * (cellSize + cellPadding) + 50; // 12 weeks + labels
+        const svgWidth = width + margin.left + margin.right;
+        const svgHeight = height + margin.top + margin.bottom;
+        const centerX = (svgWidth - contentWidth) / 2 + margin.left;
+        const centerY = (svgHeight - contentHeight) / 2 + margin.top;
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${centerX}, ${centerY})`);
+
+        // Add day labels
+        const days = ['1', '2', '3', '4', '5', '6', '7'];
+        g.selectAll('.day-label')
+            .data(days)
+            .enter()
+            .append('text')
+            .attr('x', (d, i) => i * (cellSize + cellPadding) + cellSize / 2)
+            .attr('y', -10)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '12px')
+            .style('font-weight', '600')
+            .text(d => d);
+
+        // Add "Day" label
+        g.append('text')
+            .attr('x', 3 * (cellSize + cellPadding))
+            .attr('y', -25)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '13px')
+            .style('font-weight', '600')
+            .text('Day');
+
+        // Add "Retention" label
+        g.append('text')
+            .attr('x', 7.8 * (cellSize + cellPadding) + 30)
+            .attr('y', -10)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '13px')
+            .style('font-weight', '600')
+            .text('Retention');
+
+        // Add week labels
+        g.append('text')
+            .attr('x', -50)
+            .attr('y', 5.5 * (cellSize + cellPadding))
+            .attr('text-anchor', 'middle')
+            .style('font-size', '13px')
+            .style('font-weight', '600')
+            .attr('transform', `rotate(-90, -50, ${5.5 * (cellSize + cellPadding)})`)
+            .text('Week');
+
+        // Create pie chart function
+        const pie = d3.pie()
+            .value(d => 1) // Equal slices for each survey type
+            .sort(null) // Don't sort, keep original order
+            .startAngle(-Math.PI / 2) // Start at top (12 o'clock)
+            .endAngle(3 * Math.PI / 2); // End after full circle
+
+        const arc = d3.arc()
+            .innerRadius(0)
+            .outerRadius(circleRadius);
+
+        // Create week groups
+        const weekGroups = g.selectAll('.week-group')
+            .data(scheduleData)
+            .enter()
+            .append('g')
+            .attr('class', 'week-group')
+            .attr('transform', (d, i) => `translate(0, ${i * (cellSize + cellPadding)})`);
+
+        // Add week numbers
+        weekGroups.append('text')
+            .attr('x', -25)
+            .attr('y', cellSize / 2 + 4)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '12px')
+            .style('font-weight', '600')
+            .text(d => d.week);
+
+        // Add survey circles/pie charts for each day
+        weekGroups.each(function(weekData) {
+            const group = d3.select(this);
+            
+            weekData.surveys.forEach((surveyTypes, dayIndex) => {
+                const xPos = dayIndex * (cellSize + cellPadding) + cellSize / 2;
+                const yPos = cellSize / 2;
+                
+                if (surveyTypes.length === 1) {
+                    // Single survey type - draw a circle
+                    let color = colors[surveyTypes[0]];
+                    
+                    group.append('circle')
+                        .attr('cx', xPos)
+                        .attr('cy', yPos)
+                        .attr('r', circleRadius)
+                        .attr('fill', color);
+                } else if (surveyTypes.length > 1) {
+                    // Multiple survey types - draw a pie chart
+                    const pieData = pie(surveyTypes);
+                    
+                    const pieGroup = group.append('g')
+                        .attr('transform', `translate(${xPos}, ${yPos})`);
+                    
+                    pieGroup.selectAll('path')
+                        .data(pieData)
+                        .enter()
+                        .append('path')
+                        .attr('d', arc)
+                        .attr('fill', d => colors[d.data])
+                        .attr('stroke', 'white')
+                        .attr('stroke-width', 0.5);
+                }
+            });
+            
+            // Add retention bar
+            const barWidth = 60;
+            const maxBarWidth = 60;
+            const barHeight = 20;
+            const barX = 7.3 * (cellSize + cellPadding);
+            
+            group.append('rect')
+                .attr('x', barX)
+                .attr('y', cellSize / 2 - barHeight / 2)
+                .attr('width', (weekData.retention / 100) * maxBarWidth)
+                .attr('height', barHeight)
+                .attr('fill', '#808080')
+                .attr('rx', 2);
+            
+            // Add retention percentage text
+            group.append('text')
+                .attr('x', barX + maxBarWidth + 10)
+                .attr('y', cellSize / 2 + 4)
+                .style('font-size', '11px')
+                .style('font-weight', '600')
+                .text(`${weekData.retention}%`)
+                .attr('class', 'retention-text');
+        });
+
+        // Function to update retention for a specific week
+        function updateRetention(weekNumber, retentionValue, animated = true) {
+            if (weekNumber < 1 || weekNumber > 12) {
+                console.error('Week number must be between 1 and 12');
+                return;
+            }
+            if (retentionValue < 0 || retentionValue > 100) {
+                console.error('Retention value must be between 0 and 100');
+                return;
+            }
+
+            const weekGroup = d3.selectAll('.week-group')
+                .filter((d, i) => i === weekNumber - 1);
+
+            const transition = animated ? weekGroup.transition().duration(500) : weekGroup;
+
+            // Update bar width
+            transition.select('rect')
+                .attr('width', (retentionValue / 100) * maxBarWidth);
+
+            // Update text
+            transition.select('.retention-text')
+                .text(`${retentionValue}%`);
+
+            // Update data
+            scheduleData[weekNumber - 1].retention = retentionValue;
+        }
+
+        // Function to update multiple weeks at once
+        function updateRetentions(retentionArray, animated = true) {
+            if (!Array.isArray(retentionArray)) {
+                console.error('Input must be an array');
+                return;
+            }
+            retentionArray.forEach((retention, index) => {
+                if (retention !== null && retention !== undefined) {
+                    updateRetention(index + 1, retention, animated);
+                }
+            });
+        }
+
+        // Function to export the visualization as SVG
+        function exportSVG() {
+            const svgElement = document.querySelector('#chart');
+            const svgClone = svgElement.cloneNode(true);
+            
+            // Add XML namespace if not present
+            svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            
+            // Get the computed styles and add them inline
+            const styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const styleTag = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            styleTag.textContent = `
+                text {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                }
+            `;
+            styleElement.appendChild(styleTag);
+            svgClone.insertBefore(styleElement, svgClone.firstChild);
+            
+            // Add legend to SVG
+            const legendGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            legendGroup.setAttribute('transform', `translate(${width / 2 - 150}, ${height + margin.top + margin.bottom - 120})`);
+            
+            const legendData = [
+                { color: '#4A90E2', label: 'Daily Survey', x: 0 },
+                { color: '#F5A623', label: 'Biweekly Survey', x: 120 },
+                { color: '#7ED321', label: 'Cognitive Tests', x: 260 },
+                { color: '#C0C0C0', label: 'No Survey', x: 400 }
+            ];
+            
+            legendData.forEach(item => {
+                // Add circle
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', item.x + 8);
+                circle.setAttribute('cy', 8);
+                circle.setAttribute('r', 8);
+                circle.setAttribute('fill', item.color);
+                legendGroup.appendChild(circle);
+                
+                // Add label
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', item.x + 22);
+                text.setAttribute('y', 12);
+                text.setAttribute('font-size', '12px');
+                text.setAttribute('fill', '#555');
+                text.textContent = item.label;
+                legendGroup.appendChild(text);
+            });
+            
+            svgClone.appendChild(legendGroup);
+            
+            // Serialize the SVG
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgClone);
+            
+            return svgString;
+        }
+
+        // Function to download the SVG file
+        function downloadSVG(filename = 'design.svg') {
+            const svgString = exportSVG();
+            const blob = new Blob([svgString], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // Function to copy SVG to clipboard
+        function copySVGToClipboard() {
+            const svgString = exportSVG();
+            navigator.clipboard.writeText(svgString).then(() => {
+                console.log('SVG copied to clipboard!');
+                return true;
+            }).catch(err => {
+                console.error('Failed to copy SVG:', err);
+                return false;
+            });
+        }
+
+        // Make functions globally accessible
+        window.updateRetention = updateRetention;
+        window.updateRetentions = updateRetentions;
+        window.exportSVG = exportSVG;
+        window.downloadSVG = downloadSVG;
+        window.copySVGToClipboard = copySVGToClipboard;
+    </script>
+</body>
+</html>
