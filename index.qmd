@@ -197,8 +197,6 @@ nintendo <- read_csv("data/clean/nintendo.csv.gz")
 steam <- read_csv("data/clean/steam.csv.gz")
 xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
-ethnicity_us <- read_csv("data/clean/ethnicity_us.csv.gz")
-ethnicity_uk <- read_csv("data/clean/ethnicity_uk.csv.gz")
 ```
 
 ```{r}
@@ -234,25 +232,27 @@ third_party_prop <- paste0(
 
 # merge with the local time zone offsets from intake
 tz_map <- intake |>
-  transmute(pid = as.character(pid), off = offset_secs(local_timezone)) |>
+  mutate(pid = as.character(pid), off = offset_secs(local_timezone), .keep = "none") |>
   distinct(pid, .keep_all = TRUE)
 
 # aggregate data at each level of granularity (session, hourly, daily)
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
 sessions_all <- bind_rows(
   xbox |> 
-    transmute(
+    mutate(
       pid = as.character(pid),
       platform = "Xbox",
       start_utc = session_start,
-      end_utc = session_end
+      end_utc = session_end,
+      .keep = "none"
     ),
   nintendo |> 
-    transmute(
+    mutate(
       pid = as.character(pid),
       platform = "Nintendo",
       start_utc = session_start,
-      end_utc = session_end
+      end_utc = session_end,
+      .keep = "none"
     )
 ) |> 
   left_join(tz_map, by = "pid") |> 
@@ -298,12 +298,13 @@ hourly_from_steam <- steam |>
   select(pid, datetime_hour_start, minutes) |>
   mutate(pid = as.character(pid)) |>
   left_join(tz_map, by = "pid") |>
-  transmute(
+  mutate(
     pid,
     platform = "Steam",
     hour_start_utc = datetime_hour_start,
     hour_start_local = datetime_hour_start + off,
-    minutes
+    minutes,
+    .keep = "none"
   ) |> 
   group_by(pid, platform, hour_start_local, hour_start_utc) |> 
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
@@ -566,7 +567,7 @@ lvl <- c(
 )
 
 node_counts <- intake |>
-  transmute(
+  mutate(
     stage1 = "Screened",
     stage2 = ifelse(is.na(linked_platforms), "Ineligible", "Linked ≥1 account"),
     stage3 = ifelse(qualified, "Recent trace data", "No recent trace data"),
@@ -574,14 +575,15 @@ node_counts <- intake |>
       pid %in% panel$pid,
       "Began surveys",
       "Did not begin surveys"
-    )
+    ),
+    .keep = "none"
   ) |>
   pivot_longer(everything(), names_to = "stage", values_to = "node") |>
   filter(!is.na(node)) |>
   count(node, name = "n")
 
 sankey_data <- intake |>
-  transmute(
+  mutate(
     Screening = "Screened",
     Linking = ifelse(
       is.na(linked_platforms),
@@ -597,7 +599,8 @@ sankey_data <- intake |>
       pid %in% panel$pid,
       "Began surveys",
       "Did not begin surveys"
-    )
+    ),
+    .keep = "none"
   ) |>
   make_long(Screening, Linking, `Account Validation`, Surveys) |>
   left_join(node_counts, by = "node") |>
@@ -727,167 +730,131 @@ Daily survey links were sent every day at 2pm local time for the participant and
 ## Participants
 
 ```{r}
-#| label: participant-gender
+#| label: tbl-demographics
+#| tbl-cap: "Sample demographics for qualified participants with general-population benchmarks (where available)."
 
-gender_counts <- intake |>
-  filter(country != "OTHER") |>
-  mutate(
-    gender = ifelse(gender %in% c("Man", "Woman"), gender, "Other")
-  ) |>
-  group_by(qualified) |>
-  count(gender) |>
-  mutate(
-    prop = paste0(100 * round(prop.table(n), 3), "%")
-  )
+# programmatically getting the census figures was a nightmare, and this isn't the purpose of the manuscript
+# US ethnicity: https://usafacts.org/data/topics/people-society/population-and-demographics/our-changing-population/
+# US gender**: https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf
+# US education**: https://www2.census.gov/programs-surveys/demo/tables/educational-attainment/2021/cps-detailed-tables/table-1-1.xlsx and https://data.worldbank.org/indicator/SE.TER.CUAT.MS.ZS?locations=US
+# UK gender: https://www.ons.gov.uk/peoplepopulationandcommunity/culturalidentity/genderidentity/articles/genderidentityageandsexenglandandwalescensus2021/2023-01-25
+# UK ethnicity: https://www.ethnicity-facts-figures.service.gov.uk/uk-population-by-ethnicity/national-and-regional-populations/population-of-england-and-wales/latest/
+# UK education: 
+# **values are from the 18-40 population where possible 
 
-gender_text_all <- with(
-  gender_counts |> group_by(gender) |> summarize(n = sum(n), prop = prop[1]),
-  paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
+GENPOP <- tibble::tribble(
+~Variable, ~Level, ~`US Gen Pop %`, ~`UK Gen Pop %`,
+# --- Gender ---
+"Gender", "Man", 49.0, 49.6,
+"Gender", "Woman", 48.9, 49.5,
+"Gender", "Other gender identity", 2.1, .9,
+# --- Ethnicity ---
+"Ethnicity", "White", 75.5, 81.7,
+"Ethnicity", "Black", 13.6, 4.0,
+"Ethnicity", "Asian", 6.3, 9.3,
+"Ethnicity", "Two or More Races", 3, 2.9,
+"Ethnicity", "American Indian and Alaska Native", 1.3, 0,
+"Ethnicity", "Native Hawaiian and Other Pacific Islander", .3, 0,
+"Ethnicity", "Other", 0, 2.1,
+# --- Education (3 buckets) ---
+"Education", "Completed secondary or less", 61.0, 60.1,
+"Education", "Bachelor's degree", 24.0, 25.5,
+"Education", "Postgraduate", 15.0, 14.4
 )
 
-gender_text_qualified <- with(
-  gender_counts |> filter(qualified),
-  paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
-)
+age_string <- intake |> 
+  filter(qualified) |> 
+  summarise(
+    n = n(),
+    mean = round(mean(age, na.rm = TRUE), 1),
+    sd = round(sd(age, na.rm = TRUE), 1),
+    min = min(age, na.rm = TRUE),
+    p25 = quantile(age, 0.25, na.rm = TRUE),
+    median = median(age, na.rm = TRUE),
+    p75 = quantile(age, 0.75, na.rm = TRUE),
+    max = max(age, na.rm = TRUE)
+  ) |> 
+  mutate(
+    across(everything(), as.character),
+    age_string = paste0(
+      median, " (mean = ", mean, ", SD = ", sd, ", range ", min, "-40)"
+    )
+  ) |> 
+  pull(age_string)
 
-```
-
-```{r}
-#| label: fig-representative
-
-ethnicity_survey <- intake |>
+demo <- intake |> 
+  filter(qualified) |> 
   mutate(
     ethnicity = case_match(
       ethnicity,
-      c("Other ethnic group", "Others", "Some Other Race alone") ~ "Other",
-      "White alone" ~ "White",
-      c(
-        "Black or African American alone",
-        "Black, African, Caribbean or Black British",
-        "Black or African American alone"
-      ) ~
-        "Black",
-      "Native Hawaiian and Other Pacific Islander alone" ~
-        "Native Hawaiian and Other Pacific Islander",
-      "American Indian and Alaska Native alone" ~
-        "American Indian and Alaska Native",
-      c("Asian", "Asian alone", "Asian or Asian British") ~ "Asian",
-      c("Mixed or multiple ethnic groups", "Mixed") ~ "Two or More Races",
-      .default = ethnicity
+      c("Other ethnic group","Others","Some Other Race alone") ~ "Other",
+      c("White","White alone") ~ "White",
+      c("Black or African American alone","Black, African, Caribbean or Black British") ~ "Black",
+      "Native Hawaiian and Other Pacific Islander alone" ~ "Native Hawaiian and Other Pacific Islander",
+      "American Indian and Alaska Native alone" ~ "American Indian and Alaska Native",
+      c("Asian","Asian alone","Asian or Asian British") ~ "Asian",
+      c("Mixed or multiple ethnic groups","Mixed","Two or More Races") ~ "Two or More Races",
+      .default = NA
     ),
-  ) |>
-  filter(
-    !country %in% c("OTHER", NA) &
-      !ethnicity %in% c("Prefer not to say", NA) &
-      !(country == "UK" &
-        ethnicity %in%
-          c(
-            "American Indian and Alaska Native alone",
-            "Native Hawaiian and Other Pacific Islander alone"
-          ))
-  ) |>
-  group_by(country, ethnicity) |> 
-  summarize(
-    survey_count = n(),
-    gamers_count = sum(!is.na(used_platforms), na.rm = TRUE),
-    qualified_count = sum(qualified, na.rm = TRUE),
-    survey_moe = 1.96 * sqrt(survey_count * (1 - survey_count / n())) / n(),
-    gamers_moe = 1.96 * sqrt(gamers_count * (1 - gamers_count / n())) / n(),
-    qualified_moe = 1.96 *
-      sqrt(qualified_count * (1 - qualified_count / n())) /
-      n()
-  ) |>
-  group_by(country) |>
-  mutate(
-    survey_prop = survey_count / sum(survey_count),
-    gamers_prop = gamers_count / sum(gamers_count),
-    qualified_prop = qualified_count / sum(qualified_count),
-  )
-
-# Join the census and survey summaries
-ethnicity_combined <- ethnicity_survey |>
+    
+    edu_bucket = case_when(
+      # Completed secondary or less
+      edu_level %in% c(
+        "Apprenticeships", "Associate degree", "Completed Primary School", "Completed Secondary School",
+        "Five or more GCSE passes (grade A* to C or grade 4 and above) or equivalent qualifications",
+        "High school graduate or equivalent", "Less than a high school diploma or equivalent",
+        "No formal qualifications", "One to four GCSE passes (grade A* to C or grade 4 and above) and any other GCSEs at other grades, or equivalent qualifications","Other qualifications", "Some college but no degree",
+        "Some University but no degree", "Two or more A Levels or equivalent qualifications", "Vocational or Similar"
+      ) ~ "Completed secondary or less",
+      
+      # Bachelor's degree
+      edu_level %in% c(
+        "Bachelor's degree", "University Bachelors Degree", 
+        "Higher National Certificate, Higher National Diploma, Bachelor's degree, or post-graduate qualifications"
+      ) ~ "Bachelor's degree",
+      
+      # Postgraduate
+      edu_level %in% c(
+        "Master's degree, professional degree, or doctoral degree",
+        "Graduate or professional degree (MA, MS, MBA, PhD, etc)"
+      ) ~ "Postgraduate",
+      
+      # Not usable / missing
+      edu_level %in% c("Prefer not to say") ~ NA_character_,
+      
+      TRUE ~ NA_character_
+    ),
+    
+    gender = ifelse(!gender %in% c("Man","Woman"), "Other gender identity", gender)
+  ) |> 
+  select(country, age, gender, ethnicity, edu_bucket) |> 
+  pivot_longer(c(gender, ethnicity, edu_bucket), names_to = "Variable", values_to = "Level") |>
+  filter(!is.na(Level)) |>
+  mutate(Variable = recode(Variable, gender="Gender", ethnicity="Ethnicity", edu_bucket="Education")) |>
+  count(country, Variable, Level) |>
+  group_by(country, Variable) |>
+  mutate(pct = round(100 * n / sum(n), 1)) |>
   ungroup() |>
-  left_join(
-    bind_rows(ethnicity_us, ethnicity_uk),
-    by = c("ethnicity" = "label", "country")
-  ) |>
-  pivot_longer(
-    cols = c(gen_prop, survey_prop, gamers_prop, qualified_prop),
-    names_to = "group",
-    values_to = "value"
-  ) |>
-  filter(!is.na(value) & !is.na(gen_pop)) |>
-  mutate(
-    group = recode(
-      group,
-      gen_prop = "General Population",
-      survey_prop = "Screened Participants",
-      gamers_prop = "Self-reported Video Game Players",
-      qualified_prop = "Qualified Participants"
-    ),
-    group = fct_relevel(
-      group,
-      c(
-        "General Population",
-        "Screened Participants",
-        "Self-reported Video Game Players",
-        "Qualified Participants"
-      )
-    ),
-    ethnicity = fct_relevel(
-      ethnicity,
-      c(
-        "White",
-        "Black",
-        "Asian",
-        "Two or More Races",
-        "American Indian and Alaska Native",
-        "Native Hawaiian and Other Pacific Islander",
-        "Other"
-      )
-    )
-  )
-
-ggplot(ethnicity_combined, aes(x = group, y = value, fill = ethnicity)) +
-  geom_bar(stat = "identity", position = "stack") +
-  labs(
-    x = "",
-    y = "Proportion",
-    fill = "Ethnicity",
-  ) +
-  facet_wrap(~country, scales = "free_x") +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  geom_text(
-    aes(
-      label = ifelse(
-        value < 0.01,
-        "",
-        scales::label_percent(accuracy = 1)(value)
-      ),
-      ,
-      family = "serif"
-    ),
-    position = position_stack(vjust = 0.5),
-    color = "white"
-  ) +
-  scale_fill_viridis_d(
-    option = "magma",
-    begin = .1,
-    end = .8,
-    labels = function(x) str_wrap(x, width = 25)
-  )
+  select(Variable, Level, country, pct) |>
+  mutate(country = paste0(country, " Sample %")) |>
+  pivot_wider(names_from = country, values_from = pct) |> 
+  arrange(desc(Variable), desc(`UK Sample %`)) |> 
+  left_join(GENPOP, by = c("Variable", "Level")) |> 
+  select(Variable, Level, `US Sample %`,`US Gen Pop %`, `UK Sample %`, `UK Gen Pop %`)
 
 
+tt(
+  demo,
+  caption = "Demographic characteristics of qualified participants alongside general population benchmarks (where available). See supplementary materials for sources of general popoulation estimates."
+) |>
+  style_tt(fontsize = 0.8)
 ```
 
-Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(panel$pid))` also completed at least one survey.
+Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(panel$pid))` also completed at least one survey. On average, participants were. Due to errors in screening, four participants over the age of 40 were included. 
 
-Our screening sample was roughly representative of the general population of the US and UK by ethnicity (@fig-representative) and gender identity: `r gender_text_all`.
+@tbl-demographics shows demographic characteristics of the final sample alongside general population benchmarks. Our participants are more likely to be male, non-binary, and bi- or multiracial than the general population. Although the demographics of the population of people who play video games are less well understood, our sample's demographics are broadly consistent with previously reported data [e.g., @EntertainmentSoftwareAssociation20242024].
 
-The sample of qualified participants is less representative of the general population, containing more men and non-binary participants: `r gender_text_qualified`, as well as fewer black participants (@fig-representative). However, the demographics of console video game players are not well-understood; it is likely that our sample more closely represents this population than the general population.
+Besides those appearing in @tbl-demographics, we collected various other demographic variables from eligible participants at intake, including employment status, height and weight, self-identified and diagnosed neurodivergence (e.g., ASD, ADHD, dyslexia), political party affiliation, marital status, caretaking responsibilities, and postal geography (general area only; first three digits of the five-digit US ZIP Code; UK outward code). Further details of these are available in the online codebook. 
 
 ## Ethics and Compensation
 
@@ -895,25 +862,7 @@ This study received ethical approval from the Social Sciences and Humanities Int
 
 Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening, £2 for the 10-minute intake survey (plus £5 for linking at least one account with recent data), £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.
 
-## Demographic measures
 
-We collected the following demographic variables:
-
--   age
--   gender
-
-For all participants who were eligible based on self-reported video game play (but who did not always successfully linked accounts), we additionally collected the following
-
--   ethnicity
--   educational attainment
--   employment status
--   height and weight
--   self-identified neurodivergence (e.g., ASD, ADHD, dyslexia)
--   political party affiliation
--   diagnosed neurodivergence
--   marital status
--   caretaking responsibilities (children, family members)
--   postal geography (general area only; first three digits of the five-digit US ZIP Code; UK outward code)
 
 ## Self-report measures
 
@@ -1724,5 +1673,3 @@ appendix_tbl |>
   style_tt(fontsize = 0.5)
 
 ```
-
-### END
