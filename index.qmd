@@ -103,6 +103,21 @@ knitr:
     out-width: 80%
     fig-align: center
 code-links: repo
+nocite: |
+  @RoennebergEtAl2003Life
+  @SotoJohn2017short
+  @KahnEtAl2015trojan
+  @PontesEtAl2019measurement
+  @ChenEtAl2015Basic
+  @MartelaRyan2024Assessing
+  @BallouEtAl2024Basic
+  @Cantril1965pattern
+  @CarneyEtAl2012Consensus
+  @AlmeidaEtAl2002Daily
+  @TennantEtAl2007warwickedinburgh
+  @PilkonisEtAl2011item
+  @BuysseEtAl1989Pittsburgh
+  @Johns1991New
 format:
   html:
     theme:
@@ -145,6 +160,13 @@ library(patchwork)
 library(tinytable)
 library(sparkline)
 library(Hmisc)
+
+# avoid conflicts
+library(conflicted)
+conflict_prefer("filter", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("summarize", "dplyr")
+conflict_prefer("lag", "dplyr")
 
 # Load custom functions
 source("R/helpers.R")
@@ -327,7 +349,7 @@ Digital trace data---behavioral logs automatically collected by digital devices 
 
 To combat these issues, digital trace data is increasingly used in studies of smartphone and social media use [e.g. @sewallDoesObjectivelyMeasured2022], but less so in studies of video game play---one of the world's foremost leisure activities [@Ofcom2023Online; @EntertainmentSoftwareAssociation20242024]. Trace data in video games primarily falls under the field of game analytics or data science, but (1) the majority of these studies involve the use of proprietary data that is not publicly shared, and (2) the focus of this field tends to be more on player behavior metrics with clear industry value rather than academic inquiry for the common good.
 
-Where trace data has been used in video games studies, it has largely been limited to a few games [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or single platform [@BallouEtAl2023Gaming; @BallouEtAl2025Perceived]. However, players commonly play many games on multiple platforms. Moreover, the scope of psychological attributes in these studies tends to be limited to e.g. a small set of well-being outcomes.
+Where trace data has been used in video games studies, it has largely been limited to a few games [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or single platform [@BallouEtAl2024Registered; @BallouEtAl2025Perceived]. However, players commonly play many games on multiple platforms. Moreover, the scope of psychological attributes in these studies tends to be limited to e.g. a small set of well-being outcomes.
 
 ## Current dataset
 
@@ -664,7 +686,7 @@ tibble(
       "b" = list(
         i = 1,
         j = 4,
-        text = "In previous research, Nintendo-published games accounted for 65% of Switch playtime [\\@BallouEtAl2025Perceived]."
+        text = "In previous research, Nintendo-published games accounted for 65% of Switch playtime [@BallouEtAl2025Perceived]."
       ),
       "c" = list(
         i = 2,
@@ -887,169 +909,15 @@ For all participants who were eligible based on self-reported video game play (b
 
 ## Self-report measures
 
-### Trait or traitlike measures
+We collected a variety of self-report measures at different time scales. We briefly describe which constucts we collected here; for further details of the specific measures and example items, see @tbl-measures
 
-```{r}
-#| label: tbl-trait-measures
-#| tbl-cap: "Trait or traitlike measures assessed only once"
+*Trait / traitlike (baseline).* We assessed chronotype, Big 5 personality, player trait typology, and gaming disorder symptoms at baseline. Gaming disorder symptoms were measured twice, at biweekly waves 1 and 6.
 
-tibble(
-  Construct = c(
-    "Chronotype",
-    "Big 5 Personality",
-    "Player Trait Typology",
-    "Gaming Disorder Symptoms"
-  ),
-  Measure = c(
-    "Munich Chronotype Questionnaire [\\@RoennebergEtAl2003Life]",
-    "BFI-2-XS [\\@SotoJohn2017short]",
-    "Trojan Player Typology [\\@KahnEtAl2015trojan]",
-    "Gaming Disorder Test [\\@PontesEtAl2019measurement]"
-  ),
-  `Example Item` = c(
-    "*I go to bed at...*",
-    "*I am someone who...is compassionate, has a soft heart.*",
-    "*It's important to me to play with a tightly knit group.*",
-    "*In the past 3 months...I have had difficulties controlling my gaming activity*."
-  ),
-  `Response Format` = c(
-    "Times and numbers of minutes",
-    "5-pt Likert scale from 1 (Disagree strongly) to 5 (Agree strongly)",
-    "5-pt Likert scale from 1 (Strongly disagree) to 5 (Strongly agree)",
-    "5-pt Likert scale from 1 (Never) to 5 (Very often)"
-  )
-) |>
-  tt(
-    notes = list(
-      "a" = list(
-        i = 4,
-        j = 1,
-        text = "Measured twice, at biweekly waves 1 and 6."
-      )
-    )
-  ) |>
-  style_tt(fontsize = 0.8)
-```
+*Daily.* Daily surveys captured: basic psychological need satisfaction and frustration in life in general; basic psychological need satisfaction and frustration in the context of video games; life satisfaction; affective valence; sleep quality; stressors; and self-reported displacement.
 
-### Daily measures
+*Biweekly.* Every two weeks we assessed: general mental wellbeing; depression symptoms; life satisfaction; basic psychological need satisfaction and frustration – video games; and subjective displacement.
 
-```{r}
-#| label: tbl-daily
-#| tbl-cap: "Self-report measures in the daily surveys"
-
-tibble(
-  Construct = c(
-    "Basic psychological need satisfaction and frustration - life in general",
-    "Basic psychological need satisfaction and frustration - video games",
-    "Life satisfaction",
-    "Affective valence",
-    "Sleep Quality",
-    "Stressors",
-    "Self-reported displacement"
-  ),
-  Measure = c(
-    "Basic Psychological Need Satisfaction and Frustration Scale [\\@ChenEtAl2015Basic], brief version [\\@MartelaRyan2024Assessing]",
-    "Basic Needs in Games scale [\\@BallouEtAl2024Basic], brief session-level version",
-    "Cantril Self-anchoring Scale [\\@Cantril1965pattern], daily version",
-    "ad hoc",
-    "Sleep quality item (Item 9) from Consensus Sleep Diary [\\@CarneyEtAl2012Consensus]",
-    "Daily Inventory of Stressful Events [\\@AlmeidaEtAl2002Daily], modified for digital delivery",
-    "ad hoc"
-  ),
-  `Example Item` = c(
-    "*In the last 24 hours...I was able to do things I really want and value in life.*",
-    "*In my most recent session of X...I felt disappointed with my performance.*",
-    "*I was satisfied with my life today.*",
-    "How are you feeling right now?",
-    "How do you rate the quality of your sleep?",
-    "*\\[In the last 24 hours\\], what kinds of stressful event(s) occurred? \\[Participant selects among 7 options, including e.g. argument or disagreement\\]*",
-    "*Think back to your most recent gaming session. If you hadn't played a game, what would you most likely have done instead?*"
-  ),
-  `Response format` = c(
-    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
-    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
-    "Visual Analogue Scale from 1 (Strongly disagree) to 100 (Strongly agree)",
-    "Visual Analogue Scale from 1 (very bad) to 100 (very good)",
-    "5-pt Likert scale from 1 (very poor) to 5 (very good)",
-    "Yes/No, followed by a 4-pt Likert scale from 1 (Not at all stressful) to 4 (Very stressful)",
-    "Open response"
-  )
-) |>
-  tt(escape = TRUE) |>
-  style_tt(fontsize = 0.8)
-```
-
-### Biweekly measures
-
-```{r}
-#| label: tbl-biweekly
-#| tbl-cap: "Self-report measures in the biweekly surveys"
-
-tibble(
-  Construct = c(
-    "General Mental Wellbeing",
-    "Depression symptoms",
-    "Life satisfaction",
-    "Basic psychological need satisfaction and frustration - video games",
-    "Subjective displacement"
-  ),
-  Measure = c(
-    "Warwick-Edinburgh Mental Wellbeing Scale [\\@TennantEtAl2007warwickedinburgh]",
-    "PROMIS Short Form 8a Adult Depression Scale [\\@PilkonisEtAl2011item]",
-    "Cantril Self-anchoring Scale [\\@Cantril1965pattern]",
-    "Basic Needs in Games scale [\\@BallouEtAl2024Basic], gaming in general version",
-    "ad hoc"
-  ),
-  `Example Item` = c(
-    "*I've been feeling optimistic about the future*",
-    "*In the past 7 days...I felt that I had nothing to look forward to.*",
-    "*On which step of \\[a ladder from 0 to 10 representing the best possible life\\] would you say you personally feel you stood over the past two weeks?*",
-    "*When playing video games during the last 2 weeks...I could play in the way I wanted.*",
-    "*Over the last two weeks, to what extent has the time you spend playing video games influenced the following areas of your life? \\[...\\] Work/school performance*"
-  ),
-  `Response format` = c(
-    "5-pt Likert scale from 1 (none of the time) to 5 (all of the time)",
-    "5-pt Likert scale from 1 (Never) to 5 (Always)",
-    "10-pt unlabeled scale from 0 to 10",
-    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
-    "7-pt Likert scale from 1 (greatly interfered) to 7 (greatly supported)"
-  )
-) |>
-  tt() |>
-  style_tt(fontsize = 0.8)
-```
-
-### Monthly measures
-
-```{r}
-#| label: tbl-monthly
-#| tbl-cap: "Self-report measures in alternating biweekly surveys"
-
-tibble(
-  Construct = c(
-    "Sleep quality",
-    "Daytime sleepiness",
-    "Harms and benefits of gaming"
-  ),
-  Measure = c(
-    "Pittsburgh Sleep Quality Index [\\@BuysseEtAl1989Pittsburgh]",
-    "Epworth Sleepiness Scale [\\@Johns1991New]",
-    "2 free text questions"
-  ),
-  `Example Item` = c(
-    "*During the past month, what time have you usually gotten up in the morning?*",
-    "*How likely are you to doze off or fall asleep in the following situations, in comparison to feeling just tired? \\[...\\] Watching TV*",
-    "Do you feel that gaming is sometimes a problem for you? Please describe."
-  ),
-  `Response format` = c(
-    "Various",
-    "4-pt Likert scale from 1 (No chance of dozing) to 4 (High chance of dozing)",
-    "Open text"
-  )
-) |>
-  tt() |>
-  style_tt(fontsize = 0.8)
-```
+*Monthly (alternating biweekly).* On alternating biweekly surveys (i.e., monthly), we assessed: sleep quality; daytime sleepiness; and perceived harms and benefits of gaming.
 
 ### Self-reported play
 
@@ -1082,7 +950,7 @@ TODO
 We implemented a variety of data quality checks.
 
 1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding.
-2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, 3 or more games being played simultaneously \[TODO: other heuristics\]
+2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, 3 or more games being played simultaneously [TODO: other heuristics]
 3.  In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any
 
 ## Missingness
@@ -1692,7 +1560,7 @@ tibble(
   `Justification for Deviation` = c(
     "Exhausted PureProfile participant pool before reaching required sample size",
     "Exhausted participant pools of smaller demographic categories on both Prolific and PureProfile before reaching required sample size",
-    "\\(1\\) Unable to recruit enough participants in the US aged 18--30; (2) near-zero qualification rates from UK adults over 50; (3) desire for results from both regions to be more easily comparable",
+    "(1) Unable to recruit enough participants in the US aged 18--30; (2) near-zero qualification rates from UK adults over 50; (3) desire for results from both regions to be more easily comparable",
     "Low rates of study qualification at 75% threshold, in large part due to substantial uncaptured Playstation play",
     "Feedback from participants indicating that play during a 7-day period was subject to too many fluctuations (e.g., a busy workweek)",
     "Feedback from participants indicating that evening plans often interfered with survey completion and thus adversely affected response rate",
@@ -1702,3 +1570,219 @@ tibble(
   tt() |>
   style_tt(fontsize = 0.8)
 ```
+
+
+```{r}
+#| label: tbl-measures
+#| tbl-cap: "Summary of survey measures used in the study"
+
+t_trait <- tibble(
+  Construct = c(
+    "Chronotype",
+    "Big 5 Personality",
+    "Player Trait Typology",
+    "Gaming Disorder Symptoms"
+  ),
+  Measure = c(
+    "Munich Chronotype Questionnaire (Roenneberg et al., 2003)",
+    "BFI-2-XS (Soto & John, 2017)",
+    "Trojan Player Typology (Kahn et al., 2015)",
+    "Gaming Disorder Test (Pontes et al., 2019)"
+  ),
+  `Example Item` = c(
+    "I go to bed at...",
+    "I am someone who...is compassionate, has a soft heart.",
+    "It's important to me to play with a tightly knit group.",
+    "In the past 3 months...I have had difficulties controlling my gaming activity."
+  ),
+  `Response Format` = c(   # note original casing retained, will rename for merge only
+    "Times and numbers of minutes",
+    "5-pt Likert scale from 1 (Disagree strongly) to 5 (Agree strongly)",
+    "5-pt Likert scale from 1 (Strongly disagree) to 5 (Strongly agree)",
+    "5-pt Likert scale from 1 (Never) to 5 (Very often)"
+  )
+) |>
+  mutate(
+    Frequency = c(
+      "Once (baseline)",
+      "Once (baseline)",
+      "Once (baseline)",
+      "Twice (biweekly waves 1 & 6)"
+    ),
+    Group = "Trait / traitlike"
+  )
+
+t_daily <- tibble(
+  Construct = c(
+    "Basic psychological need satisfaction and frustration - life in general",
+    "Basic psychological need satisfaction and frustration - video games",
+    "Life satisfaction",
+    "Affective valence",
+    "Sleep Quality",
+    "Stressors",
+    "Self-reported displacement"
+  ),
+  Measure = c(
+    "Basic Psychological Need Satisfaction and Frustration Scale (Chen et al., 2015), brief version (Martela & Ryan, 2024)",
+    "Basic Needs in Games scale (Ballou, Denisova, et al., 2024), brief session-level version",
+    "Cantril Self-anchoring Scale (Cantril, 1965), daily version",
+    "ad hoc",
+    "Sleep quality item (Item 9) from Consensus Sleep Diary (Carney et al., 2012)",
+    "Daily Inventory of Stressful Events (Almeida et al., 2002), modified for digital delivery",
+    "ad hoc"
+  ),
+  `Example Item` = c(
+    "In the last 24 hours...I was able to do things I really want and value in life.",
+    "In my most recent session of X...I felt disappointed with my performance.",
+    "I was satisfied with my life today.",
+    "How are you feeling right now?",
+    "How do you rate the quality of your sleep?",
+    "[In the last 24 hours], what kinds of stressful event(s) occurred? [Participant selects among 7 options, including e.g. argument or disagreement]",
+    "Think back to your most recent gaming session. If you hadn't played a game, what would you most likely have done instead?"
+  ),
+  `Response format` = c(
+    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
+    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
+    "Visual Analogue Scale from 1 (Strongly disagree) to 100 (Strongly agree)",
+    "Visual Analogue Scale from 1 (very bad) to 100 (very good)",
+    "5-pt Likert scale from 1 (very poor) to 5 (very good)",
+    "Yes/No, followed by a 4-pt Likert scale from 1 (Not at all stressful) to 4 (Very stressful)",
+    "Open response"
+  )
+) |>
+  mutate(
+    Frequency = "Daily",
+    Group = "Daily"
+  )
+
+t_biweekly <- tibble(
+  Construct = c(
+    "General Mental Wellbeing",
+    "Depression symptoms",
+    "Life satisfaction",
+    "Basic psychological need satisfaction and frustration - video games",
+    "Subjective displacement"
+  ),
+  Measure = c(
+    "Warwick-Edinburgh Mental Wellbeing Scale (Tennant et al., 2007)",
+    "PROMIS Short Form 8a Adult Depression Scale (Pilkonis et al., 2011)",
+    "Cantril Self-anchoring Scale (Cantril, 1965)",
+    "Basic Needs in Games scale (Ballou, Denisova, et al., 2024), gaming in general version",
+    "ad hoc"
+  ),
+  `Example Item` = c(
+    "I've been feeling optimistic about the future",
+    "In the past 7 days...I felt that I had nothing to look forward to.",
+    "On which step of [a ladder from 0 to 10 representing the best possible life] would you say you personally feel you stood over the past two weeks?",
+    "When playing video games during the last 2 weeks...I could play in the way I wanted.",
+    "Over the last two weeks, to what extent has the time you spend playing video games influenced the following areas of your life? [...] Work/school performance"
+  ),
+  `Response format` = c(
+    "5-pt Likert scale from 1 (none of the time) to 5 (all of the time)",
+    "5-pt Likert scale from 1 (Never) to 5 (Always)",
+    "10-pt unlabeled scale from 0 to 10",
+    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
+    "7-pt Likert scale from 1 (greatly interfered) to 7 (greatly supported)"
+  )
+) |>
+  mutate(
+    Frequency = "Biweekly (every 2 weeks)",
+    Group = "Biweekly"
+  )
+
+t_monthly <- tibble(
+  Construct = c(
+    "Sleep quality",
+    "Daytime sleepiness",
+    "Harms and benefits of gaming"
+  ),
+  Measure = c(
+    "Pittsburgh Sleep Quality Index (Buysse et al., 1989)",
+    "Epworth Sleepiness Scale (Johns, 1991)",
+    "2 free text questions"
+  ),
+  `Example Item` = c(
+    "During the past month, what time have you usually gotten up in the morning?",
+    "How likely are you to doze off or fall asleep in the following situations, in comparison to feeling just tired? [...] Watching TV",
+    "Do you feel that gaming is sometimes a problem for you? Please describe."
+  ),
+  `Response format` = c(
+    "Various",
+    "4-pt Likert scale from 1 (No chance of dozing) to 4 (High chance of dozing)",
+    "Open text"
+  )
+) |>
+  mutate(
+    Frequency = "Monthly (alternating biweekly surveys)",
+    Group = "Monthly"
+  )
+
+t_selfreport <- tibble(
+  Construct = c(
+    "Social context of play",
+    "Self-reported Playtime",
+    "Self-reported recent sessions"
+  ),
+  Measure = c(
+    "Types of social play engaged during the last 24 hours (single-player games only, multiplayer with real-world friends, multiplayer with online-only friends, multiplayer with strangers). Participants could select more than one option.",
+    "Time spent playing games on platforms they had linked during the study (e.g., excluding other platforms such as Playstation) in each of the following periods: last 24 hours, last 7 days, and last 14 days.",
+    "Details of at least 1 and up to 3 of their most recent gaming sessions (game, date, and start/end time)."
+  ),
+  `Example Item` = c(NA_character_, NA_character_, NA_character_),
+  `Response format` = c(
+    "Multiple selection from listed options",
+    "Time estimates for last 24 hours, last 7 days, last 14 days",
+    "Game title, date, and start/end time for 1–3 sessions"
+  ),
+  Frequency = c(
+    "Daily",                              # last 24h context
+    "Biweekly (every 2 weeks)",
+    "Biweekly (every 2 weeks)"
+  )
+)
+
+appendix_tbl <- bind_rows(
+  # rename the single differing column header for merge only
+  rename(t_trait, `Response format` = `Response Format`),
+  t_daily,
+  t_biweekly,
+  t_monthly,
+  t_selfreport
+) |>
+  arrange(Group, Construct) |>
+  select(Construct, Measure, `Example Item`, `Response format`, Frequency) |> 
+  bind_rows(t_selfreport) |> 
+  mutate(
+    Frequency = factor(
+      Frequency,
+      levels = c(
+        "Once (baseline)",
+        "Twice (biweekly waves 1 & 6)",
+        "Daily",
+        "Biweekly (every 2 weeks)",
+        "Monthly (alternating biweekly surveys)"
+      ),
+      ordered = TRUE
+    )
+  ) |> 
+  arrange(Frequency)
+
+# Footnote index for Gaming Disorder Symptoms row
+idx_gd <- which(appendix_tbl$Construct == "Gaming Disorder Symptoms")
+
+# ----- Render tinytable (small font, escaped safely) -----
+appendix_tbl |>
+  tt(
+    caption = "All self-report measures and their assessment frequency",
+    notes = list(
+      "a" = list(i = idx_gd, j = 1,
+                 text = "Measured twice, at biweekly waves 1 and 6.")
+    )
+  ) |>
+  # keep markdown/quarto processing for non-Typst runs too
+  format_tt(escape = FALSE, markdown = TRUE, quarto = TRUE) |>
+  style_tt(fontsize = 0.5)
+
+```
+
+### END
