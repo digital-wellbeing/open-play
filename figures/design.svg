@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="545" height="550" viewBox="125 50 545 550">
+  <defs>
+    <style>
+      text {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      }
+      .day-label { font-size: 12px; font-weight: 600; }
+      .week-label { font-size: 12px; font-weight: 600; }
+      .section-label { font-size: 13px; font-weight: 600; }
+      .retention-text { font-size: 11px; font-weight: 600; }
+      .legend-text { font-size: 12px; fill: #555; }
+    </style>
+  </defs>
+  
+  <g transform="translate(225.5, 95)">
+    <!-- Day labels -->
+    <text x="15" y="-10" text-anchor="middle" class="day-label">1</text>
+    <text x="53" y="-10" text-anchor="middle" class="day-label">2</text>
+    <text x="91" y="-10" text-anchor="middle" class="day-label">3</text>
+    <text x="129" y="-10" text-anchor="middle" class="day-label">4</text>
+    <text x="167" y="-10" text-anchor="middle" class="day-label">5</text>
+    <text x="205" y="-10" text-anchor="middle" class="day-label">6</text>
+    <text x="243" y="-10" text-anchor="middle" class="day-label">7</text>
+    
+    <!-- "Day" label -->
+    <text x="129" y="-25" text-anchor="middle" class="section-label">Day</text>
+    
+    <!-- "Retention" label -->
+    <text x="326.4" y="-10" text-anchor="middle" class="section-label">Retention</text>
+    
+    <!-- "Week" label (rotated) -->
+    <text x="-50" y="209" text-anchor="middle" class="section-label" transform="rotate(-90, -50, 209)">Week</text>
+    
+    <!-- Week 1 -->
+    <g transform="translate(0, 0)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">1</text>
+      <!-- Day 1: daily, biweekly, cognitive (equal thirds: 120° each, starting at top) -->
+      <path d="M 15,15 L 15,3 A 12,12 0 0,1 25.392304,21 Z" fill="#4A90E2" stroke="white" stroke-width="0.5"/>
+      <path d="M 15,15 L 25.392304,21 A 12,12 0 0,1 4.607696,21 Z" fill="#F5A623" stroke="white" stroke-width="0.5"/>
+      <path d="M 15,15 L 4.607696,21 A 12,12 0 0,1 15,3 Z" fill="#7ED321" stroke="white" stroke-width="0.5"/>
+      <!-- Days 2-7: daily only -->
+      <circle cx="53" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="91" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="129" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="167" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="205" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="243" cy="15" r="12" fill="#4A90E2"/>
+      <!-- Retention bar -->
+      <rect x="277.4" y="5" width="60" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">100.0%</text>
+    </g>
+    
+    <!-- Week 2 -->
+    <g transform="translate(0, 38)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">2</text>
+      <circle cx="15" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="53" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="91" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="129" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="167" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="205" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="243" cy="15" r="12" fill="#4A90E2"/>
+      <rect x="277.4" y="5" width="59.94" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">99.9%</text>
+    </g>
+    
+    <!-- Week 3 -->
+    <g transform="translate(0, 76)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">3</text>
+      <!-- Day 1: daily, biweekly (half and half: 180° each, starting at top) -->
+      <path d="M 15,15 L 15,3 A 12,12 0 0,1 15,27 Z" fill="#4A90E2" stroke="white" stroke-width="0.5"/>
+      <path d="M 15,15 L 15,27 A 12,12 0 0,1 15,3 Z" fill="#F5A623" stroke="white" stroke-width="0.5"/>
+      <circle cx="53" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="91" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="129" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="167" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="205" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="243" cy="15" r="12" fill="#4A90E2"/>
+      <rect x="277.4" y="5" width="59.22" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">98.7%</text>
+    </g>
+    
+    <!-- Week 4 -->
+    <g transform="translate(0, 114)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">4</text>
+      <circle cx="15" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="53" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="91" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="129" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="167" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="205" cy="15" r="12" fill="#4A90E2"/>
+      <circle cx="243" cy="15" r="12" fill="#4A90E2"/>
+      <rect x="277.4" y="5" width="57.66" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">96.1%</text>
+    </g>
+    
+    <!-- Week 5 -->
+    <g transform="translate(0, 152)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">5</text>
+      <!-- Day 1: daily, biweekly, cognitive (equal thirds: 120° each, starting at top) -->
+      <path d="M 15,15 L 15,3 A 12,12 0 0,1 25.392304,21 Z" fill="#4A90E2" stroke="white" stroke-width="0.5"/>
+      <path d="M 15,15 L 25.392304,21 A 12,12 0 0,1 4.607696,21 Z" fill="#F5A623" stroke="white" stroke-width="0.5"/>
+      <path d="M 15,15 L 4.607696,21 A 12,12 0 0,1 15,3 Z" fill="#7ED321" stroke="white" stroke-width="0.5"/>
+      <!-- Day 2: daily -->
+      <circle cx="53" cy="15" r="12" fill="#4A90E2"/>
+      <!-- Days 3-7: none -->
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="55.8" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">93.0%</text>
+    </g>
+    
+    <!-- Week 6 -->
+    <g transform="translate(0, 190)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">6</text>
+      <circle cx="15" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="53" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="53.1" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">88.5%</text>
+    </g>
+    
+    <!-- Week 7 -->
+    <g transform="translate(0, 228)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">7</text>
+      <circle cx="15" cy="15" r="12" fill="#F5A623"/>
+      <circle cx="53" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="50.4" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">84.0%</text>
+    </g>
+    
+    <!-- Week 8 -->
+    <g transform="translate(0, 266)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">8</text>
+      <circle cx="15" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="53" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="47.58" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">79.3%</text>
+    </g>
+    
+    <!-- Week 9 -->
+    <g transform="translate(0, 304)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">9</text>
+      <!-- Day 1: biweekly, cognitive (half and half: 180° each, starting at top) -->
+      <path d="M 15,15 L 15,3 A 12,12 0 0,1 15,27 Z" fill="#F5A623" stroke="white" stroke-width="0.5"/>
+      <path d="M 15,15 L 15,27 A 12,12 0 0,1 15,3 Z" fill="#7ED321" stroke="white" stroke-width="0.5"/>
+      <circle cx="53" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="46.08" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">76.8%</text>
+    </g>
+    
+    <!-- Week 10 -->
+    <g transform="translate(0, 342)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">10</text>
+      <circle cx="15" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="53" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="43.74" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">72.9%</text>
+    </g>
+    
+    <!-- Week 11 -->
+    <g transform="translate(0, 380)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">11</text>
+      <circle cx="15" cy="15" r="12" fill="#F5A623"/>
+      <circle cx="53" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="42.48" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">70.8%</text>
+    </g>
+    
+    <!-- Week 12 -->
+    <g transform="translate(0, 418)">
+      <text x="-25" y="19" text-anchor="middle" class="week-label">12</text>
+      <circle cx="15" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="53" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="91" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="129" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="167" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="205" cy="15" r="12" fill="#C0C0C0"/>
+      <circle cx="243" cy="15" r="12" fill="#C0C0C0"/>
+      <rect x="277.4" y="5" width="39.96" height="20" fill="#808080" rx="2"/>
+      <text x="347.4" y="19" class="retention-text">66.6%</text>
+    </g>
+  </g>
+  
+  <!-- Legend -->
+  <g transform="translate(150, 580)">
+    <!-- Daily Survey -->
+    <circle cx="8" cy="8" r="8" fill="#4A90E2"/>
+    <text x="22" y="12" class="legend-text">Daily Survey</text>
+    
+    <!-- Biweekly Survey -->
+    <circle cx="128" cy="8" r="8" fill="#F5A623"/>
+    <text x="142" y="12" class="legend-text">Biweekly Survey</text>
+    
+    <!-- Cognitive Tests -->
+    <circle cx="268" cy="8" r="8" fill="#7ED321"/>
+    <text x="282" y="12" class="legend-text">Cognitive Tests</text>
+    
+    <!-- No Survey -->
+    <circle cx="408" cy="8" r="8" fill="#C0C0C0"/>
+    <text x="422" y="12" class="legend-text">No Survey</text>
+  </g>
+</svg>
