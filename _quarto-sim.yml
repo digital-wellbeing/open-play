@@ -1,17 +1,20 @@
 # Activate with: quarto render --profile sim
 project:
   # Render the manuscript plus the simulation pages
+  type: book
   render:
     - index.qmd
-    - R/*.qmd
+    - R/stage_1_simulations/*.qmd
 
 book:
   # keep the manuscript first, then add one chapter that *contains* all sims
   chapters:
+    - part: "Data Descriptor Manuscript"
     - index.qmd
-    - part: "Simulation Study"
+    - part: "Stage 1 Simulations"
       chapters:
-        - R/1_preprocess.qmd
-        - R/2_basicNeeds.qmd
-        - R/3_sleep.qmd
-        - R/4_genres.qmd
+        - R/stage_1_simulations/0_generateSyntheticData.qmd
+        - R/stage_1_simulations/1_preprocess.qmd
+        - R/stage_1_simulations/2_basicNeeds.qmd
+        - R/stage_1_simulations/3_sleep.qmd
+        - R/stage_1_simulations/4_genres.qmd

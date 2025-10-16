@@ -41,7 +41,7 @@ clean_string <- function(text) {
 #| label: load-data
 #| code-summary: "Show code (load data)"
 
-panel <- fread("data/data-synthetic-clean/synPanelClean.csv.gz") |> 
+panel <- fread("data/synthetic/data-synthetic-clean/synPanelClean.csv.gz") |> 
   mutate(
     start_date = case_when(
       wave == 1 ~ as.Date("2024-05-01"),
@@ -54,13 +54,13 @@ panel <- fread("data/data-synthetic-clean/synPanelClean.csv.gz") |>
     end_date = start_date + 13  # Each wave covers a 14-day period
   )
 
-diary <- read_csv("data/data-synthetic-clean/synDiaryClean.csv.gz")
-intake <- read_csv("data/data-synthetic-clean/synIntakeClean.csv.gz")
-ninRaw <- read_csv("data/data-synthetic-clean/synNintendoClean.csv.gz")
-xboxRaw <- read_csv("data/data-synthetic-clean/synXboxClean.csv.gz") 
-steamRaw <- read_csv("data/data-synthetic-clean/synSteamClean.csv.gz")
-iOSRaw <- read_csv("data/data-synthetic-raw/syniOS.csv.gz")
-androidRaw <- read_csv("data/data-synthetic-raw/synAndroid.csv.gz")
+diary <- read_csv("data/synthetic/data-synthetic-clean/synDiaryClean.csv.gz")
+intake <- read_csv("data/synthetic/data-synthetic-clean/synIntakeClean.csv.gz")
+ninRaw <- read_csv("data/synthetic/data-synthetic-clean/synNintendoClean.csv.gz")
+xboxRaw <- read_csv("data/synthetic/data-synthetic-clean/synXboxClean.csv.gz") 
+steamRaw <- read_csv("data/synthetic/data-synthetic-clean/synSteamClean.csv.gz")
+iOSRaw <- read_csv("data/synthetic/data-synthetic-raw/syniOS.csv.gz")
+androidRaw <- read_csv("data/synthetic/data-synthetic-raw/synAndroid.csv.gz")
 
 ```
 
@@ -144,10 +144,9 @@ genre_vars <- aggregated_playtime |>
   colnames()
 
 # demean
-aggregated_playtime <- aggregated_playtime |> 
-  bind_cols(
-    datawizard::demean(aggregated_playtime, select = c(genre_vars, "total_time_all_genres"), by = "pid")
-  ) |> 
+aggregated_playtime <- datawizard::demean(aggregated_playtime, 
+                                          select = c(genre_vars, "total_time_all_genres"), 
+                                          by = "pid") |> 
   left_join(panel, by = c("pid", "wave"))
 
 ```

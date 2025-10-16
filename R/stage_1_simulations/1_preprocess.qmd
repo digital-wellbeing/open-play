@@ -24,19 +24,19 @@ set.seed(8675309)
 #| label: load-data
 #| code-summary: "Show the code (load data)"
 
-synDiary <- read_csv("data/data-synthetic-raw/synDiary.csv.gz")
+synDiary <- read_csv("data/synthetic/data-synthetic-raw/synDiary.csv.gz")
 
 # for unknown reasons, read_csv imports some columns incorrectly, so we use data.table::fread
-synPanel <- fread("data/data-synthetic-raw/synPanel.csv.gz") 
-synIntake <- read_csv("data/data-synthetic-raw/synIntake.csv.gz")
+synPanel <- fread("data/synthetic/data-synthetic-raw/synPanel.csv.gz") 
+synIntake <- read_csv("data/synthetic/data-synthetic-raw/synIntake.csv.gz")
 
-synNintendo <- read_csv("data/data-synthetic-raw/synNintendo.csv.gz") |>
+synNintendo <- read_csv("data/synthetic/data-synthetic-raw/synNintendo.csv.gz") |>
   mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
-synXbox <- read_csv("data/data-synthetic-raw/synXbox.csv.gz") |>
+synXbox <- read_csv("data/synthetic/data-synthetic-raw/synXbox.csv.gz") |>
   mutate(sessionEnd = sessionStart + minutes(round(duration)), .after = sessionStart)
-synSteam <- read_csv("data/data-synthetic-raw/synSteam.csv.gz")
-syniOS <- read_csv("data/data-synthetic-raw/syniOS.csv.gz")
-synAndroid <- read_csv("data/data-synthetic-raw/synAndroid.csv.gz")
+synSteam <- read_csv("data/synthetic/data-synthetic-raw/synSteam.csv.gz")
+syniOS <- read_csv("data/synthetic/data-synthetic-raw/syniOS.csv.gz")
+synAndroid <- read_csv("data/synthetic/data-synthetic-raw/synAndroid.csv.gz")
 ```
 
 ## Clean intake
@@ -603,13 +603,13 @@ mice(data = diaryWide, m = 5, method = "pmm", maxit = 5, parallelseed = 8675309)
 #| label: save-data
 #| code-summary: "Show the code (save data)"
 
-write_csv(synIntakeClean, "data/data-synthetic-clean/synIntakeClean.csv.gz")
-write_csv(synDiaryClean, "data/data-synthetic-clean/synDiaryClean.csv.gz")
-write_csv(synPanelClean, "data/data-synthetic-clean/synPanelClean.csv.gz")
-write_csv(synNintendoClean, "data/data-synthetic-clean/synNintendoClean.csv.gz")
-write_csv(synXboxClean, "data/data-synthetic-clean/synXboxClean.csv.gz")
-write_csv(synSteamClean, "data/data-synthetic-clean/synSteamClean.csv.gz")
-write_csv(syniOS, "data/data-synthetic-clean/syniOSClean.csv.gz")
-write_csv(synAndroidClean, "data/data-synthetic-clean/synAndroidClean.csv.gz")
+write_csv(synIntakeClean, "data/synthetic/data-synthetic-clean/synIntakeClean.csv.gz")
+write_csv(synDiaryClean, "data/synthetic/data-synthetic-clean/synDiaryClean.csv.gz")
+write_csv(synPanelClean, "data/synthetic/data-synthetic-clean/synPanelClean.csv.gz")
+write_csv(synNintendoClean, "data/synthetic/data-synthetic-clean/synNintendoClean.csv.gz")
+write_csv(synXboxClean, "data/synthetic/data-synthetic-clean/synXboxClean.csv.gz")
+write_csv(synSteamClean, "data/synthetic/data-synthetic-clean/synSteamClean.csv.gz")
+write_csv(syniOS, "data/synthetic/data-synthetic-clean/syniOSClean.csv.gz")
+write_csv(synAndroidClean, "data/synthetic/data-synthetic-clean/synAndroidClean.csv.gz")
 
 ```
