@@ -17,11 +17,11 @@ p_load(tidyverse, lme4, marginaleffects, glmmTMB, mice, modelsummary)
 #| label: load-data
 #| code-summary: "Show the code (load data)"
 
-diary <- read_csv("data/data-synthetic-clean/synDiaryClean.csv.gz") # requires that the preprocessing script has been run
-intake <- read_csv("data/data-synthetic-clean/synIntakeClean.csv.gz")
-nin <- read_csv("data/data-synthetic-clean/synNintendoClean.csv.gz")
-xbox <- read_csv("data/data-synthetic-clean/synXboxClean.csv.gz")
-steam <- read_csv("data/data-synthetic-clean/synSteamClean.csv.gz")
+diary <- read_csv("data/synthetic/data-synthetic-clean/synDiaryClean.csv.gz") # requires that the preprocessing script has been run
+intake <- read_csv("data/synthetic/data-synthetic-clean/synIntakeClean.csv.gz")
+nin <- read_csv("data/synthetic/data-synthetic-clean/synNintendoClean.csv.gz")
+xbox <- read_csv("data/synthetic/data-synthetic-clean/synXboxClean.csv.gz")
+steam <- read_csv("data/synthetic/data-synthetic-clean/synSteamClean.csv.gz")
 
 ```
 

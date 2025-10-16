@@ -21,8 +21,8 @@ studyStartDate <- as_datetime("2024-05-01 00:00:00")
 # don't use read_csv for the synPanelClean! no idea why but it guesses column
 # type wrong, leading to a lot of NA imports
 
-data.panel <- fread("data/data-synthetic-clean/synPanelClean.csv.gz") |> # requires that the preprocessing script has been run
-  left_join(read_csv("data/data-synthetic-clean/synIntakeClean.csv.gz"), by = "pid") |> 
+data.panel <- fread("data/synthetic/data-synthetic-clean/synPanelClean.csv.gz") |> # requires that the preprocessing script has been run
+  left_join(read_csv("data/synthetic/data-synthetic-clean/synIntakeClean.csv.gz"), by = "pid") |> 
   dplyr::select(pid, wave, region, psqi_6, starts_with(c("mctq", "eps", "psqi")), total_hours_sleep, wemwbs, 
          age_scaled, bmi_scaled, SES_index_scaled, msf_sc_numeric, gender) |> 
   mutate(
@@ -30,11 +30,11 @@ data.panel <- fread("data/data-synthetic-clean/synPanelClean.csv.gz") |> # requi
     pid = as.character(pid)
   )
 
-data.nin <- read_csv("data/data-synthetic-clean/synNintendoClean.csv.gz")
-data.xbox <- read_csv("data/data-synthetic-clean/synXboxClean.csv.gz")
-data.steam <- read_csv("data/data-synthetic-clean/synSteamClean.csv.gz")
-data.android <- read_csv("data/data-synthetic-raw/synAndroid.csv.gz")
-data.ios <- read_csv("data/data-synthetic-raw/syniOS.csv.gz")
+data.nin <- read_csv("data/synthetic/data-synthetic-clean/synNintendoClean.csv.gz")
+data.xbox <- read_csv("data/synthetic/data-synthetic-clean/synXboxClean.csv.gz")
+data.steam <- read_csv("data/synthetic/data-synthetic-clean/synSteamClean.csv.gz")
+data.android <- read_csv("data/synthetic/data-synthetic-raw/synAndroid.csv.gz")
+data.ios <- read_csv("data/synthetic/data-synthetic-raw/syniOS.csv.gz")
 
 ```
 

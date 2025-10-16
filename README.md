@@ -33,13 +33,15 @@ In `R/`, we have a number of helper functions used in the analysis scripts, as w
 
 ## Simulation 
 
-🔴️ The simulatio analysis pipeline is not currently integrated into the rendering pipeline - Nick will fix. 🔴
+For the Stage 1 Registered Report associated with this project, we did extensive simulations to validate our data collection and analyses. These remain present in the current repo, and can be run by using the `--profile sim` flag when rendering the quarto documents. This will then generate a book instead of a website. 
 
-- In `1_preprocess.qmd`, we clean the data and calculate relevant derived variables (e.g., mean scores, play behavior metrics, and so on).
+Data for the simulations is found in `data/synthetic`. 
 
-We then analyze these data in the following scripts:
+The simulation pipeline consists of:
 
-- In `2_basicNeeds.qmd`, we present the analysis code for Study 1: the relationship between basic needs and video game play.
-- In `3_sleep.qmd`, we present the analysis code for Study 2: the relationship between sleep and video game play.
-- In `4_genres.qmd`, we present the analysis code for Study 3: the relationship between video game genres and video game play.
+- [not run] `0_generateSyntheticData.qmd`, documents the internal process we used to generate synthetic data
+- `1_preprocess.qmd` cleans the data and calculates relevant derived variables (e.g., mean scores, play behavior metrics, and so on).
+- `2_basicNeeds.qmd` presents the analysis code for Study 1: the relationship between basic needs and video game play.
+- `3_sleep.qmd` presents the analysis code for Study 2: the relationship between sleep and video game play.
+- `4_genres.qmd` presents the analysis code for Study 3: the relationship between video game genres and video game play.
 

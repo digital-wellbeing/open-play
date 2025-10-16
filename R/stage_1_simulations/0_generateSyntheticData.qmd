@@ -2,10 +2,12 @@
 title: "Generate Synthetic Data"
 output: html_document
 execute-dir: project
+execute:
+  eval: false
 ---
 
 ::: {.callout-note}
-This file creates the synthetic data used in our simulation analyses. Its outputs are saved in the `data-synthetic-raw` folder; this thus does not need to be run locally in order to reproduce the simulation analyses.
+This file is deprecated. It previously synthetically sampled from real data, with PII and thus internal only, and saved it's outputs to `data/data-synthetic-raw`. These files are fixed and this no longer needs to be run, but is saved for posterity to have a record of the data generating process. 
 :::
 
 ## Libraries

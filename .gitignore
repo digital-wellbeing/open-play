@@ -21,6 +21,7 @@ deprecated/
 tinytable_assets/
 docs/
 _site/
+_freeze/R/stage_1_simulations/
 
 **/*.quarto_ipynb
 data/clean/*
