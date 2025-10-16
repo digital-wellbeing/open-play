@@ -119,6 +119,8 @@ format:
     wordcount: true
     theme: jou
     citeproc: true
+    mainfont: "Liberation Serif"
+    sansfont: "Liberation Sans"
     include-before-body:
       - text: "#show <refs>: set par(hanging-indent: 1.4em)"
   docx: default
@@ -142,6 +144,7 @@ library(ggstream)
 library(patchwork)
 library(tinytable)
 library(sparkline)
+library(Hmisc)
 
 # Load custom functions
 source("R/helpers.R")
@@ -1365,11 +1368,211 @@ ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
 
 ```
 
-Finally, @fig-case-study descriptively visualizes three participants' (in the 25th, 50th, and 75th percentiles of playtime) playtime and wellbeing throughout the study.
+@fig-case-study illustrates the temporal dynamics of gaming behavior and mental wellbeing through three representative case studies.
 
 ```{r}
 #| label: fig-case-study
+#| fig-cap: "Daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green). Orange line shows biweekly mental wellbeing scores (WEMWBS, range 14-70) measured at six study waves. Participants were selected as closest representatives of the 25th, 50th, and 75th percentiles of total playtime distribution across the full 84-day study period."
+#| fig-asp: 1.2
 
+# Find each participant's study start date (first panel wave)
+study_start_dates <- panel |>
+  group_by(pid) |>
+  summarise(study_start = min(date, na.rm = TRUE), .groups = "drop") |>
+  mutate(pid = as.character(pid))
+
+# Join study start dates and calculate study day
+daily_with_study_day <- daily_all |>
+  left_join(study_start_dates, by = "pid") |>
+  filter(!is.na(study_start)) |>
+  mutate(
+    study_day = as.integer(floor(as.numeric(difftime(day_local, study_start, units = "days")))) + 1
+  ) |>
+  filter(study_day >= 1 & study_day <= 84)
+
+# Calculate total playtime per participant (sum across all platforms and days 1-84)
+total_playtime <- daily_with_study_day |>
+  group_by(pid) |>
+  summarise(
+    total_minutes = sum(minutes, na.rm = TRUE),
+    n_platforms = n_distinct(platform[minutes > 0]),
+    .groups = "drop"
+  )
+
+# Calculate percentiles
+percentiles <- quantile(total_playtime$total_minutes, probs = c(0.25, 0.50, 0.75), na.rm = TRUE)
+
+# Find participant closest to each percentile based on total playtime
+find_closest_participant <- function(target_value, data) {
+  data |>
+    mutate(distance = abs(total_minutes - target_value)) |>
+    slice_min(distance, n = 1, with_ties = FALSE) |>
+    pull(pid)
+}
+
+selected_pids <- c(
+  "p25" = find_closest_participant(percentiles[1], total_playtime),
+  "p50" = find_closest_participant(percentiles[2], total_playtime),
+  "p75" = find_closest_participant(percentiles[3], total_playtime)
+)
+
+# Process panel data to get wellbeing scores
+panel_wellbeing <- panel |>
+  mutate(pid = as.character(pid)) |>
+  left_join(study_start_dates, by = "pid") |>
+  filter(!is.na(study_start)) |>
+  mutate(
+    study_day = as.integer(floor(as.numeric(difftime(date, study_start, units = "days")))) + 1
+  ) |>
+  filter(pid %in% selected_pids) |>
+  # Calculate wellbeing composite scores
+  rowwise() |>
+  mutate(
+    # WEMWBS - mental wellbeing (14 items, scale 1-5 each, summed for total score 14-70)
+    wemwbs = sum(c_across(starts_with("wemwbs_")), na.rm = TRUE)
+  ) |>
+  ungroup() |>
+  select(pid, study_day, wave, wemwbs) |>
+  mutate(
+    percentile = case_when(
+      pid == selected_pids["p25"] ~ "25th Percentile",
+      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
+      pid == selected_pids["p75"] ~ "75th Percentile",
+      TRUE ~ NA_character_
+    ),
+    percentile = factor(percentile, levels = c("25th Percentile", "50th Percentile (Median)", "75th Percentile"))
+  )
+
+# Prepare data for selected participants
+plot_data <- daily_with_study_day |>
+  filter(pid %in% selected_pids) |>
+  mutate(
+    percentile = case_when(
+      pid == selected_pids["p25"] ~ "25th Percentile",
+      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
+      pid == selected_pids["p75"] ~ "75th Percentile",
+      TRUE ~ NA_character_
+    ),
+    percentile = factor(percentile, levels = c("25th Percentile", "50th Percentile (Median)", "75th Percentile"))
+  )
+
+# Create a complete grid of study days for each participant
+complete_grid <- expand_grid(
+  pid = selected_pids,
+  study_day = 1:84,
+  platform = unique(daily_all$platform)
+) |>
+  mutate(
+    percentile = case_when(
+      pid == selected_pids["p25"] ~ "25th Percentile",
+      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
+      pid == selected_pids["p75"] ~ "75th Percentile",
+      TRUE ~ NA_character_
+    ),
+    percentile = factor(percentile, levels = c("25th Percentile", "50th Percentile (Median)", "75th Percentile"))
+  )
+
+# Fill in missing days with 0 minutes
+plot_data_complete <- complete_grid |>
+  left_join(plot_data |> select(pid, study_day, platform, minutes), 
+            by = c("pid", "study_day", "platform")) |>
+  mutate(minutes = replace_na(minutes, 0))
+
+# Calculate global max playtime across all percentiles for fixed y-axis
+global_max_playtime <- plot_data_complete |>
+  group_by(percentile, study_day) |>
+  summarise(daily_total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+  pull(daily_total) |>
+  max(na.rm = TRUE)
+
+# Calculate coefficient for dual axis (wellbeing 70 maps to global max playtime)
+# This will be the same for all panels
+coeff <- global_max_playtime / 56
+y_max_for_wb70 <- (70 - 14) * coeff
+
+# Create separate plots for each percentile to handle dual y-axes properly
+plots_list <- list()
+pct_levels <- levels(plot_data_complete$percentile)
+
+for (i in seq_along(pct_levels)) {
+  pct_level <- pct_levels[i]
+  is_bottom <- (i == length(pct_levels))
+  is_middle <- (i == 2)  # Middle facet for y-axis labels
+  
+  # Filter data for this percentile
+  plot_data_pct <- plot_data_complete |> filter(percentile == pct_level)
+  wellbeing_data_pct <- panel_wellbeing |> filter(percentile == pct_level)
+  
+  p_temp <- ggplot() +
+    # Playtime bars (primary y-axis)
+    geom_col(
+      data = plot_data_pct,
+      aes(x = study_day, y = minutes, fill = platform),
+      width = 1
+    ) +
+    # Wellbeing line (secondary y-axis) - transform to playtime scale
+    geom_line(
+      data = wellbeing_data_pct,
+      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
+      color = "#FF6B35",
+      linewidth = 1.2,
+      linetype = "solid"
+    ) +
+    geom_point(
+      data = wellbeing_data_pct,
+      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
+      color = "#FF6B35",
+      size = 3,
+      shape = 21,
+      fill = "white",
+      stroke = 1.5
+    ) +
+    scale_fill_manual(
+      values = c(
+        "Nintendo" = "#E60012",  # Nintendo red
+        "Steam" = "#1B2838",     # Steam dark blue
+        "Xbox" = "#107C10"       # Xbox green
+      ),
+      name = "Platform"
+    ) +
+    scale_x_continuous(
+      name = if (is_bottom) "Study Day" else NULL,
+      breaks = seq(0, 84, by = 14),
+      expand = c(0, 0)
+    ) +
+    scale_y_continuous(
+      name = if (is_middle) "Total Daily Playtime (minutes)" else NULL,
+      limits = c(0, y_max_for_wb70 * 1.05),
+      expand = c(0, 0),
+      sec.axis = sec_axis(
+        transform = ~ . / coeff + 14,
+        name = if (is_middle) "Wellbeing (WEMWBS)" else NULL,
+        breaks = seq(14, 70, by = 7)
+      )
+    ) +
+    ggtitle(pct_level) +
+    theme(
+      axis.title.y.right = if (is_middle) element_text(color = "#FF6B35", size = 10) else element_blank(),
+      axis.text.y.right = element_text(color = "#FF6B35", size = 9),
+      axis.title.y.left = if (is_middle) element_text(size = 10) else element_blank(),
+      plot.title = element_text(size = 11, hjust = 0.5),
+      axis.title.x = if (is_bottom) element_text() else element_blank()
+    )
+  
+  plots_list[[pct_level]] <- p_temp
+}
+
+# Combine plots using patchwork
+wrap_plots(plots_list, ncol = 1, guides = "collect") +
+  plot_annotation(
+    title = "Daily Gaming Patterns and Wellbeing Across Platforms",
+    subtitle = "Sample gaming timeseries with biweekly wellbeing (WEMWBS)",
+    theme = theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 11)
+    )
+  ) &
+  theme(legend.position = "bottom")
 ```
 
 ## Attention control
