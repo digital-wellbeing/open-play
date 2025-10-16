@@ -8,7 +8,7 @@ data-synthetic/data-template/
 data/synthetic/data-template/
 *_cache/
 *_files/
-
+.vscode/
 outputs/
 /.quarto/
 .Renviron
@@ -25,3 +25,5 @@ _site/
 **/*.quarto_ipynb
 data/clean/*
 *.knit.md
+
+/.luarc.json
