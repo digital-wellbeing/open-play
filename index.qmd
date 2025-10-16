@@ -152,6 +152,17 @@ source("R/helpers.R")
 set.seed(8675309)
 options(scipen = 999)
 
+# Configure tinytable
+options(tinytable_tt_theme_placement = "after")
+options(tinytable_print_output = NULL)
+options(tinytable_tt_digits = 2)
+
+# For HTML, use portable mode to embed images inline (avoids external file dependencies)
+# For other formats, we'll exclude plot columns entirely to avoid path issues
+if (knitr::is_html_output()) {
+  options(tinytable_html_portable = TRUE)
+}
+
 theme_set(theme_minimal())
 theme_update(
   strip.background = element_rect(fill = "black"),
@@ -347,9 +358,21 @@ THUMB_H <- 200
 LINEWIDTH <- 1.0
 
 # ---- helpers ----
-avg_days_platform <- function(pltf) {
-  daily_all |>
-    filter(platform == pltf) |>
+# Get PIDs of participants who completed at least one survey
+survey_pids <- union(
+  panel |> mutate(pid = as.character(pid)) |> pull(pid) |> unique(),
+  diary |> mutate(pid = as.character(pid)) |> pull(pid) |> unique()
+)
+
+avg_days_platform <- function(pltf, pids_filter = NULL) {
+  data <- daily_all |>
+    filter(platform == pltf)
+  
+  if (!is.null(pids_filter)) {
+    data <- data |> filter(pid %in% pids_filter)
+  }
+  
+  data |>
     group_by(pid) |>
     summarise(days = sum(minutes > 0, na.rm = TRUE), .groups = "drop") |>
     summarise(avg = mean(days, na.rm = TRUE), .groups = "drop") |>
@@ -390,6 +413,11 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
 }
 
 # ---- table rows (order preserved) ----
+# Filter telemetry to only include participants who completed at least one survey
+steam_survey <- steam |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
+nintendo_survey <- nintendo |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
+xbox_survey <- xbox |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
+
 overview <- bind_rows(
   summ_basic(intake, pid, "Intake survey", avg_days = 1),
   summ_basic(
@@ -404,14 +432,14 @@ overview <- bind_rows(
     "Biweekly surveys",
     avg_days = nrow(panel) / n_distinct(panel$pid)
   ),
-  summ_basic(steam, pid, "Steam", avg_days = avg_days_platform("Steam")),
+  summ_basic(steam_survey, pid, "Steam", avg_days = avg_days_platform("Steam", survey_pids)),
   summ_basic(
-    nintendo,
+    nintendo_survey,
     pid,
     "Nintendo",
-    avg_days = avg_days_platform("Nintendo")
+    avg_days = avg_days_platform("Nintendo", survey_pids)
   ),
-  summ_basic(xbox, pid, "Xbox", avg_days = avg_days_platform("Xbox"))
+  summ_basic(xbox_survey, pid, "Xbox", avg_days = avg_days_platform("Xbox", survey_pids))
 ) |>
   mutate(
     Participants = number(
@@ -449,9 +477,9 @@ plot_data <- list(
   events_per_participant(intake, pid, cap = 1),
   events_per_participant(diary, pid, cap = 30),
   events_per_participant(panel, pid, cap = 6),
-  events_per_participant(steam, pid, cap = Inf),
-  events_per_participant(nintendo, pid, cap = Inf),
-  events_per_participant(xbox, pid, cap = Inf)
+  events_per_participant(steam_survey, pid, cap = Inf),
+  events_per_participant(nintendo_survey, pid, cap = Inf),
+  events_per_participant(xbox_survey, pid, cap = Inf)
 )
 
 # ---- winsorize globally, then log-scale if requested ----
@@ -1087,9 +1115,441 @@ We implemented a variety of data quality checks.
 
 ## Missingness
 
-TODO - figure
+As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by region (US and UK) and data type (Survey, Telemetry, and Cognitive Task). 
 
-TODO - text
+```{r}
+#| label: tbl-missingness
+#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, observations actually collected, missing observations, median number of missing observations per participant, and percentage of data completeness for each measure. Retention plots (right columns) visualize the proportion of participants remaining active over time: for surveys and tasks, retention is calculated across study days or waves; for telemetry, across the 84-day study period. Density plots show the distribution of observations per participant."
+
+# Helper function to calculate study days from enrollment date
+get_study_days <- function(dates, pid, intake_data) {
+  enrollment_date <- intake_data |>
+    filter(pid == !!pid) |>
+    pull(enrollment_date) |>
+    first()
+
+  if (is.na(enrollment_date)) {
+    return(rep(NA_real_, length(dates)))
+  }
+
+  enrollment_datetime <- as.POSIXct(enrollment_date, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  date_datetimes <- as.POSIXct(dates, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+  study_days <- as.numeric(difftime(date_datetimes, enrollment_datetime, units = "days"))
+  return(ceiling(study_days) + 1)
+}
+
+# Identify participants based on actual survey participation
+uk_pids <- panel |>
+  mutate(pid = as.character(pid)) |>
+  filter(pid %in% (intake |> mutate(pid = as.character(pid)) |> filter(country == "UK") |> pull(pid))) |>
+  pull(pid) |>
+  unique()
+
+us_pids_panel <- panel |>
+  mutate(pid = as.character(pid)) |>
+  filter(pid %in% (intake |> mutate(pid = as.character(pid)) |> filter(country == "US") |> pull(pid))) |>
+  pull(pid) |>
+  unique()
+
+us_pids_diary <- diary |>
+  mutate(pid = as.character(pid)) |>
+  pull(pid) |>
+  unique()
+
+us_pids <- union(us_pids_panel, us_pids_diary)
+
+# Helper function to calculate survey missingness
+calc_survey_missingness <- function(data, pids, region, measure_name, expected_n) {
+  # Ensure pid is character for consistency
+  data <- data |> mutate(pid = as.character(pid))
+
+  by_participant <- data |>
+    filter(pid %in% pids) |>
+    count(pid, name = "observed") |>
+    complete(pid = pids, fill = list(observed = 0)) |>
+    mutate(
+      expected = expected_n,
+      missing = expected - observed
+    )
+
+  actual_observed <- data |>
+    filter(pid %in% pids) |>
+    nrow()
+
+  # Calculate retention over time
+  max_days <- if (measure_name == "Daily Diary") 30 else 84
+
+  enrollment_lookup <- intake |>
+    filter(pid %in% pids) |>
+    select(pid, enrollment_date) |>
+    distinct()
+
+  last_response_by_participant <- data |>
+    filter(pid %in% pids) |>
+    left_join(enrollment_lookup, by = "pid") |>
+    mutate(
+      enrollment_datetime = as.POSIXct(enrollment_date, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+      response_datetime = as.POSIXct(date, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+      study_day = ceiling(as.numeric(difftime(response_datetime, enrollment_datetime, units = "days"))) + 1
+    ) |>
+    filter(!is.na(study_day) & study_day >= 1 & study_day <= max_days) |>
+    group_by(pid) |>
+    summarise(last_day = max(study_day, na.rm = TRUE), .groups = "drop")
+
+  retention_data <- sapply(1:max_days, function(day) {
+    n_retained <- sum(last_response_by_participant$last_day >= day)
+    n_retained / length(pids)
+  })
+
+  tibble(
+    region = region,
+    data_type = "Survey",
+    measure = measure_name,
+    n_participants = length(pids),
+    total_expected = length(pids) * expected_n,
+    total_observed = actual_observed,
+    total_missing = length(pids) * expected_n - actual_observed,
+    median_missing_per_participant = median(by_participant$missing, na.rm = TRUE),
+    obs_per_participant = list(by_participant$observed),
+    retention_over_time = list(retention_data),
+    complete_missingness = FALSE
+  )
+}
+
+# Helper function to get platform players
+get_platform_players <- function(platform_name, pids = NULL) {
+  result <- intake |>
+    mutate(pid = as.character(pid)) |>
+    filter(
+      str_detect(linked_platforms %||% "", platform_name) |
+      case_when(
+        platform_name == "Xbox" ~ coalesce(prop_xbox, 0) > 0,
+        platform_name == "Nintendo" ~ coalesce(prop_nintendo, 0) > 0,
+        platform_name == "Steam" ~ coalesce(prop_steam, 0) > 0,
+        TRUE ~ FALSE
+      )
+    ) |>
+    pull(pid) |>
+    unique()
+
+  if (!is.null(pids)) {
+    result <- intersect(result, pids)
+  }
+
+  return(as.character(result))
+}
+
+# Helper function to calculate telemetry missingness
+calc_telemetry_missingness <- function(telemetry_data, platform_name, pids, region) {
+  # Ensure pid is character for consistency
+  telemetry_data <- telemetry_data |> mutate(pid = as.character(pid))
+  telemetry_pids <- unique(telemetry_data$pid)
+  players <- get_platform_players(platform_name, pids)
+  no_telemetry <- setdiff(players, telemetry_pids)
+
+  by_participant <- telemetry_data |>
+    filter(pid %in% players) |>
+    count(pid, name = "observed") |>
+    complete(pid = players, fill = list(observed = 0))
+
+  obs_values <- by_participant$observed
+  has_complete_missingness <- length(intersect(players, telemetry_pids)) == 0
+
+  if (has_complete_missingness) {
+    obs_for_plot <- c(0, 0)
+  } else if (any(obs_values > 0)) {
+    q1 <- quantile(obs_values, 0.25, na.rm = TRUE)
+    q3 <- quantile(obs_values, 0.75, na.rm = TRUE)
+    iqr <- q3 - q1
+    lower_bound <- max(0, q1 - 1.5 * iqr)
+    upper_bound <- q3 + 1.5 * iqr
+    obs_for_plot <- obs_values[obs_values >= lower_bound & obs_values <= upper_bound]
+    if (length(obs_for_plot) < 2) obs_for_plot <- obs_values
+  } else {
+    obs_for_plot <- obs_values
+  }
+
+  if (length(obs_for_plot) < 2) {
+    obs_for_plot <- if (length(obs_for_plot) == 1) c(obs_for_plot, obs_for_plot) else c(0, 0)
+  }
+
+  # Calculate retention over time (84 days)
+  if (has_complete_missingness || nrow(telemetry_data |> filter(pid %in% players)) == 0) {
+    retention_data <- rep(0, 84)
+  } else {
+    enrollment_lookup <- intake |>
+      filter(pid %in% players) |>
+      select(pid, enrollment_date) |>
+      distinct()
+
+    last_activity_by_participant <- telemetry_data |>
+      filter(pid %in% players) |>
+      left_join(enrollment_lookup, by = "pid") |>
+      mutate(
+        enrollment_datetime = as.POSIXct(enrollment_date, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+        session_datetime = as.POSIXct(session_start, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+        study_day = ceiling(as.numeric(difftime(session_datetime, enrollment_datetime, units = "days"))) + 1
+      ) |>
+      filter(!is.na(study_day) & study_day >= 1 & study_day <= 84) |>
+      group_by(pid) |>
+      summarise(last_day = max(study_day, na.rm = TRUE), .groups = "drop")
+
+    retention_data <- sapply(1:84, function(day) {
+      n_retained <- sum(last_activity_by_participant$last_day >= day)
+      n_retained / length(players)
+    })
+  }
+
+  tibble(
+    region = region,
+    data_type = "Telemetry",
+    measure = platform_name,
+    n_participants = length(players),
+    total_expected = length(players),
+    total_observed = length(intersect(players, telemetry_pids)),
+    total_missing = length(no_telemetry),
+    median_missing_per_participant = NA_real_,
+    obs_per_participant = list(obs_for_plot),
+    retention_over_time = list(retention_data),
+    complete_missingness = has_complete_missingness
+  )
+}
+
+# Helper function to calculate cognitive task missingness
+calc_task_missingness <- function(data, pids, region, measure_name, expected_n) {
+  # Ensure pid is character for consistency
+  data <- data |> mutate(pid = as.character(pid))
+
+  by_participant <- data |>
+    filter(pid %in% pids) |>
+    count(pid, name = "observed") |>
+    complete(pid = pids, fill = list(observed = 0)) |>
+    mutate(
+      expected = expected_n,
+      missing = expected - observed
+    )
+
+  actual_observed <- data |>
+    filter(pid %in% pids) |>
+    nrow()
+
+  expected_waves <- c(1, 3, 5)
+
+  last_wave_by_participant <- data |>
+    filter(pid %in% pids) |>
+    group_by(pid) |>
+    summarise(last_wave = max(wave, na.rm = TRUE), .groups = "drop")
+
+  retention_data <- sapply(expected_waves, function(w) {
+    n_retained <- sum(last_wave_by_participant$last_wave >= w)
+    n_retained / length(pids)
+  })
+
+  tibble(
+    region = region,
+    data_type = "Task",
+    measure = measure_name,
+    n_participants = length(pids),
+    total_expected = length(pids) * expected_n,
+    total_observed = actual_observed,
+    median_missing_per_participant = median(by_participant$missing, na.rm = TRUE),
+    total_missing = length(pids) * expected_n - actual_observed,
+    obs_per_participant = list(by_participant$observed),
+    retention_over_time = list(retention_data),
+    complete_missingness = FALSE
+  )
+}
+
+# Calculate all statistics
+diary_stats_us <- calc_survey_missingness(diary, us_pids, "US", "Daily Diary", 30)
+panel_stats_us <- calc_survey_missingness(panel, us_pids, "US", "Biweekly Panel", 6)
+panel_stats_uk <- calc_survey_missingness(panel, uk_pids, "UK", "Biweekly Panel", 6)
+xbox_stats_us <- calc_telemetry_missingness(xbox, "Xbox", us_pids, "US")
+xbox_stats_uk <- calc_telemetry_missingness(xbox, "Xbox", uk_pids, "UK")
+nintendo_stats_us <- calc_telemetry_missingness(nintendo, "Nintendo", us_pids, "US")
+nintendo_stats_uk <- calc_telemetry_missingness(nintendo, "Nintendo", uk_pids, "UK")
+steam_stats_us <- calc_telemetry_missingness(steam, "Steam", us_pids, "US")
+steam_stats_uk <- calc_telemetry_missingness(steam, "Steam", uk_pids, "UK")
+simon_stats_us <- calc_task_missingness(simon, us_pids, "US", "Simon Task", 3)
+simon_stats_uk <- calc_task_missingness(simon, uk_pids, "UK", "Simon Task", 3)
+
+# Combine all statistics
+missingness_table <- bind_rows(
+  diary_stats_us, panel_stats_us, xbox_stats_us, nintendo_stats_us, steam_stats_us, simon_stats_us,
+  panel_stats_uk, xbox_stats_uk, nintendo_stats_uk, steam_stats_uk, simon_stats_uk
+)
+
+# Extract plot data
+density_plot_data <- missingness_table$obs_per_participant
+
+retention_plot_data <- lapply(1:nrow(missingness_table), function(i) {
+  ret_vec <- missingness_table$retention_over_time[[i]]
+  if (missingness_table$measure[i] == "Daily Diary") {
+    x_vals <- 1:30
+  } else if (missingness_table$data_type[i] == "Task") {
+    x_vals <- c(1, 3, 5)
+  } else {
+    x_vals <- 1:84
+  }
+  data.frame(x = x_vals, y = ret_vec)
+})
+
+# Format table for display
+table_data <- missingness_table |>
+  mutate(
+    pct_complete = (total_observed / total_expected) * 100,
+    `N` = format(n_participants, big.mark = ","),
+    Expected = format(total_expected, big.mark = ","),
+    Observed = format(total_observed, big.mark = ","),
+    `Median Missing` = ifelse(
+      is.na(median_missing_per_participant),
+      "—",
+      sprintf("%.1f", median_missing_per_participant)
+    ),
+    `% Complete` = sprintf("%.1f%%", pct_complete),
+    Retention = "",
+    Density = ""
+  ) |>
+  group_by(region, data_type) |>
+  mutate(
+    show_type = row_number() == 1,
+    show_region = row_number() == 1
+  ) |>
+  ungroup() |>
+  group_by(region) |>
+  mutate(show_region = ifelse(row_number() == 1, TRUE, FALSE)) |>
+  ungroup() |>
+  select(
+    Region = region,
+    `Data Type` = data_type,
+    Measure = measure,
+    `N`, Expected, Observed,
+    `Median Missing`,
+    `% Complete`,
+    Retention, Density,
+    show_type, show_region
+  ) |>
+  mutate(
+    Region = ifelse(show_region, Region, ""),
+    `Data Type` = ifelse(show_type, `Data Type`, "")
+  ) |>
+  select(-show_type, -show_region)
+
+# Identify styling positions
+us_start <- 1
+uk_start <- which(missingness_table$region == "UK")[1]
+data_type_starts <- table_data |>
+  mutate(row_num = row_number()) |>
+  filter(`Data Type` != "") |>
+  pull(row_num)
+
+# Create table - with plots for HTML, without for other formats
+if (knitr::is_html_output()) {
+  # Find the row index for UK Xbox telemetry  
+  uk_xbox_row <- which(missingness_table$region == "UK" & 
+                       missingness_table$data_type == "Telemetry" & 
+                       missingness_table$measure == "Xbox")
+  
+  # Prepare percentage complete data for bar plot
+  pct_complete_values <- as.list(
+    (missingness_table$total_observed / missingness_table$total_expected)
+  )
+  
+  # Create initial table with % complete bar plots
+  tbl_html <- tt(table_data) |>
+    plot_tt(
+      j = 8,
+      fun = "bar",
+      data = pct_complete_values,
+      color = c("steelblue", "lightgrey"),
+      xlim = c(0, 1)
+    ) |>
+    style_tt(i = 0, bold = TRUE) |>
+    style_tt(
+      i = c(us_start, uk_start),
+      j = 1,
+      bold = TRUE,
+      line = "t",
+      line_width = 0.15
+    ) |>
+    style_tt(
+      i = data_type_starts,
+      j = 2,
+      bold = TRUE,
+      line = "t",
+      line_width = 0.1
+    ) |>
+    style_tt(j = c(8, 9, 10), align = "c") |>
+    style_tt(fontsize = 0.8)
+  
+  # Apply retention and density plots to all rows EXCEPT UK Xbox
+  if (length(uk_xbox_row) > 0) {
+    # Get indices for all rows except UK Xbox
+    rows_to_plot <- setdiff(1:nrow(table_data), uk_xbox_row)
+    
+    # Create subset of plot data for non-UK-Xbox rows
+    retention_subset <- retention_plot_data[rows_to_plot]
+    density_subset <- density_plot_data[rows_to_plot]
+    
+    # Apply plots to non-UK-Xbox rows
+    tbl_html <- tbl_html |>
+      plot_tt(
+        i = rows_to_plot,
+        j = 9,
+        fun = "line",
+        data = retention_subset,
+        color = "steelblue"
+      ) |>
+      plot_tt(
+        i = rows_to_plot,
+        j = 10,
+        fun = "density",
+        data = density_subset,
+        color = "steelblue"
+      )
+  } else {
+    # No UK Xbox row found, plot all rows normally
+    tbl_html <- tbl_html |>
+      plot_tt(
+        j = 9,
+        fun = "line",
+        data = retention_plot_data,
+        color = "steelblue"
+      ) |>
+      plot_tt(
+        j = 10,
+        fun = "density",
+        data = density_plot_data,
+        color = "steelblue"
+      )
+  }
+  
+  tbl_html
+} else {
+  # Other formats: table without plot columns to avoid path issues
+  table_data_no_plots <- table_data |>
+    select(-Retention, -Density)
+  
+  tt(table_data_no_plots) |>
+    style_tt(i = 0, bold = TRUE) |>
+    style_tt(
+      i = c(us_start, uk_start),
+      j = 1,
+      bold = TRUE,
+      line = "t",
+      line_width = 0.15
+    ) |>
+    style_tt(
+      i = data_type_starts,
+      j = 2,
+      bold = TRUE,
+      line = "t",
+      line_width = 0.1
+    ) |>
+    style_tt(j = 8, align = "c") |>
+    style_tt(fontsize = 0.8)
+}
+```
 
 # Dataset
 
