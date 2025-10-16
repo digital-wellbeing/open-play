@@ -28,14 +28,6 @@
             align-items: center;
         }
         
-        h1 {
-            text-align: center;
-            color: #333;
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 30px;
-            width: 100%;
-        }
         
         .chart-wrapper {
             display: flex;
@@ -76,7 +68,6 @@
 </head>
 <body>
     <div class="container">
-        <h1>Figure 1. Survey Administration Schedule Across 12-Week Study Period</h1>
         <div class="chart-wrapper">
             <svg id="chart"></svg>
         </div>
@@ -116,7 +107,7 @@
                     ['daily'], 
                     ['daily']
                 ], 
-                retention: 100 
+                retention: 100.0 
             },
             { 
                 week: 2, 
@@ -129,7 +120,7 @@
                     ['daily'], 
                     ['daily']
                 ], 
-                retention: 96 
+                retention: 99.9 
             },
             { 
                 week: 3, 
@@ -142,7 +133,7 @@
                     ['daily'], 
                     ['daily']
                 ], 
-                retention: 91 
+                retention: 98.7 
             },
             { 
                 week: 4, 
@@ -155,7 +146,7 @@
                     ['daily'], 
                     ['daily']
                 ], 
-                retention: 89 
+                retention: 96.1 
             },
             { 
                 week: 5, 
@@ -168,7 +159,7 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 82 
+                retention: 93.0 
             },
             { 
                 week: 6, 
@@ -181,7 +172,7 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 79 
+                retention: 88.5 
             },
             { 
                 week: 7, 
@@ -194,7 +185,7 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 76 
+                retention: 84.0 
             },
             { 
                 week: 8, 
@@ -207,7 +198,7 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 74 
+                retention: 79.3 
             },
             { 
                 week: 9, 
@@ -220,7 +211,7 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 68 
+                retention: 76.8 
             },
             { 
                 week: 10, 
@@ -233,7 +224,7 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 65 
+                retention: 72.9 
             },
             { 
                 week: 11, 
@@ -246,7 +237,7 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 61 
+                retention: 70.8 
             },
             { 
                 week: 12, 
@@ -259,14 +250,14 @@
                     ['none'], 
                     ['none']
                 ], 
-                retention: 58 
+                retention: 66.6 
             }
         ];
 
         // Set up dimensions
-        const margin = { top: 50, right: 80, bottom: 20, left: 80 };
+        const margin = { top: 50, right: 80, bottom: 100, left: 80 };
         const width = 750 - margin.left - margin.right;
-        const height = 500 - margin.top - margin.bottom;
+        const height = 600 - margin.top - margin.bottom;
         const cellSize = 30;
         const cellPadding = 8;
         const circleRadius = 12;
@@ -284,8 +275,16 @@
             .attr('width', width + margin.left + margin.right)
             .attr('height', height + margin.top + margin.bottom);
 
+        // Calculate content dimensions for centering
+        const contentWidth = 7 * (cellSize + cellPadding) + 150; // 7 days + retention section
+        const contentHeight = 12 * (cellSize + cellPadding) + 50; // 12 weeks + labels
+        const svgWidth = width + margin.left + margin.right;
+        const svgHeight = height + margin.top + margin.bottom;
+        const centerX = (svgWidth - contentWidth) / 2 + margin.left;
+        const centerY = (svgHeight - contentHeight) / 2 + margin.top;
+
         const g = svg.append('g')
-            .attr('transform', `translate(${margin.left}, ${margin.top})`);
+            .attr('transform', `translate(${centerX}, ${centerY})`);
 
         // Add day labels
         const days = ['1', '2', '3', '4', '5', '6', '7'];
@@ -331,7 +330,9 @@
         // Create pie chart function
         const pie = d3.pie()
             .value(d => 1) // Equal slices for each survey type
-            .sort(null);
+            .sort(null) // Don't sort, keep original order
+            .startAngle(-Math.PI / 2) // Start at top (12 o'clock)
+            .endAngle(3 * Math.PI / 2); // End after full circle
 
         const arc = d3.arc()
             .innerRadius(0)
@@ -409,8 +410,142 @@
                 .attr('y', cellSize / 2 + 4)
                 .style('font-size', '11px')
                 .style('font-weight', '600')
-                .text(`${weekData.retention}%`);
+                .text(`${weekData.retention}%`)
+                .attr('class', 'retention-text');
         });
+
+        // Function to update retention for a specific week
+        function updateRetention(weekNumber, retentionValue, animated = true) {
+            if (weekNumber < 1 || weekNumber > 12) {
+                console.error('Week number must be between 1 and 12');
+                return;
+            }
+            if (retentionValue < 0 || retentionValue > 100) {
+                console.error('Retention value must be between 0 and 100');
+                return;
+            }
+
+            const weekGroup = d3.selectAll('.week-group')
+                .filter((d, i) => i === weekNumber - 1);
+
+            const transition = animated ? weekGroup.transition().duration(500) : weekGroup;
+
+            // Update bar width
+            transition.select('rect')
+                .attr('width', (retentionValue / 100) * maxBarWidth);
+
+            // Update text
+            transition.select('.retention-text')
+                .text(`${retentionValue}%`);
+
+            // Update data
+            scheduleData[weekNumber - 1].retention = retentionValue;
+        }
+
+        // Function to update multiple weeks at once
+        function updateRetentions(retentionArray, animated = true) {
+            if (!Array.isArray(retentionArray)) {
+                console.error('Input must be an array');
+                return;
+            }
+            retentionArray.forEach((retention, index) => {
+                if (retention !== null && retention !== undefined) {
+                    updateRetention(index + 1, retention, animated);
+                }
+            });
+        }
+
+        // Function to export the visualization as SVG
+        function exportSVG() {
+            const svgElement = document.querySelector('#chart');
+            const svgClone = svgElement.cloneNode(true);
+            
+            // Add XML namespace if not present
+            svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            
+            // Get the computed styles and add them inline
+            const styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const styleTag = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            styleTag.textContent = `
+                text {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                }
+            `;
+            styleElement.appendChild(styleTag);
+            svgClone.insertBefore(styleElement, svgClone.firstChild);
+            
+            // Add legend to SVG
+            const legendGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            legendGroup.setAttribute('transform', `translate(${width / 2 - 150}, ${height + margin.top + margin.bottom - 120})`);
+            
+            const legendData = [
+                { color: '#4A90E2', label: 'Daily Survey', x: 0 },
+                { color: '#F5A623', label: 'Biweekly Survey', x: 120 },
+                { color: '#7ED321', label: 'Cognitive Tests', x: 260 },
+                { color: '#C0C0C0', label: 'No Survey', x: 400 }
+            ];
+            
+            legendData.forEach(item => {
+                // Add circle
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', item.x + 8);
+                circle.setAttribute('cy', 8);
+                circle.setAttribute('r', 8);
+                circle.setAttribute('fill', item.color);
+                legendGroup.appendChild(circle);
+                
+                // Add label
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', item.x + 22);
+                text.setAttribute('y', 12);
+                text.setAttribute('font-size', '12px');
+                text.setAttribute('fill', '#555');
+                text.textContent = item.label;
+                legendGroup.appendChild(text);
+            });
+            
+            svgClone.appendChild(legendGroup);
+            
+            // Serialize the SVG
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgClone);
+            
+            return svgString;
+        }
+
+        // Function to download the SVG file
+        function downloadSVG(filename = 'design.svg') {
+            const svgString = exportSVG();
+            const blob = new Blob([svgString], { type: 'image/svg+xml' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        // Function to copy SVG to clipboard
+        function copySVGToClipboard() {
+            const svgString = exportSVG();
+            navigator.clipboard.writeText(svgString).then(() => {
+                console.log('SVG copied to clipboard!');
+                return true;
+            }).catch(err => {
+                console.error('Failed to copy SVG:', err);
+                return false;
+            });
+        }
+
+        // Make functions globally accessible
+        window.updateRetention = updateRetention;
+        window.updateRetentions = updateRetentions;
+        window.exportSVG = exportSVG;
+        window.downloadSVG = downloadSVG;
+        window.copySVGToClipboard = copySVGToClipboard;
     </script>
 </body>
 </html>

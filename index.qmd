@@ -686,8 +686,9 @@ After players completed the account linking process, we checked each account for
 
 ```{r}
 #| label: fig-design
+#| fig-cap: "Survey administration schedule across the 12-week study period. Participants completed biweekly surveys (orange) every two weeks, with US participants additionally completing daily surveys (blue) for the first 30 days. Cognitive tests (green) were administered during biweekly surveys at weeks 1, 5, and 9. Gray circles indicate days with no scheduled surveys. Retention percentages show the proportion of baseline participants (N=1,980) who were still active at each measurement week (defined as having completed either a daily diary or biweekly survey at any time after that week)."
 
-knitr::include_graphics("figures/design.png")
+knitr::include_graphics("figures/design.svg")
 ```
 
 Eligible participants were invited to complete 6 waves of biweekly surveys, one every two weeks (@fig-design). US participants were additionally invited to complete daily surveys for 30 days, concurrently with the first biweekly surveys. During waves 1, 3, and 5, a cognitive task was also administered within the biweekly survey.
