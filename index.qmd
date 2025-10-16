@@ -358,9 +358,21 @@ THUMB_H <- 200
 LINEWIDTH <- 1.0
 
 # ---- helpers ----
-avg_days_platform <- function(pltf) {
-  daily_all |>
-    filter(platform == pltf) |>
+# Get PIDs of participants who completed at least one survey
+survey_pids <- union(
+  panel |> mutate(pid = as.character(pid)) |> pull(pid) |> unique(),
+  diary |> mutate(pid = as.character(pid)) |> pull(pid) |> unique()
+)
+
+avg_days_platform <- function(pltf, pids_filter = NULL) {
+  data <- daily_all |>
+    filter(platform == pltf)
+  
+  if (!is.null(pids_filter)) {
+    data <- data |> filter(pid %in% pids_filter)
+  }
+  
+  data |>
     group_by(pid) |>
     summarise(days = sum(minutes > 0, na.rm = TRUE), .groups = "drop") |>
     summarise(avg = mean(days, na.rm = TRUE), .groups = "drop") |>
@@ -401,6 +413,11 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
 }
 
 # ---- table rows (order preserved) ----
+# Filter telemetry to only include participants who completed at least one survey
+steam_survey <- steam |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
+nintendo_survey <- nintendo |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
+xbox_survey <- xbox |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
+
 overview <- bind_rows(
   summ_basic(intake, pid, "Intake survey", avg_days = 1),
   summ_basic(
@@ -415,14 +432,14 @@ overview <- bind_rows(
     "Biweekly surveys",
     avg_days = nrow(panel) / n_distinct(panel$pid)
   ),
-  summ_basic(steam, pid, "Steam", avg_days = avg_days_platform("Steam")),
+  summ_basic(steam_survey, pid, "Steam", avg_days = avg_days_platform("Steam", survey_pids)),
   summ_basic(
-    nintendo,
+    nintendo_survey,
     pid,
     "Nintendo",
-    avg_days = avg_days_platform("Nintendo")
+    avg_days = avg_days_platform("Nintendo", survey_pids)
   ),
-  summ_basic(xbox, pid, "Xbox", avg_days = avg_days_platform("Xbox"))
+  summ_basic(xbox_survey, pid, "Xbox", avg_days = avg_days_platform("Xbox", survey_pids))
 ) |>
   mutate(
     Participants = number(
@@ -460,9 +477,9 @@ plot_data <- list(
   events_per_participant(intake, pid, cap = 1),
   events_per_participant(diary, pid, cap = 30),
   events_per_participant(panel, pid, cap = 6),
-  events_per_participant(steam, pid, cap = Inf),
-  events_per_participant(nintendo, pid, cap = Inf),
-  events_per_participant(xbox, pid, cap = Inf)
+  events_per_participant(steam_survey, pid, cap = Inf),
+  events_per_participant(nintendo_survey, pid, cap = Inf),
+  events_per_participant(xbox_survey, pid, cap = Inf)
 )
 
 # ---- winsorize globally, then log-scale if requested ----
@@ -1098,11 +1115,11 @@ We implemented a variety of data quality checks.
 
 ## Missingness
 
-As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by region (US and UK) and data type (Survey, Telemetry, and Cognitive Task). The table reveals substantial heterogeneity in completion rates, with survey measures showing higher compliance than telemetry data, and notable regional differences in participation across platforms.
+As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by region (US and UK) and data type (Survey, Telemetry, and Cognitive Task). 
 
 ```{r}
 #| label: tbl-missingness
-#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, observations actually collected, missing observations, median number of missing observations per participant, and percentage of data completeness for each measure. Retention plots (right columns) visualize the proportion of participants remaining active over time: for surveys and tasks, retention is calculated across study days or waves; for telemetry, across the 84-day study period. Density plots show the distribution of observations per participant. Region and Data Type labels appear only at the start of each grouping to reduce visual clutter."
+#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, observations actually collected, missing observations, median number of missing observations per participant, and percentage of data completeness for each measure. Retention plots (right columns) visualize the proportion of participants remaining active over time: for surveys and tasks, retention is calculated across study days or waves; for telemetry, across the 84-day study period. Density plots show the distribution of observations per participant."
 
 # Helper function to calculate study days from enrollment date
 get_study_days <- function(dates, pid, intake_data) {
@@ -1384,13 +1401,12 @@ table_data <- missingness_table |>
     `N` = format(n_participants, big.mark = ","),
     Expected = format(total_expected, big.mark = ","),
     Observed = format(total_observed, big.mark = ","),
-    Missing = format(total_missing, big.mark = ","),
-    `% Complete` = sprintf("%.1f%%", pct_complete),
     `Median Missing` = ifelse(
       is.na(median_missing_per_participant),
       "—",
       sprintf("%.1f", median_missing_per_participant)
     ),
+    `% Complete` = sprintf("%.1f%%", pct_complete),
     Retention = "",
     Density = ""
   ) |>
@@ -1407,7 +1423,7 @@ table_data <- missingness_table |>
     Region = region,
     `Data Type` = data_type,
     Measure = measure,
-    `N`, Expected, Observed, Missing,
+    `N`, Expected, Observed,
     `Median Missing`,
     `% Complete`,
     Retention, Density,
@@ -1429,31 +1445,24 @@ data_type_starts <- table_data |>
 
 # Create table - with plots for HTML, without for other formats
 if (knitr::is_html_output()) {
+  # Find the row index for UK Xbox telemetry  
+  uk_xbox_row <- which(missingness_table$region == "UK" & 
+                       missingness_table$data_type == "Telemetry" & 
+                       missingness_table$measure == "Xbox")
+  
   # Prepare percentage complete data for bar plot
   pct_complete_values <- as.list(
     (missingness_table$total_observed / missingness_table$total_expected)
   )
   
-  # Create initial table with plots
+  # Create initial table with % complete bar plots
   tbl_html <- tt(table_data) |>
     plot_tt(
-      j = 9,
+      j = 8,
       fun = "bar",
       data = pct_complete_values,
       color = c("steelblue", "lightgrey"),
       xlim = c(0, 1)
-    ) |>
-    plot_tt(
-      j = 10,
-      fun = "line",
-      data = retention_plot_data,
-      color = "steelblue"
-    ) |>
-    plot_tt(
-      j = 11,
-      fun = "density",
-      data = density_plot_data,
-      color = "steelblue"
     ) |>
     style_tt(i = 0, bold = TRUE) |>
     style_tt(
@@ -1470,12 +1479,51 @@ if (knitr::is_html_output()) {
       line = "t",
       line_width = 0.1
     ) |>
-    style_tt(j = c(9, 10, 11), align = "c") |>
+    style_tt(j = c(8, 9, 10), align = "c") |>
     style_tt(fontsize = 0.8)
   
-  # Just print the table - tinytable will handle the rendering
-  # Note: Post-processing to replace plots with "—" for complete missingness rows
-  # is not easily done in Quarto context, so rows with 0 data will show minimal plots
+  # Apply retention and density plots to all rows EXCEPT UK Xbox
+  if (length(uk_xbox_row) > 0) {
+    # Get indices for all rows except UK Xbox
+    rows_to_plot <- setdiff(1:nrow(table_data), uk_xbox_row)
+    
+    # Create subset of plot data for non-UK-Xbox rows
+    retention_subset <- retention_plot_data[rows_to_plot]
+    density_subset <- density_plot_data[rows_to_plot]
+    
+    # Apply plots to non-UK-Xbox rows
+    tbl_html <- tbl_html |>
+      plot_tt(
+        i = rows_to_plot,
+        j = 9,
+        fun = "line",
+        data = retention_subset,
+        color = "steelblue"
+      ) |>
+      plot_tt(
+        i = rows_to_plot,
+        j = 10,
+        fun = "density",
+        data = density_subset,
+        color = "steelblue"
+      )
+  } else {
+    # No UK Xbox row found, plot all rows normally
+    tbl_html <- tbl_html |>
+      plot_tt(
+        j = 9,
+        fun = "line",
+        data = retention_plot_data,
+        color = "steelblue"
+      ) |>
+      plot_tt(
+        j = 10,
+        fun = "density",
+        data = density_plot_data,
+        color = "steelblue"
+      )
+  }
+  
   tbl_html
 } else {
   # Other formats: table without plot columns to avoid path issues
@@ -1498,7 +1546,7 @@ if (knitr::is_html_output()) {
       line = "t",
       line_width = 0.1
     ) |>
-    style_tt(j = 9, align = "c") |>
+    style_tt(j = 8, align = "c") |>
     style_tt(fontsize = 0.8)
 }
 ```
