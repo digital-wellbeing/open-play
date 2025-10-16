@@ -103,6 +103,21 @@ knitr:
     out-width: 80%
     fig-align: center
 code-links: repo
+nocite: |
+  @RoennebergEtAl2003Life
+  @SotoJohn2017short
+  @KahnEtAl2015trojan
+  @PontesEtAl2019measurement
+  @ChenEtAl2015Basic
+  @MartelaRyan2024Assessing
+  @BallouEtAl2024Basic
+  @Cantril1965pattern
+  @CarneyEtAl2012Consensus
+  @AlmeidaEtAl2002Daily
+  @TennantEtAl2007warwickedinburgh
+  @PilkonisEtAl2011item
+  @BuysseEtAl1989Pittsburgh
+  @Johns1991New
 format:
   html:
     theme:
@@ -146,6 +161,13 @@ library(tinytable)
 library(sparkline)
 library(Hmisc)
 
+# avoid conflicts
+library(conflicted)
+conflict_prefer("filter", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("summarize", "dplyr")
+conflict_prefer("lag", "dplyr")
+
 # Load custom functions
 source("R/helpers.R")
 
@@ -186,8 +208,6 @@ nintendo <- read_csv("data/clean/nintendo.csv.gz")
 steam <- read_csv("data/clean/steam.csv.gz")
 xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
-ethnicity_us <- read_csv("data/clean/ethnicity_us.csv.gz")
-ethnicity_uk <- read_csv("data/clean/ethnicity_uk.csv.gz")
 ```
 
 ```{r}
@@ -223,25 +243,27 @@ third_party_prop <- paste0(
 
 # merge with the local time zone offsets from intake
 tz_map <- intake |>
-  transmute(pid = as.character(pid), off = offset_secs(local_timezone)) |>
+  mutate(pid = as.character(pid), off = offset_secs(local_timezone), .keep = "none") |>
   distinct(pid, .keep_all = TRUE)
 
 # aggregate data at each level of granularity (session, hourly, daily)
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
 sessions_all <- bind_rows(
   xbox |> 
-    transmute(
+    mutate(
       pid = as.character(pid),
       platform = "Xbox",
       start_utc = session_start,
-      end_utc = session_end
+      end_utc = session_end,
+      .keep = "none"
     ),
   nintendo |> 
-    transmute(
+    mutate(
       pid = as.character(pid),
       platform = "Nintendo",
       start_utc = session_start,
-      end_utc = session_end
+      end_utc = session_end,
+      .keep = "none"
     )
 ) |> 
   left_join(tz_map, by = "pid") |> 
@@ -287,12 +309,13 @@ hourly_from_steam <- steam |>
   select(pid, datetime_hour_start, minutes) |>
   mutate(pid = as.character(pid)) |>
   left_join(tz_map, by = "pid") |>
-  transmute(
+  mutate(
     pid,
     platform = "Steam",
     hour_start_utc = datetime_hour_start,
     hour_start_local = datetime_hour_start + off,
-    minutes
+    minutes,
+    .keep = "none"
   ) |> 
   group_by(pid, platform, hour_start_local, hour_start_utc) |> 
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
@@ -305,6 +328,14 @@ daily_all <- hourly_all |>
     day_local = as.Date(hour_start_local),
   ) |>
   group_by(pid, platform, day_local) |>
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+# --- 4) weekly
+weekly_all <- daily_all |>
+  mutate(
+    week = floor_date(day_local, "week")
+  ) |>
+  group_by(pid, platform, week) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
 # --- (optional) MOBILE PLACEHOLDERS ----------------------------------------
@@ -338,7 +369,7 @@ Digital trace data---behavioral logs automatically collected by digital devices 
 
 To combat these issues, digital trace data is increasingly used in studies of smartphone and social media use [e.g. @sewallDoesObjectivelyMeasured2022], but less so in studies of video game play---one of the world's foremost leisure activities [@Ofcom2023Online; @EntertainmentSoftwareAssociation20242024]. Trace data in video games primarily falls under the field of game analytics or data science, but (1) the majority of these studies involve the use of proprietary data that is not publicly shared, and (2) the focus of this field tends to be more on player behavior metrics with clear industry value rather than academic inquiry for the common good.
 
-Where trace data has been used in video games studies, it has largely been limited to a few games [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or single platform [@BallouEtAl2023Gaming; @BallouEtAl2025Perceived]. However, players commonly play many games on multiple platforms. Moreover, the scope of psychological attributes in these studies tends to be limited to e.g. a small set of well-being outcomes.
+Where trace data has been used in video games studies, it has largely been limited to a few games [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or single platform [@BallouEtAl2024Registered; @BallouEtAl2025Perceived]. However, players commonly play many games on multiple platforms. Moreover, the scope of psychological attributes in these studies tends to be limited to e.g. a small set of well-being outcomes.
 
 ## Current dataset
 
@@ -564,7 +595,7 @@ lvl <- c(
 )
 
 node_counts <- intake |>
-  transmute(
+  mutate(
     stage1 = "Screened",
     stage2 = ifelse(is.na(linked_platforms), "Ineligible", "Linked ≥1 account"),
     stage3 = ifelse(qualified, "Recent trace data", "No recent trace data"),
@@ -572,14 +603,15 @@ node_counts <- intake |>
       pid %in% panel$pid,
       "Began surveys",
       "Did not begin surveys"
-    )
+    ),
+    .keep = "none"
   ) |>
   pivot_longer(everything(), names_to = "stage", values_to = "node") |>
   filter(!is.na(node)) |>
   count(node, name = "n")
 
 sankey_data <- intake |>
-  transmute(
+  mutate(
     Screening = "Screened",
     Linking = ifelse(
       is.na(linked_platforms),
@@ -595,7 +627,8 @@ sankey_data <- intake |>
       pid %in% panel$pid,
       "Began surveys",
       "Did not begin surveys"
-    )
+    ),
+    .keep = "none"
   ) |>
   make_long(Screening, Linking, `Account Validation`, Surveys) |>
   left_join(node_counts, by = "node") |>
@@ -692,7 +725,7 @@ tibble(
       "b" = list(
         i = 1,
         j = 4,
-        text = "In previous research, Nintendo-published games accounted for 65% of Switch playtime [\\@BallouEtAl2025Perceived]."
+        text = "In previous research, Nintendo-published games accounted for 65% of Switch playtime [@BallouEtAl2025Perceived]."
       ),
       "c" = list(
         i = 2,
@@ -726,167 +759,131 @@ Daily survey links were sent every day at 2pm local time for the participant and
 ## Participants
 
 ```{r}
-#| label: participant-gender
+#| label: tbl-demographics
+#| tbl-cap: "Sample demographics for qualified participants with general-population benchmarks (where available)."
 
-gender_counts <- intake |>
-  filter(country != "OTHER") |>
-  mutate(
-    gender = ifelse(gender %in% c("Man", "Woman"), gender, "Other")
-  ) |>
-  group_by(qualified) |>
-  count(gender) |>
-  mutate(
-    prop = paste0(100 * round(prop.table(n), 3), "%")
-  )
+# programmatically getting the census figures was a nightmare, and this isn't the purpose of the manuscript
+# US ethnicity: https://usafacts.org/data/topics/people-society/population-and-demographics/our-changing-population/
+# US gender**: https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf
+# US education**: https://www2.census.gov/programs-surveys/demo/tables/educational-attainment/2021/cps-detailed-tables/table-1-1.xlsx and https://data.worldbank.org/indicator/SE.TER.CUAT.MS.ZS?locations=US
+# UK gender: https://www.ons.gov.uk/peoplepopulationandcommunity/culturalidentity/genderidentity/articles/genderidentityageandsexenglandandwalescensus2021/2023-01-25
+# UK ethnicity: https://www.ethnicity-facts-figures.service.gov.uk/uk-population-by-ethnicity/national-and-regional-populations/population-of-england-and-wales/latest/
+# UK education: 
+# **values are from the 18-40 population where possible 
 
-gender_text_all <- with(
-  gender_counts |> group_by(gender) |> summarize(n = sum(n), prop = prop[1]),
-  paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
+GENPOP <- tibble::tribble(
+~Variable, ~Level, ~`US Gen Pop %`, ~`UK Gen Pop %`,
+# --- Gender ---
+"Gender", "Man", 49.0, 49.6,
+"Gender", "Woman", 48.9, 49.5,
+"Gender", "Other gender identity", 2.1, .9,
+# --- Ethnicity ---
+"Ethnicity", "White", 75.5, 81.7,
+"Ethnicity", "Black", 13.6, 4.0,
+"Ethnicity", "Asian", 6.3, 9.3,
+"Ethnicity", "Two or More Races", 3, 2.9,
+"Ethnicity", "American Indian and Alaska Native", 1.3, 0,
+"Ethnicity", "Native Hawaiian and Other Pacific Islander", .3, 0,
+"Ethnicity", "Other", 0, 2.1,
+# --- Education (3 buckets) ---
+"Education", "Completed secondary or less", 61.0, 60.1,
+"Education", "Bachelor's degree", 24.0, 25.5,
+"Education", "Postgraduate", 15.0, 14.4
 )
 
-gender_text_qualified <- with(
-  gender_counts |> filter(qualified),
-  paste0(gender, " (", n, ", ", prop, ")", collapse = "; "),
-)
+age_string <- intake |> 
+  filter(qualified) |> 
+  summarise(
+    n = n(),
+    mean = round(mean(age, na.rm = TRUE), 1),
+    sd = round(sd(age, na.rm = TRUE), 1),
+    min = min(age, na.rm = TRUE),
+    p25 = quantile(age, 0.25, na.rm = TRUE),
+    median = median(age, na.rm = TRUE),
+    p75 = quantile(age, 0.75, na.rm = TRUE),
+    max = max(age, na.rm = TRUE)
+  ) |> 
+  mutate(
+    across(everything(), as.character),
+    age_string = paste0(
+      median, " (mean = ", mean, ", SD = ", sd, ", range ", min, "-40)"
+    )
+  ) |> 
+  pull(age_string)
 
-```
-
-```{r}
-#| label: fig-representative
-
-ethnicity_survey <- intake |>
+demo <- intake |> 
+  filter(qualified) |> 
   mutate(
     ethnicity = case_match(
       ethnicity,
-      c("Other ethnic group", "Others", "Some Other Race alone") ~ "Other",
-      "White alone" ~ "White",
-      c(
-        "Black or African American alone",
-        "Black, African, Caribbean or Black British",
-        "Black or African American alone"
-      ) ~
-        "Black",
-      "Native Hawaiian and Other Pacific Islander alone" ~
-        "Native Hawaiian and Other Pacific Islander",
-      "American Indian and Alaska Native alone" ~
-        "American Indian and Alaska Native",
-      c("Asian", "Asian alone", "Asian or Asian British") ~ "Asian",
-      c("Mixed or multiple ethnic groups", "Mixed") ~ "Two or More Races",
-      .default = ethnicity
+      c("Other ethnic group","Others","Some Other Race alone") ~ "Other",
+      c("White","White alone") ~ "White",
+      c("Black or African American alone","Black, African, Caribbean or Black British") ~ "Black",
+      "Native Hawaiian and Other Pacific Islander alone" ~ "Native Hawaiian and Other Pacific Islander",
+      "American Indian and Alaska Native alone" ~ "American Indian and Alaska Native",
+      c("Asian","Asian alone","Asian or Asian British") ~ "Asian",
+      c("Mixed or multiple ethnic groups","Mixed","Two or More Races") ~ "Two or More Races",
+      .default = NA
     ),
-  ) |>
-  filter(
-    !country %in% c("OTHER", NA) &
-      !ethnicity %in% c("Prefer not to say", NA) &
-      !(country == "UK" &
-        ethnicity %in%
-          c(
-            "American Indian and Alaska Native alone",
-            "Native Hawaiian and Other Pacific Islander alone"
-          ))
-  ) |>
-  group_by(country, ethnicity) |> 
-  summarize(
-    survey_count = n(),
-    gamers_count = sum(!is.na(used_platforms), na.rm = TRUE),
-    qualified_count = sum(qualified, na.rm = TRUE),
-    survey_moe = 1.96 * sqrt(survey_count * (1 - survey_count / n())) / n(),
-    gamers_moe = 1.96 * sqrt(gamers_count * (1 - gamers_count / n())) / n(),
-    qualified_moe = 1.96 *
-      sqrt(qualified_count * (1 - qualified_count / n())) /
-      n()
-  ) |>
-  group_by(country) |>
-  mutate(
-    survey_prop = survey_count / sum(survey_count),
-    gamers_prop = gamers_count / sum(gamers_count),
-    qualified_prop = qualified_count / sum(qualified_count),
-  )
-
-# Join the census and survey summaries
-ethnicity_combined <- ethnicity_survey |>
+    
+    edu_bucket = case_when(
+      # Completed secondary or less
+      edu_level %in% c(
+        "Apprenticeships", "Associate degree", "Completed Primary School", "Completed Secondary School",
+        "Five or more GCSE passes (grade A* to C or grade 4 and above) or equivalent qualifications",
+        "High school graduate or equivalent", "Less than a high school diploma or equivalent",
+        "No formal qualifications", "One to four GCSE passes (grade A* to C or grade 4 and above) and any other GCSEs at other grades, or equivalent qualifications","Other qualifications", "Some college but no degree",
+        "Some University but no degree", "Two or more A Levels or equivalent qualifications", "Vocational or Similar"
+      ) ~ "Completed secondary or less",
+      
+      # Bachelor's degree
+      edu_level %in% c(
+        "Bachelor's degree", "University Bachelors Degree", 
+        "Higher National Certificate, Higher National Diploma, Bachelor's degree, or post-graduate qualifications"
+      ) ~ "Bachelor's degree",
+      
+      # Postgraduate
+      edu_level %in% c(
+        "Master's degree, professional degree, or doctoral degree",
+        "Graduate or professional degree (MA, MS, MBA, PhD, etc)"
+      ) ~ "Postgraduate",
+      
+      # Not usable / missing
+      edu_level %in% c("Prefer not to say") ~ NA_character_,
+      
+      TRUE ~ NA_character_
+    ),
+    
+    gender = ifelse(!gender %in% c("Man","Woman"), "Other gender identity", gender)
+  ) |> 
+  select(country, age, gender, ethnicity, edu_bucket) |> 
+  pivot_longer(c(gender, ethnicity, edu_bucket), names_to = "Variable", values_to = "Level") |>
+  filter(!is.na(Level)) |>
+  mutate(Variable = recode(Variable, gender="Gender", ethnicity="Ethnicity", edu_bucket="Education")) |>
+  count(country, Variable, Level) |>
+  group_by(country, Variable) |>
+  mutate(pct = round(100 * n / sum(n), 1)) |>
   ungroup() |>
-  left_join(
-    bind_rows(ethnicity_us, ethnicity_uk),
-    by = c("ethnicity" = "label", "country")
-  ) |>
-  pivot_longer(
-    cols = c(gen_prop, survey_prop, gamers_prop, qualified_prop),
-    names_to = "group",
-    values_to = "value"
-  ) |>
-  filter(!is.na(value) & !is.na(gen_pop)) |>
-  mutate(
-    group = recode(
-      group,
-      gen_prop = "General Population",
-      survey_prop = "Screened Participants",
-      gamers_prop = "Self-reported Video Game Players",
-      qualified_prop = "Qualified Participants"
-    ),
-    group = fct_relevel(
-      group,
-      c(
-        "General Population",
-        "Screened Participants",
-        "Self-reported Video Game Players",
-        "Qualified Participants"
-      )
-    ),
-    ethnicity = fct_relevel(
-      ethnicity,
-      c(
-        "White",
-        "Black",
-        "Asian",
-        "Two or More Races",
-        "American Indian and Alaska Native",
-        "Native Hawaiian and Other Pacific Islander",
-        "Other"
-      )
-    )
-  )
-
-ggplot(ethnicity_combined, aes(x = group, y = value, fill = ethnicity)) +
-  geom_bar(stat = "identity", position = "stack") +
-  labs(
-    x = "",
-    y = "Proportion",
-    fill = "Ethnicity",
-  ) +
-  facet_wrap(~country, scales = "free_x") +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-  geom_text(
-    aes(
-      label = ifelse(
-        value < 0.01,
-        "",
-        scales::label_percent(accuracy = 1)(value)
-      ),
-      ,
-      family = "serif"
-    ),
-    position = position_stack(vjust = 0.5),
-    color = "white"
-  ) +
-  scale_fill_viridis_d(
-    option = "magma",
-    begin = .1,
-    end = .8,
-    labels = function(x) str_wrap(x, width = 25)
-  )
+  select(Variable, Level, country, pct) |>
+  mutate(country = paste0(country, " Sample %")) |>
+  pivot_wider(names_from = country, values_from = pct) |> 
+  arrange(desc(Variable), desc(`UK Sample %`)) |> 
+  left_join(GENPOP, by = c("Variable", "Level")) |> 
+  select(Variable, Level, `US Sample %`,`US Gen Pop %`, `UK Sample %`, `UK Gen Pop %`)
 
 
+tt(
+  demo,
+  caption = "Demographic characteristics of qualified participants alongside general population benchmarks (where available). See supplementary materials for sources of general popoulation estimates."
+) |>
+  style_tt(fontsize = 0.8)
 ```
 
-Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(panel$pid))` also completed at least one survey.
+Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(panel$pid))` also completed at least one survey. On average, participants were. Due to errors in screening, four participants over the age of 40 were included. 
 
-Our screening sample was roughly representative of the general population of the US and UK by ethnicity (@fig-representative) and gender identity: `r gender_text_all`.
+@tbl-demographics shows demographic characteristics of the final sample alongside general population benchmarks. Our participants are more likely to be male, non-binary, and bi- or multiracial than the general population. Although the demographics of the population of people who play video games are less well understood, our sample's demographics are broadly consistent with previously reported data [e.g., @EntertainmentSoftwareAssociation20242024].
 
-The sample of qualified participants is less representative of the general population, containing more men and non-binary participants: `r gender_text_qualified`, as well as fewer black participants (@fig-representative). However, the demographics of console video game players are not well-understood; it is likely that our sample more closely represents this population than the general population.
+Besides those appearing in @tbl-demographics, we collected various other demographic variables from eligible participants at intake, including employment status, height and weight, self-identified and diagnosed neurodivergence (e.g., ASD, ADHD, dyslexia), political party affiliation, marital status, caretaking responsibilities, and postal geography (general area only; first three digits of the five-digit US ZIP Code; UK outward code). Further details of these are available in the online codebook. 
 
 ## Ethics and Compensation
 
@@ -894,191 +891,19 @@ This study received ethical approval from the Social Sciences and Humanities Int
 
 Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening, £2 for the 10-minute intake survey (plus £5 for linking at least one account with recent data), £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.
 
-## Demographic measures
 
-We collected the following demographic variables:
-
--   age
--   gender
-
-For all participants who were eligible based on self-reported video game play (but who did not always successfully linked accounts), we additionally collected the following
-
--   ethnicity
--   educational attainment
--   employment status
--   height and weight
--   self-identified neurodivergence (e.g., ASD, ADHD, dyslexia)
--   political party affiliation
--   diagnosed neurodivergence
--   marital status
--   caretaking responsibilities (children, family members)
--   postal geography (general area only; first three digits of the five-digit US ZIP Code; UK outward code)
 
 ## Self-report measures
 
-### Trait or traitlike measures
+We collected a variety of self-report measures at different time scales. We briefly describe which constucts we collected here; for further details of the specific measures and example items, see @tbl-measures.
 
-```{r}
-#| label: tbl-trait-measures
-#| tbl-cap: "Trait or traitlike measures assessed only once"
+*Trait / traitlike (baseline).* We assessed chronotype, Big 5 personality, player trait typology, and gaming disorder symptoms at baseline. Gaming disorder symptoms were measured twice, at biweekly waves 1 and 6.
 
-tibble(
-  Construct = c(
-    "Chronotype",
-    "Big 5 Personality",
-    "Player Trait Typology",
-    "Gaming Disorder Symptoms"
-  ),
-  Measure = c(
-    "Munich Chronotype Questionnaire [\\@RoennebergEtAl2003Life]",
-    "BFI-2-XS [\\@SotoJohn2017short]",
-    "Trojan Player Typology [\\@KahnEtAl2015trojan]",
-    "Gaming Disorder Test [\\@PontesEtAl2019measurement]"
-  ),
-  `Example Item` = c(
-    "*I go to bed at...*",
-    "*I am someone who...is compassionate, has a soft heart.*",
-    "*It's important to me to play with a tightly knit group.*",
-    "*In the past 3 months...I have had difficulties controlling my gaming activity*."
-  ),
-  `Response Format` = c(
-    "Times and numbers of minutes",
-    "5-pt Likert scale from 1 (Disagree strongly) to 5 (Agree strongly)",
-    "5-pt Likert scale from 1 (Strongly disagree) to 5 (Strongly agree)",
-    "5-pt Likert scale from 1 (Never) to 5 (Very often)"
-  )
-) |>
-  tt(
-    notes = list(
-      "a" = list(
-        i = 4,
-        j = 1,
-        text = "Measured twice, at biweekly waves 1 and 6."
-      )
-    )
-  ) |>
-  style_tt(fontsize = 0.8)
-```
+*Daily.* Daily surveys captured: basic psychological need satisfaction and frustration in life in general; basic psychological need satisfaction and frustration in the context of video games; life satisfaction; affective valence; sleep quality; stressors; and self-reported displacement.
 
-### Daily measures
+*Biweekly.* Every two weeks we assessed: general mental wellbeing; depression symptoms; life satisfaction; basic psychological need satisfaction and frustration – video games; and subjective displacement.
 
-```{r}
-#| label: tbl-daily
-#| tbl-cap: "Self-report measures in the daily surveys"
-
-tibble(
-  Construct = c(
-    "Basic psychological need satisfaction and frustration - life in general",
-    "Basic psychological need satisfaction and frustration - video games",
-    "Life satisfaction",
-    "Affective valence",
-    "Sleep Quality",
-    "Stressors",
-    "Self-reported displacement"
-  ),
-  Measure = c(
-    "Basic Psychological Need Satisfaction and Frustration Scale [\\@ChenEtAl2015Basic], brief version [\\@MartelaRyan2024Assessing]",
-    "Basic Needs in Games scale [\\@BallouEtAl2024Basic], brief session-level version",
-    "Cantril Self-anchoring Scale [\\@Cantril1965pattern], daily version",
-    "ad hoc",
-    "Sleep quality item (Item 9) from Consensus Sleep Diary [\\@CarneyEtAl2012Consensus]",
-    "Daily Inventory of Stressful Events [\\@AlmeidaEtAl2002Daily], modified for digital delivery",
-    "ad hoc"
-  ),
-  `Example Item` = c(
-    "*In the last 24 hours...I was able to do things I really want and value in life.*",
-    "*In my most recent session of X...I felt disappointed with my performance.*",
-    "*I was satisfied with my life today.*",
-    "How are you feeling right now?",
-    "How do you rate the quality of your sleep?",
-    "*\\[In the last 24 hours\\], what kinds of stressful event(s) occurred? \\[Participant selects among 7 options, including e.g. argument or disagreement\\]*",
-    "*Think back to your most recent gaming session. If you hadn't played a game, what would you most likely have done instead?*"
-  ),
-  `Response format` = c(
-    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
-    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
-    "Visual Analogue Scale from 1 (Strongly disagree) to 100 (Strongly agree)",
-    "Visual Analogue Scale from 1 (very bad) to 100 (very good)",
-    "5-pt Likert scale from 1 (very poor) to 5 (very good)",
-    "Yes/No, followed by a 4-pt Likert scale from 1 (Not at all stressful) to 4 (Very stressful)",
-    "Open response"
-  )
-) |>
-  tt(escape = TRUE) |>
-  style_tt(fontsize = 0.8)
-```
-
-### Biweekly measures
-
-```{r}
-#| label: tbl-biweekly
-#| tbl-cap: "Self-report measures in the biweekly surveys"
-
-tibble(
-  Construct = c(
-    "General Mental Wellbeing",
-    "Depression symptoms",
-    "Life satisfaction",
-    "Basic psychological need satisfaction and frustration - video games",
-    "Subjective displacement"
-  ),
-  Measure = c(
-    "Warwick-Edinburgh Mental Wellbeing Scale [\\@TennantEtAl2007warwickedinburgh]",
-    "PROMIS Short Form 8a Adult Depression Scale [\\@PilkonisEtAl2011item]",
-    "Cantril Self-anchoring Scale [\\@Cantril1965pattern]",
-    "Basic Needs in Games scale [\\@BallouEtAl2024Basic], gaming in general version",
-    "ad hoc"
-  ),
-  `Example Item` = c(
-    "*I've been feeling optimistic about the future*",
-    "*In the past 7 days...I felt that I had nothing to look forward to.*",
-    "*On which step of \\[a ladder from 0 to 10 representing the best possible life\\] would you say you personally feel you stood over the past two weeks?*",
-    "*When playing video games during the last 2 weeks...I could play in the way I wanted.*",
-    "*Over the last two weeks, to what extent has the time you spend playing video games influenced the following areas of your life? \\[...\\] Work/school performance*"
-  ),
-  `Response format` = c(
-    "5-pt Likert scale from 1 (none of the time) to 5 (all of the time)",
-    "5-pt Likert scale from 1 (Never) to 5 (Always)",
-    "10-pt unlabeled scale from 0 to 10",
-    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
-    "7-pt Likert scale from 1 (greatly interfered) to 7 (greatly supported)"
-  )
-) |>
-  tt() |>
-  style_tt(fontsize = 0.8)
-```
-
-### Monthly measures
-
-```{r}
-#| label: tbl-monthly
-#| tbl-cap: "Self-report measures in alternating biweekly surveys"
-
-tibble(
-  Construct = c(
-    "Sleep quality",
-    "Daytime sleepiness",
-    "Harms and benefits of gaming"
-  ),
-  Measure = c(
-    "Pittsburgh Sleep Quality Index [\\@BuysseEtAl1989Pittsburgh]",
-    "Epworth Sleepiness Scale [\\@Johns1991New]",
-    "2 free text questions"
-  ),
-  `Example Item` = c(
-    "*During the past month, what time have you usually gotten up in the morning?*",
-    "*How likely are you to doze off or fall asleep in the following situations, in comparison to feeling just tired? \\[...\\] Watching TV*",
-    "Do you feel that gaming is sometimes a problem for you? Please describe."
-  ),
-  `Response format` = c(
-    "Various",
-    "4-pt Likert scale from 1 (No chance of dozing) to 4 (High chance of dozing)",
-    "Open text"
-  )
-) |>
-  tt() |>
-  style_tt(fontsize = 0.8)
-```
+*Monthly (alternating biweekly).* On alternating biweekly surveys (i.e., monthly), we assessed: sleep quality; daytime sleepiness; and perceived harms and benefits of gaming.
 
 ### Self-reported play
 
@@ -1111,7 +936,7 @@ TODO
 We implemented a variety of data quality checks.
 
 1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding.
-2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, 3 or more games being played simultaneously \[TODO: other heuristics\]
+2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, 3 or more games being played simultaneously [TODO: other heuristics]
 3.  In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any
 
 ## Missingness
@@ -1556,208 +1381,140 @@ if (knitr::is_html_output()) {
 
 Here we visualize key aspects of the data to provide an overview of its contents and properties.
 
-@fig-stacked-playtime compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of player's true gaming is systematically uncaptured, due to factors such as missing platforms (e.g., Playstation), missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam).
+@fig-paired-dotplot compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of players' true gaming is systematically uncaptured, due to factors such as  missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam). The figure therefore provides a useful overview of the relative coverage of different platforms in our telemetry data.
 
 ::: {.callout-warning}
 I'm halfway through making changes to the stacked bar chart preprocessing, ignore the actual values.
 :::
 
 ```{r}
-#| label: fig-stacked-playtime
+#| label: fig-paired-dotplot
 
-# TODO: blur or fuzzy lines?
-# TODO: week-to-week variance?
-# violin plot / side by side - comparison of 5 specific individuals - by quantiles
+# Paired dot plot: self-report vs telemetry (normalized by exposure)
 
-# --- counts ---
-n_qualified <- intake |>
-  filter(qualified) |>
-  summarise(n = n_distinct(pid)) |>
-  pull()
+telemetry_platforms <- c("Steam", "Nintendo", "Xbox")
+platforms_all <- c(telemetry_platforms, "iOS", "Android", "Other (uncaptured)")
 
-# --- Self-report per platform (as before; drop the temporary Xbox-only filter) ---
-sr_long <- intake |>
+sr_users <- intake |>
   filter(qualified) |>
   mutate(
-    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
-    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
-    PlayStation = self_reported_weekly_play *
-      coalesce(prop_playstation / 100, 0),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
-    iOS = self_reported_weekly_play * coalesce(prop_ios / 100, 0),
-    Android = self_reported_weekly_play * coalesce(prop_android / 100, 0)
-  ) |>
-  pivot_longer(
-    c(Steam, Xbox, PlayStation, Nintendo, iOS, Android),
-    names_to = "platform",
-    values_to = "minutes"
-  ) |>
-  group_by(platform) |>
-  summarise(minutes = mean(minutes, na.rm = TRUE), .groups = "drop") |>
-  mutate(source = "Self-report")
+    pid = as.character(pid),
+    # usage flags (keep your existing logic for captured + mobile)
+    uses_Steam    = str_detect(used_platforms %||% "", "Steam"),
+    uses_Nintendo = str_detect(used_platforms %||% "", "Nintendo"),
+    uses_Xbox     = str_detect(used_platforms %||% "", "Xbox"),
+    uses_iOS      = str_detect(used_platforms %||% "", "iOS"),
+    uses_Android  = str_detect(used_platforms %||% "", "Android"),
+    # "Other" usage is defined purely by nonzero props on uncaptured platforms
+    other_prop    = coalesce(prop_playstation, 0) + coalesce(prop_other, 0),
+    uses_Other    = other_prop > 0 & !is.na(other_prop),
+    # minutes by platform
+    Steam    = self_reported_weekly_play * coalesce(prop_steam / 100,     NA),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100,  NA),
+    Xbox     = self_reported_weekly_play * coalesce(prop_xbox / 100,      NA),
+    iOS      = self_reported_weekly_play * coalesce(prop_ios / 100,       NA),
+    Android  = self_reported_weekly_play * coalesce(prop_android / 100,   NA),
+    `Other (uncaptured)` = self_reported_weekly_play * if_else(uses_Other, other_prop / 100, NA_real_),
+    .keep = "used"
+  )
 
-# --- Telemetry per platform PER QUALIFIED PERSON (new denominator) ---
-telemetry_weekly_A <- daily_all |>
-  mutate(week = floor_date(day_local, "week")) |>
-  group_by(platform, week) |>
-  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+sr_totals <- sr_users |>
+  pivot_longer(c(`Other (uncaptured)`, Steam, Nintendo, Xbox, iOS, Android),
+               names_to = "platform", values_to = "sr_minutes") |>
+  mutate(
+    uses = case_when(
+      platform == "Steam"              ~ uses_Steam,
+      platform == "Nintendo"           ~ uses_Nintendo,
+      platform == "Xbox"               ~ uses_Xbox,
+      platform == "iOS"                ~ uses_iOS,
+      platform == "Android"            ~ uses_Android,
+      platform == "Other (uncaptured)" ~ uses_Other,
+      TRUE ~ FALSE
+    )
+  ) |>
+  filter(uses, platform %in% platforms_all) |>
   group_by(platform) |>
   summarise(
-    minutes = mean(total_minutes, na.rm = TRUE) / n_qualified,
+    minutes = mean(sr_minutes, na.rm = TRUE),
+    n_users = n_distinct(pid[!is.na(sr_minutes)]),
+    .groups = "drop"
+  ) |>
+  mutate(source = "Self-report")
+
+# ---- TELEMETRY (avg weekly minutes among users with telemetry; normalized) ----
+tele_exposure <- telemetry_spans |>
+  filter(platform %in% telemetry_platforms) |>
+  mutate(
+    pid = as.character(pid),
+    exposure_weeks = as.numeric(difftime(telemetry_end, telemetry_start, units = "days")) / 7
+  ) |>
+  filter(is.finite(exposure_weeks), exposure_weeks > 4) |>
+  select(pid, platform, exposure_weeks)
+
+tele_users <- daily_all |>
+  filter(platform %in% telemetry_platforms) |>
+  mutate(pid = as.character(pid)) |>
+  group_by(pid, platform) |>
+  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+  left_join(tele_exposure, by = c("pid", "platform")) |>
+  filter(!is.na(exposure_weeks), exposure_weeks > 0) |>
+  mutate(weekly_minutes = total_minutes / exposure_weeks)
+
+tele_totals <- tele_users |>
+  group_by(platform) |>
+  summarise(
+    minutes = mean(weekly_minutes, na.rm = TRUE),
+    n_users = n_distinct(pid),
     .groups = "drop"
   ) |>
   mutate(source = "Telemetry")
 
-# --- Combine + order (unchanged) ---
-weekly_by_platform <- bind_rows(sr_long, telemetry_weekly_A) |>
-  mutate(source = factor(source, levels = c("Self-report", "Telemetry")))
-
-stack_order <- weekly_by_platform |>
-  filter(source == "Self-report") |>
-  arrange(minutes) |>
-  pull(platform)
-
-weekly_by_platform <- weekly_by_platform |>
-  mutate(platform = factor(platform, levels = stack_order))
-
-# --- Ghost overlay (unchanged) ---
-ghost <- weekly_by_platform |>
-  select(platform, source, minutes) |>
-  pivot_wider(names_from = source, values_from = minutes, values_fill = 0) |>
-  mutate(gap = pmax(`Self-report` - Telemetry, 0)) |>
-  arrange(desc(gap)) |>
+# ---- COMBINE + PLOT ----
+paired_summary <- bind_rows(sr_totals, tele_totals) |>
   mutate(
-    tele_top = sum(Telemetry, na.rm = TRUE),
-    ymin = tele_top + lag(cumsum(gap), default = 0),
-    ymax = ymin + gap,
-    xmid = match("Telemetry", levels(weekly_by_platform$source)),
-    xmin = xmid - 0.45,
-    xmax = xmid + 0.45,
-    ymid = (ymin + ymax) / 2
-  ) |>
-  filter(gap > 0)
+    platform = factor(platform, levels = platforms_all),
+    source   = factor(source, levels = c("Self-report", "Telemetry"))
+  )
 
-# --- Panel A plot (your original plot code works as-is) ---
-gA <- ggplot(
-  weekly_by_platform,
-  aes(x = source, y = minutes, fill = platform)
-) +
-  geom_col(width = 0.9) +
-  scale_fill_viridis_d(
-    option = "magma",
-    begin = .1,
-    end = .8,
-    limits = stack_order
+# segments only where both SR and Telemetry exist
+segment_df <- paired_summary |>
+  select(platform, source, minutes) |>
+  pivot_wider(names_from = source, values_from = minutes) |>
+  # filter(!is.na(`Self-report`) & !is.na(Telemetry)) |>
+  mutate(xmin = `Self-report`, xmax = Telemetry) |> 
+  mutate(platform = factor(platform, levels = c("Other (uncaptured)", "iOS", "Android", "Nintendo", "Xbox", "Steam")))
+
+ggplot(paired_summary, aes(x = minutes, y = platform)) +
+  geom_segment(
+    data = segment_df,
+    aes(x = xmin, xend = xmax, y = platform, yend = platform),
+    color = "grey70", linewidth = 0.9, alpha = 0.8, inherit.aes = FALSE
+  ) +
+  geom_point(
+    aes(shape = source, color = source, fill = source),
+    size = 4, stroke = 0.7
+  ) +
+  scale_shape_manual(values = c("Self-report" = 24, "Telemetry" = 22)) +
+  scale_color_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
+  scale_fill_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
+  scale_y_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_x_continuous(limits = c(0, 1200), expand = expansion(mult = c(0.02, 0.08))) +
+  guides(
+    shape = guide_legend(title = NULL),
+    color = guide_legend(title = NULL),
+    fill = "none"
   ) +
   labs(
-    x = "Data Source",
-    y = "Weekly minutes per qualified person",
-    fill = "Platform"
+    x = "Average weekly minutes per active user of platform",
+    y = NULL,
+    caption = "Telemetry calculated per user with any telemetry on that platform, based only on the period between their first and last recorded session."
   ) +
-  theme(legend.position = "bottom") +
-  geom_text(
-    aes(label = ifelse(minutes < 10, "", round(minutes, 0))),
-    position = position_stack(vjust = 0.5),
-    color = "white",
-    family = "serif"
-  ) +
-  geom_rect(
-    data = ghost,
-    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-    inherit.aes = FALSE,
-    linetype = "dotted",
-    linewidth = 0.6,
-    color = "black",
-    fill = NA
-  ) +
-  geom_text(
-    data = ghost,
-    aes(x = xmid, y = ymid, label = paste0("+", round(gap, 0))),
-    inherit.aes = FALSE,
-    family = "serif"
+  theme_minimal(base_size = 10) +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 12, face = "bold")
   )
 
-# --- how many qualified users per platform ---
-n_users <- intake |>
-  filter(qualified) |>
-  transmute(
-    pid = as.character(pid),
-    Steam = str_detect(linked_platforms %||% "", "Steam"),
-    Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
-    Xbox = str_detect(linked_platforms %||% "", "Xbox")
-  ) |>
-  summarise(
-    Steam = sum(Steam, na.rm = TRUE),
-    Nintendo = sum(Nintendo, na.rm = TRUE),
-    Xbox = sum(Xbox, na.rm = TRUE)
-  ) |>
-  pivot_longer(everything(), names_to = "platform", values_to = "n_users")
-
-# --- SR per platform among users of that platform ---
-sr_users <- intake |>
-  filter(qualified) |>
-  mutate(
-    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
-    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
-    uses_Steam = str_detect(linked_platforms %||% "", "Steam"),
-    uses_Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
-    uses_Xbox = str_detect(linked_platforms %||% "", "Xbox")
-  ) |>
-  select(pid, Steam, Nintendo, Xbox, uses_Steam, uses_Nintendo, uses_Xbox) |>
-  pivot_longer(
-    c(Steam, Nintendo, Xbox),
-    names_to = "platform",
-    values_to = "sr_minutes"
-  ) |>
-  mutate(
-    uses = case_when(
-      platform == "Steam" ~ uses_Steam,
-      platform == "Nintendo" ~ uses_Nintendo,
-      platform == "Xbox" ~ uses_Xbox,
-      TRUE ~ FALSE
-    )
-  ) |>
-  filter(uses) |>
-  group_by(platform) |>
-  summarise(sr = mean(sr_minutes, na.rm = TRUE), .groups = "drop")
-
-# --- Telemetry per platform PER USER OF THAT PLATFORM ---
-tele_users <- daily_all |>
-  filter(platform %in% c("Steam", "Nintendo", "Xbox")) |>
-  mutate(week = floor_date(day_local, "week")) |>
-  group_by(platform, week) |>
-  summarise(total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
-  group_by(platform) |>
-  summarise(avg_weekly_total = mean(total, na.rm = TRUE), .groups = "drop") |>
-  left_join(n_users, by = "platform") |>
-  mutate(tele = ifelse(n_users > 0, avg_weekly_total / n_users, NA_real_)) |>
-  select(platform, tele)
-
-# --- tidy + facet plot ---
-bcd <- sr_users |>
-  left_join(tele_users, by = "platform") |>
-  pivot_longer(c(sr, tele), names_to = "source", values_to = "minutes") |>
-  mutate(
-    source = recode(source, sr = "Self-report", tele = "Telemetry"),
-    source = factor(source, levels = c("Self-report", "Telemetry")),
-    platform = factor(platform, levels = c("Steam", "Nintendo", "Xbox"))
-  )
-
-gBCD <- ggplot(bcd, aes(source, minutes, fill = source)) +
-  geom_col(width = 0.8) +
-  scale_fill_viridis_d(
-    option = "magma",
-    begin = .15,
-    end = .7,
-    guide = "none"
-  ) +
-  labs(x = NULL, y = "Weekly minutes per user of platform") +
-  geom_text(aes(label = round(minutes, 0)), vjust = -0.35, family = "serif") +
-  facet_wrap(~platform, nrow = 1)
-
-# --- combine if desired ---
-gA / gBCD
 ```
 
 In @fig-heatmap, we visualize the distribution of play across days and times. As expected, we find that the likelihood of play peaks on weekends from 8-11pm, and is lowest in the early morning.
@@ -2153,7 +1910,7 @@ tibble(
   `Justification for Deviation` = c(
     "Exhausted PureProfile participant pool before reaching required sample size",
     "Exhausted participant pools of smaller demographic categories on both Prolific and PureProfile before reaching required sample size",
-    "\\(1\\) Unable to recruit enough participants in the US aged 18--30; (2) near-zero qualification rates from UK adults over 50; (3) desire for results from both regions to be more easily comparable",
+    "(1) Unable to recruit enough participants in the US aged 18--30; (2) near-zero qualification rates from UK adults over 50; (3) desire for results from both regions to be more easily comparable",
     "Low rates of study qualification at 75% threshold, in large part due to substantial uncaptured Playstation play",
     "Feedback from participants indicating that play during a 7-day period was subject to too many fluctuations (e.g., a busy workweek)",
     "Feedback from participants indicating that evening plans often interfered with survey completion and thus adversely affected response rate",
@@ -2162,4 +1919,218 @@ tibble(
 ) |>
   tt() |>
   style_tt(fontsize = 0.8)
+```
+
+
+```{r}
+#| label: tbl-measures
+#| tbl-cap: "Summary of survey measures used in the study"
+
+t_trait <- tibble(
+  Construct = c(
+    "Chronotype",
+    "Big 5 Personality",
+    "Player Trait Typology",
+    "Gaming Disorder Symptoms"
+  ),
+  Measure = c(
+    "Munich Chronotype Questionnaire (Roenneberg et al., 2003)",
+    "BFI-2-XS (Soto & John, 2017)",
+    "Trojan Player Typology (Kahn et al., 2015)",
+    "Gaming Disorder Test (Pontes et al., 2019)"
+  ),
+  `Example Item` = c(
+    "I go to bed at...",
+    "I am someone who...is compassionate, has a soft heart.",
+    "It's important to me to play with a tightly knit group.",
+    "In the past 3 months...I have had difficulties controlling my gaming activity."
+  ),
+  `Response Format` = c(   # note original casing retained, will rename for merge only
+    "Times and numbers of minutes",
+    "5-pt Likert scale from 1 (Disagree strongly) to 5 (Agree strongly)",
+    "5-pt Likert scale from 1 (Strongly disagree) to 5 (Strongly agree)",
+    "5-pt Likert scale from 1 (Never) to 5 (Very often)"
+  )
+) |>
+  mutate(
+    Frequency = c(
+      "Once (baseline)",
+      "Once (baseline)",
+      "Once (baseline)",
+      "Twice (biweekly waves 1 & 6)"
+    ),
+    Group = "Trait / traitlike"
+  )
+
+t_daily <- tibble(
+  Construct = c(
+    "Basic psychological need satisfaction and frustration - life in general",
+    "Basic psychological need satisfaction and frustration - video games",
+    "Life satisfaction",
+    "Affective valence",
+    "Sleep Quality",
+    "Stressors",
+    "Self-reported displacement"
+  ),
+  Measure = c(
+    "Basic Psychological Need Satisfaction and Frustration Scale (Chen et al., 2015), brief version (Martela & Ryan, 2024)",
+    "Basic Needs in Games scale (Ballou, Denisova, et al., 2024), brief session-level version",
+    "Cantril Self-anchoring Scale (Cantril, 1965), daily version",
+    "ad hoc",
+    "Sleep quality item (Item 9) from Consensus Sleep Diary (Carney et al., 2012)",
+    "Daily Inventory of Stressful Events (Almeida et al., 2002), modified for digital delivery",
+    "ad hoc"
+  ),
+  `Example Item` = c(
+    "In the last 24 hours...I was able to do things I really want and value in life.",
+    "In my most recent session of X...I felt disappointed with my performance.",
+    "I was satisfied with my life today.",
+    "How are you feeling right now?",
+    "How do you rate the quality of your sleep?",
+    "[In the last 24 hours], what kinds of stressful event(s) occurred? [Participant selects among 7 options, including e.g. argument or disagreement]",
+    "Think back to your most recent gaming session. If you hadn't played a game, what would you most likely have done instead?"
+  ),
+  `Response format` = c(
+    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
+    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
+    "Visual Analogue Scale from 1 (Strongly disagree) to 100 (Strongly agree)",
+    "Visual Analogue Scale from 1 (very bad) to 100 (very good)",
+    "5-pt Likert scale from 1 (very poor) to 5 (very good)",
+    "Yes/No, followed by a 4-pt Likert scale from 1 (Not at all stressful) to 4 (Very stressful)",
+    "Open response"
+  )
+) |>
+  mutate(
+    Frequency = "Daily",
+    Group = "Daily"
+  )
+
+t_biweekly <- tibble(
+  Construct = c(
+    "General Mental Wellbeing",
+    "Depression symptoms",
+    "Life satisfaction",
+    "Basic psychological need satisfaction and frustration - video games",
+    "Subjective displacement"
+  ),
+  Measure = c(
+    "Warwick-Edinburgh Mental Wellbeing Scale (Tennant et al., 2007)",
+    "PROMIS Short Form 8a Adult Depression Scale (Pilkonis et al., 2011)",
+    "Cantril Self-anchoring Scale (Cantril, 1965)",
+    "Basic Needs in Games scale (Ballou, Denisova, et al., 2024), gaming in general version",
+    "ad hoc"
+  ),
+  `Example Item` = c(
+    "I've been feeling optimistic about the future",
+    "In the past 7 days...I felt that I had nothing to look forward to.",
+    "On which step of [a ladder from 0 to 10 representing the best possible life] would you say you personally feel you stood over the past two weeks?",
+    "When playing video games during the last 2 weeks...I could play in the way I wanted.",
+    "Over the last two weeks, to what extent has the time you spend playing video games influenced the following areas of your life? [...] Work/school performance"
+  ),
+  `Response format` = c(
+    "5-pt Likert scale from 1 (none of the time) to 5 (all of the time)",
+    "5-pt Likert scale from 1 (Never) to 5 (Always)",
+    "10-pt unlabeled scale from 0 to 10",
+    "7-pt Likert scale from 1 (very strongly disagree) to 7 (very strongly agree)",
+    "7-pt Likert scale from 1 (greatly interfered) to 7 (greatly supported)"
+  )
+) |>
+  mutate(
+    Frequency = "Biweekly (every 2 weeks)",
+    Group = "Biweekly"
+  )
+
+t_monthly <- tibble(
+  Construct = c(
+    "Sleep quality",
+    "Daytime sleepiness",
+    "Harms and benefits of gaming"
+  ),
+  Measure = c(
+    "Pittsburgh Sleep Quality Index (Buysse et al., 1989)",
+    "Epworth Sleepiness Scale (Johns, 1991)",
+    "2 free text questions"
+  ),
+  `Example Item` = c(
+    "During the past month, what time have you usually gotten up in the morning?",
+    "How likely are you to doze off or fall asleep in the following situations, in comparison to feeling just tired? [...] Watching TV",
+    "Do you feel that gaming is sometimes a problem for you? Please describe."
+  ),
+  `Response format` = c(
+    "Various",
+    "4-pt Likert scale from 1 (No chance of dozing) to 4 (High chance of dozing)",
+    "Open text"
+  )
+) |>
+  mutate(
+    Frequency = "Monthly (alternating biweekly surveys)",
+    Group = "Monthly"
+  )
+
+t_selfreport <- tibble(
+  Construct = c(
+    "Social context of play",
+    "Self-reported Playtime",
+    "Self-reported recent sessions"
+  ),
+  Measure = c(
+    "Types of social play engaged during the last 24 hours (single-player games only, multiplayer with real-world friends, multiplayer with online-only friends, multiplayer with strangers). Participants could select more than one option.",
+    "Time spent playing games on platforms they had linked during the study (e.g., excluding other platforms such as Playstation) in each of the following periods: last 24 hours, last 7 days, and last 14 days.",
+    "Details of at least 1 and up to 3 of their most recent gaming sessions (game, date, and start/end time)."
+  ),
+  `Example Item` = c(NA_character_, NA_character_, NA_character_),
+  `Response format` = c(
+    "Multiple selection from listed options",
+    "Time estimates for last 24 hours, last 7 days, last 14 days",
+    "Game title, date, and start/end time for 1–3 sessions"
+  ),
+  Frequency = c(
+    "Daily",                              # last 24h context
+    "Biweekly (every 2 weeks)",
+    "Biweekly (every 2 weeks)"
+  )
+)
+
+appendix_tbl <- bind_rows(
+  # rename the single differing column header for merge only
+  rename(t_trait, `Response format` = `Response Format`),
+  t_daily,
+  t_biweekly,
+  t_monthly,
+  t_selfreport
+) |>
+  arrange(Group, Construct) |>
+  select(Construct, Measure, `Example Item`, `Response format`, Frequency) |> 
+  bind_rows(t_selfreport) |> 
+  mutate(
+    Frequency = factor(
+      Frequency,
+      levels = c(
+        "Once (baseline)",
+        "Twice (biweekly waves 1 & 6)",
+        "Daily",
+        "Biweekly (every 2 weeks)",
+        "Monthly (alternating biweekly surveys)"
+      ),
+      ordered = TRUE
+    )
+  ) |> 
+  arrange(Frequency)
+
+# Footnote index for Gaming Disorder Symptoms row
+idx_gd <- which(appendix_tbl$Construct == "Gaming Disorder Symptoms")
+
+# ----- Render tinytable (small font, escaped safely) -----
+appendix_tbl |>
+  tt(
+    caption = "All self-report measures and their assessment frequency",
+    notes = list(
+      "a" = list(i = idx_gd, j = 1,
+                 text = "Measured twice, at biweekly waves 1 and 6.")
+    )
+  ) |>
+  # keep markdown/quarto processing for non-Typst runs too
+  format_tt(escape = FALSE, markdown = TRUE, quarto = TRUE) |>
+  style_tt(fontsize = 0.5)
+
 ```

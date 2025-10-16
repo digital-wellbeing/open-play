@@ -5,7 +5,6 @@ title: Clean raw data and save outputs
 ```{r}
 library(data.table)
 library(dtplyr)
-library(tidycensus)
 library(fs)
 library(tidyverse)
 
@@ -183,115 +182,6 @@ dat_cog <- dat_cog |>
   arrange(wave, pid)
 ```
 
-```{r}
-#| label: load-US-census-data
-
-# import ethnicity data using the census API and tidycensus
-ethnicity_vars <- load_variables(2020, "pl", cache = TRUE) |>
-  filter(name %in% paste0("P1_00", 3:9, "N"))
-
-ethnicity_us <- get_decennial(
-  geography = "us",
-  variables = ethnicity_vars$name,
-  year = 2020,
-) |>
-  left_join(ethnicity_vars, by = c("variable" = "name")) |> 
-  mutate(
-    label = map_chr(label, ~ str_trim(tail(str_split(.x, "!!")[[1]], 1)))
-  ) |>
-  select(label, gen_pop = value) |>
-  mutate(
-    label = case_match(
-      label,
-      c("White alone") ~ "White",
-      c("Black or African American alone", "Black or African American") ~
-        "Black",
-      c("Asian alone") ~ "Asian",
-      c("American Indian and Alaska Native alone") ~
-        "American Indian and Alaska Native",
-      c("Native Hawaiian and Other Pacific Islander alone") ~
-        "Native Hawaiian and Other Pacific Islander",
-      c("Some Other Race alone") ~ "Other",
-      c("Population of two or more races:") ~ "Two or More Races",
-      .default = "Other"
-    )
-  ) |>
-  mutate(
-    gen_prop = gen_pop / sum(gen_pop, na.rm = TRUE),
-    moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
-    country = "US"
-  )
-```
-
-```{r}
-#| label: load-UK-census-data
-
-age_uk <- read_csv(
-  "data/census/TS009-2021-2-filtered-2025-03-05T23-18-32Z.csv"
-) |>
-  pivot_wider(
-    id_cols = c(`Age (91 categories) Code`, `Age (91 categories)`),
-    names_from = `Sex (2 categories)`,
-    values_from = Observation
-  ) |> 
-  mutate(total = Female + Male) |> 
-  select(age = `Age (91 categories)`, female = Female, male = Male, total)
-
-# https://www.ons.gov.uk/datasets/TS021/editions/2021/versions/1/filter-outputs/f1addb18-dcb8-4adb-98a8-abeb9108c330#get-data
-ethnicity_uk <- read_csv(
-  "data/census/TS021-2021-1-filtered-2025-03-05T23-25-05Z.csv"
-) |>
-  # Optionally drop the row for "Does not apply"
-  filter(`Ethnic group (20 categories)` != "Does not apply") |> 
-  mutate(
-    label = case_when(
-      str_detect(`Ethnic group (20 categories)`, "^Asian") ~ "Asian",
-      str_detect(`Ethnic group (20 categories)`, "^Black") ~ "Black",
-      str_detect(`Ethnic group (20 categories)`, "^Mixed") ~
-        "Two or More Races",
-      str_detect(`Ethnic group (20 categories)`, "^White") ~ "White",
-      str_detect(`Ethnic group (20 categories)`, "^Other ethnic group") ~
-        "Other",
-      TRUE ~ "Other" # fallback if nothing matches
-    )
-  ) |>
-  group_by(label) |>
-  summarize(gen_pop = sum(Observation, na.rm = TRUE)) |>
-  ungroup() |>
-  mutate(
-    gen_prop = gen_pop / sum(gen_pop),
-    moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
-    country = "UK"
-  )
-
-education_uk <- read_csv(
-  "data/census/TS067-2021-3-filtered-2025-03-05T23-37-22Z.csv"
-) |>
-  select(4:5) |>
-  rename_with(~ c("level", "gen_pop")) |>
-  filter(level != "Does not apply") |>
-  mutate(
-    level = case_when(
-      str_detect(level, "No qualifications") ~ "No formal qualifications",
-      str_detect(level, "Level 1") ~
-        "One to four GCSE passes (grade A* to C or grade 4 and above) and any other GCSEs at other grades, or equivalent qualifications",
-      str_detect(level, "Level 2") ~
-        "Five or more GCSE passes (grade A* to C or grade 4 and above) or equivalent qualifications",
-      str_detect(level, "Level 3") ~
-        "Two or more A Levels or equivalent qualifications",
-      str_detect(level, "Level 4") ~
-        "Higher National Certificate, Higher National Diploma, Bachelor's degree, or post-graduate qualifications",
-      str_detect(level, "Other:") ~ "Other qualifications",
-      str_detect(level, "Apprenticeship") ~ "Apprenticeships",
-      TRUE ~ "Other qualifications"
-    ),
-    level = factor(level, levels = unique(level)),
-    moe = 1.96 * sqrt(gen_pop * (1 - gen_pop / sum(gen_pop))) / sum(gen_pop),
-    gen_prop = gen_pop / sum(gen_pop),
-    country = "UK"
-  )
-```
-
 ## Write clean data files
 
 ```{r}
@@ -309,6 +199,4 @@ write_csv(nintendo_clean, path(path_out, "nintendo", ext = "csv.gz"))
 write_csv(steam_clean, path(path_out, "steam", ext = "csv.gz"))
 write_csv(xbox_clean, path(path_out, "xbox", ext = "csv.gz"))
 write_csv(dat_cog, path(path_out, "simon", ext = "csv.gz"))
-write_csv(ethnicity_us, path(path_out, "ethnicity_us", ext = "csv.gz"))
-write_csv(ethnicity_uk, path(path_out, "ethnicity_uk", ext = "csv.gz"))
 ```
