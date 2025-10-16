@@ -318,6 +318,14 @@ daily_all <- hourly_all |>
   group_by(pid, platform, day_local) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
+# --- 4) weekly
+weekly_all <- daily_all |>
+  mutate(
+    week = floor_date(day_local, "week")
+  ) |>
+  group_by(pid, platform, week) |>
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
 # --- (optional) MOBILE PLACEHOLDERS ----------------------------------------
 # When iOS/Android daily datasets are ready, bind_rows() their daily tables here.
 # ios_daily <- ios_df |>
@@ -909,7 +917,7 @@ For all participants who were eligible based on self-reported video game play (b
 
 ## Self-report measures
 
-We collected a variety of self-report measures at different time scales. We briefly describe which constucts we collected here; for further details of the specific measures and example items, see @tbl-measures
+We collected a variety of self-report measures at different time scales. We briefly describe which constucts we collected here; for further details of the specific measures and example items, see @tbl-measures.
 
 *Trait / traitlike (baseline).* We assessed chronotype, Big 5 personality, player trait typology, and gaming disorder symptoms at baseline. Gaming disorder symptoms were measured twice, at biweekly waves 1 and 6.
 
@@ -963,208 +971,140 @@ TODO - text
 
 Here we visualize key aspects of the data to provide an overview of its contents and properties.
 
-@fig-stacked-playtime compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of player's true gaming is systematically uncaptured, due to factors such as missing platforms (e.g., Playstation), missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam).
+@fig-paired-dotplot compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of players' true gaming is systematically uncaptured, due to factors such as  missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam). The figure therefore provides a useful overview of the relative coverage of different platforms in our telemetry data.
 
 ::: {.callout-warning}
 I'm halfway through making changes to the stacked bar chart preprocessing, ignore the actual values.
 :::
 
 ```{r}
-#| label: fig-stacked-playtime
+#| label: fig-paired-dotplot
 
-# TODO: blur or fuzzy lines?
-# TODO: week-to-week variance?
-# violin plot / side by side - comparison of 5 specific individuals - by quantiles
+# Paired dot plot: self-report vs telemetry (normalized by exposure)
 
-# --- counts ---
-n_qualified <- intake |>
-  filter(qualified) |>
-  summarise(n = n_distinct(pid)) |>
-  pull()
+telemetry_platforms <- c("Steam", "Nintendo", "Xbox")
+platforms_all <- c(telemetry_platforms, "iOS", "Android", "Other (uncaptured)")
 
-# --- Self-report per platform (as before; drop the temporary Xbox-only filter) ---
-sr_long <- intake |>
+sr_users <- intake |>
   filter(qualified) |>
   mutate(
-    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
-    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
-    PlayStation = self_reported_weekly_play *
-      coalesce(prop_playstation / 100, 0),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
-    iOS = self_reported_weekly_play * coalesce(prop_ios / 100, 0),
-    Android = self_reported_weekly_play * coalesce(prop_android / 100, 0)
-  ) |>
-  pivot_longer(
-    c(Steam, Xbox, PlayStation, Nintendo, iOS, Android),
-    names_to = "platform",
-    values_to = "minutes"
-  ) |>
-  group_by(platform) |>
-  summarise(minutes = mean(minutes, na.rm = TRUE), .groups = "drop") |>
-  mutate(source = "Self-report")
+    pid = as.character(pid),
+    # usage flags (keep your existing logic for captured + mobile)
+    uses_Steam    = str_detect(used_platforms %||% "", "Steam"),
+    uses_Nintendo = str_detect(used_platforms %||% "", "Nintendo"),
+    uses_Xbox     = str_detect(used_platforms %||% "", "Xbox"),
+    uses_iOS      = str_detect(used_platforms %||% "", "iOS"),
+    uses_Android  = str_detect(used_platforms %||% "", "Android"),
+    # "Other" usage is defined purely by nonzero props on uncaptured platforms
+    other_prop    = coalesce(prop_playstation, 0) + coalesce(prop_other, 0),
+    uses_Other    = other_prop > 0 & !is.na(other_prop),
+    # minutes by platform
+    Steam    = self_reported_weekly_play * coalesce(prop_steam / 100,     NA),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100,  NA),
+    Xbox     = self_reported_weekly_play * coalesce(prop_xbox / 100,      NA),
+    iOS      = self_reported_weekly_play * coalesce(prop_ios / 100,       NA),
+    Android  = self_reported_weekly_play * coalesce(prop_android / 100,   NA),
+    `Other (uncaptured)` = self_reported_weekly_play * if_else(uses_Other, other_prop / 100, NA_real_),
+    .keep = "used"
+  )
 
-# --- Telemetry per platform PER QUALIFIED PERSON (new denominator) ---
-telemetry_weekly_A <- daily_all |>
-  mutate(week = floor_date(day_local, "week")) |>
-  group_by(platform, week) |>
-  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+sr_totals <- sr_users |>
+  pivot_longer(c(`Other (uncaptured)`, Steam, Nintendo, Xbox, iOS, Android),
+               names_to = "platform", values_to = "sr_minutes") |>
+  mutate(
+    uses = case_when(
+      platform == "Steam"              ~ uses_Steam,
+      platform == "Nintendo"           ~ uses_Nintendo,
+      platform == "Xbox"               ~ uses_Xbox,
+      platform == "iOS"                ~ uses_iOS,
+      platform == "Android"            ~ uses_Android,
+      platform == "Other (uncaptured)" ~ uses_Other,
+      TRUE ~ FALSE
+    )
+  ) |>
+  filter(uses, platform %in% platforms_all) |>
   group_by(platform) |>
   summarise(
-    minutes = mean(total_minutes, na.rm = TRUE) / n_qualified,
+    minutes = mean(sr_minutes, na.rm = TRUE),
+    n_users = n_distinct(pid[!is.na(sr_minutes)]),
+    .groups = "drop"
+  ) |>
+  mutate(source = "Self-report")
+
+# ---- TELEMETRY (avg weekly minutes among users with telemetry; normalized) ----
+tele_exposure <- telemetry_spans |>
+  filter(platform %in% telemetry_platforms) |>
+  mutate(
+    pid = as.character(pid),
+    exposure_weeks = as.numeric(difftime(telemetry_end, telemetry_start, units = "days")) / 7
+  ) |>
+  filter(is.finite(exposure_weeks), exposure_weeks > 4) |>
+  select(pid, platform, exposure_weeks)
+
+tele_users <- daily_all |>
+  filter(platform %in% telemetry_platforms) |>
+  mutate(pid = as.character(pid)) |>
+  group_by(pid, platform) |>
+  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+  left_join(tele_exposure, by = c("pid", "platform")) |>
+  filter(!is.na(exposure_weeks), exposure_weeks > 0) |>
+  mutate(weekly_minutes = total_minutes / exposure_weeks)
+
+tele_totals <- tele_users |>
+  group_by(platform) |>
+  summarise(
+    minutes = mean(weekly_minutes, na.rm = TRUE),
+    n_users = n_distinct(pid),
     .groups = "drop"
   ) |>
   mutate(source = "Telemetry")
 
-# --- Combine + order (unchanged) ---
-weekly_by_platform <- bind_rows(sr_long, telemetry_weekly_A) |>
-  mutate(source = factor(source, levels = c("Self-report", "Telemetry")))
-
-stack_order <- weekly_by_platform |>
-  filter(source == "Self-report") |>
-  arrange(minutes) |>
-  pull(platform)
-
-weekly_by_platform <- weekly_by_platform |>
-  mutate(platform = factor(platform, levels = stack_order))
-
-# --- Ghost overlay (unchanged) ---
-ghost <- weekly_by_platform |>
-  select(platform, source, minutes) |>
-  pivot_wider(names_from = source, values_from = minutes, values_fill = 0) |>
-  mutate(gap = pmax(`Self-report` - Telemetry, 0)) |>
-  arrange(desc(gap)) |>
+# ---- COMBINE + PLOT ----
+paired_summary <- bind_rows(sr_totals, tele_totals) |>
   mutate(
-    tele_top = sum(Telemetry, na.rm = TRUE),
-    ymin = tele_top + lag(cumsum(gap), default = 0),
-    ymax = ymin + gap,
-    xmid = match("Telemetry", levels(weekly_by_platform$source)),
-    xmin = xmid - 0.45,
-    xmax = xmid + 0.45,
-    ymid = (ymin + ymax) / 2
-  ) |>
-  filter(gap > 0)
+    platform = factor(platform, levels = platforms_all),
+    source   = factor(source, levels = c("Self-report", "Telemetry"))
+  )
 
-# --- Panel A plot (your original plot code works as-is) ---
-gA <- ggplot(
-  weekly_by_platform,
-  aes(x = source, y = minutes, fill = platform)
-) +
-  geom_col(width = 0.9) +
-  scale_fill_viridis_d(
-    option = "magma",
-    begin = .1,
-    end = .8,
-    limits = stack_order
+# segments only where both SR and Telemetry exist
+segment_df <- paired_summary |>
+  select(platform, source, minutes) |>
+  pivot_wider(names_from = source, values_from = minutes) |>
+  # filter(!is.na(`Self-report`) & !is.na(Telemetry)) |>
+  mutate(xmin = `Self-report`, xmax = Telemetry) |> 
+  mutate(platform = factor(platform, levels = c("Other (uncaptured)", "iOS", "Android", "Nintendo", "Xbox", "Steam")))
+
+ggplot(paired_summary, aes(x = minutes, y = platform)) +
+  geom_segment(
+    data = segment_df,
+    aes(x = xmin, xend = xmax, y = platform, yend = platform),
+    color = "grey70", linewidth = 0.9, alpha = 0.8, inherit.aes = FALSE
+  ) +
+  geom_point(
+    aes(shape = source, color = source, fill = source),
+    size = 4, stroke = 0.7
+  ) +
+  scale_shape_manual(values = c("Self-report" = 24, "Telemetry" = 22)) +
+  scale_color_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
+  scale_fill_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
+  scale_y_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_x_continuous(limits = c(0, 1200), expand = expansion(mult = c(0.02, 0.08))) +
+  guides(
+    shape = guide_legend(title = NULL),
+    color = guide_legend(title = NULL),
+    fill = "none"
   ) +
   labs(
-    x = "Data Source",
-    y = "Weekly minutes per qualified person",
-    fill = "Platform"
+    x = "Average weekly minutes per active user of platform",
+    y = NULL,
+    caption = "Telemetry calculated per user with any telemetry on that platform, based only on the period between their first and last recorded session."
   ) +
-  theme(legend.position = "bottom") +
-  geom_text(
-    aes(label = ifelse(minutes < 10, "", round(minutes, 0))),
-    position = position_stack(vjust = 0.5),
-    color = "white",
-    family = "serif"
-  ) +
-  geom_rect(
-    data = ghost,
-    aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-    inherit.aes = FALSE,
-    linetype = "dotted",
-    linewidth = 0.6,
-    color = "black",
-    fill = NA
-  ) +
-  geom_text(
-    data = ghost,
-    aes(x = xmid, y = ymid, label = paste0("+", round(gap, 0))),
-    inherit.aes = FALSE,
-    family = "serif"
+  theme_minimal(base_size = 10) +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 12, face = "bold")
   )
 
-# --- how many qualified users per platform ---
-n_users <- intake |>
-  filter(qualified) |>
-  transmute(
-    pid = as.character(pid),
-    Steam = str_detect(linked_platforms %||% "", "Steam"),
-    Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
-    Xbox = str_detect(linked_platforms %||% "", "Xbox")
-  ) |>
-  summarise(
-    Steam = sum(Steam, na.rm = TRUE),
-    Nintendo = sum(Nintendo, na.rm = TRUE),
-    Xbox = sum(Xbox, na.rm = TRUE)
-  ) |>
-  pivot_longer(everything(), names_to = "platform", values_to = "n_users")
-
-# --- SR per platform among users of that platform ---
-sr_users <- intake |>
-  filter(qualified) |>
-  mutate(
-    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, 0),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, 0),
-    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, 0),
-    uses_Steam = str_detect(linked_platforms %||% "", "Steam"),
-    uses_Nintendo = str_detect(linked_platforms %||% "", "Nintendo"),
-    uses_Xbox = str_detect(linked_platforms %||% "", "Xbox")
-  ) |>
-  select(pid, Steam, Nintendo, Xbox, uses_Steam, uses_Nintendo, uses_Xbox) |>
-  pivot_longer(
-    c(Steam, Nintendo, Xbox),
-    names_to = "platform",
-    values_to = "sr_minutes"
-  ) |>
-  mutate(
-    uses = case_when(
-      platform == "Steam" ~ uses_Steam,
-      platform == "Nintendo" ~ uses_Nintendo,
-      platform == "Xbox" ~ uses_Xbox,
-      TRUE ~ FALSE
-    )
-  ) |>
-  filter(uses) |>
-  group_by(platform) |>
-  summarise(sr = mean(sr_minutes, na.rm = TRUE), .groups = "drop")
-
-# --- Telemetry per platform PER USER OF THAT PLATFORM ---
-tele_users <- daily_all |>
-  filter(platform %in% c("Steam", "Nintendo", "Xbox")) |>
-  mutate(week = floor_date(day_local, "week")) |>
-  group_by(platform, week) |>
-  summarise(total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
-  group_by(platform) |>
-  summarise(avg_weekly_total = mean(total, na.rm = TRUE), .groups = "drop") |>
-  left_join(n_users, by = "platform") |>
-  mutate(tele = ifelse(n_users > 0, avg_weekly_total / n_users, NA_real_)) |>
-  select(platform, tele)
-
-# --- tidy + facet plot ---
-bcd <- sr_users |>
-  left_join(tele_users, by = "platform") |>
-  pivot_longer(c(sr, tele), names_to = "source", values_to = "minutes") |>
-  mutate(
-    source = recode(source, sr = "Self-report", tele = "Telemetry"),
-    source = factor(source, levels = c("Self-report", "Telemetry")),
-    platform = factor(platform, levels = c("Steam", "Nintendo", "Xbox"))
-  )
-
-gBCD <- ggplot(bcd, aes(source, minutes, fill = source)) +
-  geom_col(width = 0.8) +
-  scale_fill_viridis_d(
-    option = "magma",
-    begin = .15,
-    end = .7,
-    guide = "none"
-  ) +
-  labs(x = NULL, y = "Weekly minutes per user of platform") +
-  geom_text(aes(label = round(minutes, 0)), vjust = -0.35, family = "serif") +
-  facet_wrap(~platform, nrow = 1)
-
-# --- combine if desired ---
-gA / gBCD
 ```
 
 In @fig-heatmap, we visualize the distribution of play across days and times. As expected, we find that the likelihood of play peaks on weekends from 8-11pm, and is lowest in the early morning.
