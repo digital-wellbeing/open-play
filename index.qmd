@@ -119,17 +119,17 @@ nocite: |
   @BuysseEtAl1989Pittsburgh
   @Johns1991New
 format:
-  html:
-    theme:
-      light: united
-      dark: darkly
-    toc: true
-    toc-depth: 2
-    fontsize: 13pt
-    other-links:
-      - text: Stage 1 Registered Report
-        href: https://osf.io/pb5nu
-        icon: file-pdf
+  # html:
+  #   theme:
+  #     light: united
+  #     dark: darkly
+  #   toc: true
+  #   toc-depth: 2
+  #   fontsize: 13pt
+  #   other-links:
+  #     - text: Stage 1 Registered Report
+  #       href: https://osf.io/pb5nu
+  #       icon: file-pdf
   preprint-typst:
     wordcount: true
     theme: jou
@@ -138,7 +138,7 @@ format:
     sansfont: "Liberation Sans"
     include-before-body:
       - text: "#show <refs>: set par(hanging-indent: 1.4em)"
-  docx: default
+  # docx: default
 ---
 
 ```{r}
@@ -167,6 +167,8 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("summarise", "dplyr")
 conflict_prefer("summarize", "dplyr")
 conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+
 
 # Load custom functions
 source("R/helpers.R")
@@ -579,6 +581,7 @@ tt(
 
 ## Design
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-sankey
 #| fig-cap: Participant flow during study intake.
@@ -665,6 +668,7 @@ ggplot(
   scale_y_continuous(expand = expansion(c(0.2, 0.1))) +
   scale_fill_grey(drop = FALSE, start = 1, end = 0)
 ```
+:::
 
 The study consisted of four stages (@fig-sankey).
 
@@ -902,8 +906,12 @@ All telemetry timestamps are stored as UTC, but can be converted to the particip
 
 In @fig-heatmap, we visualize the distribution of play across days and times. As expected, we find that the likelihood of play peaks on weekends from 8-11pm, and is lowest in the early morning.
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-heatmap
+#| fig-cap: "Diurnal play across Xbox, Nintendo, Steam."
+#| fig-asp: .4
+#| out.width: 95%
 
 # expected number of occurrences of each slot in telemetry span
 slot_exposure <- telemetry_spans |>
@@ -968,6 +976,7 @@ ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
   theme(panel.grid.major.y = element_blank())
 
 ```
+:::
 
 ### Self-reported Gaming
 
@@ -975,8 +984,12 @@ We also collected self-reported gaming data in each biweekly survey. Participant
 
 @fig-paired-dotplot compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of players' true gaming is systematically uncaptured, due to factors such as  missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam). The figure therefore provides a useful overview of the relative coverage of different platforms in our telemetry data.
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-paired-dotplot
+#| fig-cap: "Average weekly playtime (minutes) by platform, self-reported vs telemetry (among users with telemetry). Lines connect estimates for the same platform."
+#| fig-asp: 0.4
+#| out.width: 95%
 
 # Paired dot plot: self-report vs telemetry (normalized by exposure)
 
@@ -1095,7 +1108,7 @@ ggplot(paired_summary, aes(x = minutes, y = platform)) +
   labs(
     x = "Average weekly minutes per active user of platform",
     y = NULL,
-    caption = "Telemetry calculated per user with any telemetry on that platform, based only on the period between their first and last recorded session."
+    caption = "Telemetry calculated per user of that platform,\nbased only on the period between their first and last recorded session."
   ) +
   theme_minimal(base_size = 10) +
   theme(
@@ -1104,6 +1117,7 @@ ggplot(paired_summary, aes(x = minutes, y = platform)) +
   )
 
 ```
+:::
 
 ## Survey measures
 
@@ -1119,10 +1133,13 @@ We collected a variety of self-report measures at different time scales. We brie
 
 @fig-case-study illustrates the temporal dynamics of gaming behavior and mental wellbeing through three representative case studies.
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-case-study
 #| fig-cap: "Daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green). Orange line shows biweekly mental wellbeing scores (WEMWBS, range 14-70) measured at six study waves. Participants were selected as closest representatives of the 25th, 50th, and 75th percentiles of total playtime distribution across the full 84-day study period."
-#| fig-asp: 1.2
+#| fig-asp: .8
+#| out.width: 80%
+
 
 # Find each participant's study start date (first panel wave)
 study_start_dates <- panel |>
@@ -1296,7 +1313,7 @@ for (i in seq_along(pct_levels)) {
       sec.axis = sec_axis(
         transform = ~ . / coeff + 14,
         name = if (is_middle) "Wellbeing (WEMWBS)" else NULL,
-        breaks = seq(14, 70, by = 7)
+        breaks = seq(14, 70, by = 14)
       )
     ) +
     ggtitle(pct_level) +
@@ -1323,7 +1340,7 @@ wrap_plots(plots_list, ncol = 1, guides = "collect") +
   ) &
   theme(legend.position = "bottom")
 ```
-
+:::
 
 ## Attention Control
 
@@ -1394,6 +1411,7 @@ We implemented a variety of data quality checks.
 
 As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by region (US and UK) and data type (Survey, Telemetry, and Cognitive Task). 
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-missingness
 #| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, observations actually collected, missing observations, median number of missing observations per participant, and percentage of data completeness for each measure. Retention plots (right columns) visualize the proportion of participants remaining active over time: for surveys and tasks, retention is calculated across study days or waves; for telemetry, across the 84-day study period. Density plots show the distribution of observations per participant."
@@ -1827,7 +1845,7 @@ if (knitr::is_html_output()) {
     style_tt(fontsize = 0.8)
 }
 ```
-
+:::
 
 # Discussion
 
