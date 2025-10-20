@@ -22,6 +22,8 @@ panel <- read_csv("data/raw/survey_panel_raw.csv.gz")
 nintendo <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
 steam <- read_csv("data/raw/telemetry_steam_raw.csv.gz")
 xbox <- read_csv("data/raw/telemetry_xbox_raw.csv.gz")
+ios <- read_csv("data/raw/telemetry_ios_raw.csv.gz")
+android <- read_csv("data/raw/telemetry_android_raw.csv.gz")
 
 dat_cog <- read_csv("data/raw/cognitive_tasks_raw.csv.gz")
 ```
@@ -182,6 +184,24 @@ dat_cog <- dat_cog |>
   arrange(wave, pid)
 ```
 
+```{r}
+#| label: preprocess-android
+
+android <- android |> 
+  mutate(platform = "Android") |> 
+  select(pid, platform, day_local = date, minutes = total_gaming_minutes)
+
+```
+
+```{r}
+#| label: preprocess-ios
+
+ios <- ios |> 
+  mutate(platform = "iOS") |> 
+  select(pid, platform, day_local = date, minutes = total_gaming_minutes)
+
+```
+
 ## Write clean data files
 
 ```{r}
@@ -198,5 +218,7 @@ write_csv(panel, path(path_out, "panel", ext = "csv.gz"))
 write_csv(nintendo_clean, path(path_out, "nintendo", ext = "csv.gz"))
 write_csv(steam_clean, path(path_out, "steam", ext = "csv.gz"))
 write_csv(xbox_clean, path(path_out, "xbox", ext = "csv.gz"))
+write_csv(ios, path(path_out, "ios", ext = "csv.gz"))
+write_csv(android, path(path_out, "android", ext = "csv.gz"))
 write_csv(dat_cog, path(path_out, "simon", ext = "csv.gz"))
 ```

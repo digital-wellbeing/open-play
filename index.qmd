@@ -47,7 +47,7 @@ author:
   - name: Thomas Hakman
     corresponding: false
     orcid: 0009-0009-8292-2482
-    email: nick@nickballou.com
+    email: thomas.hakman@oii.ox.ac.uk
     affiliations:
       - ref: 1
     # roles:
@@ -168,6 +168,8 @@ conflict_prefer("filter", "dplyr")
 conflict_prefer("summarise", "dplyr")
 conflict_prefer("summarize", "dplyr")
 conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+
 
 # Load custom functions
 source("R/helpers.R")
@@ -209,6 +211,8 @@ nintendo <- read_csv("data/clean/nintendo.csv.gz")
 steam <- read_csv("data/clean/steam.csv.gz")
 xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
+ios <- read_csv("data/clean/ios.csv.gz")
+android <- read_csv("data/clean/android.csv.gz")
 ```
 
 ```{r}
@@ -333,7 +337,9 @@ daily_all <- hourly_all |>
     day_local = as.Date(hour_start_local),
   ) |>
   group_by(pid, platform, day_local) |>
-  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |> 
+  bind_rows(ios) |> 
+  bind_rows(android)
 
 # --- 4) weekly
 weekly_all <- daily_all |>
@@ -386,13 +392,6 @@ The dataset is openly available under a {{< meta data-license >}} license at {{<
 #| label: tbl-overview
 #| tbl-cap: "Overview of the dataset and sources."
 
-# ===== tuning knobs =====
-CAP_PROB <- 0.99 # winsorize at global 99th percentile (after per-dataset caps)
-USE_LOG <- TRUE
-THUMB_W <- 400
-THUMB_H <- 200
-LINEWIDTH <- 1.0
-
 # ---- helpers ----
 # Get PIDs of participants who completed at least one survey
 survey_pids <- union(
@@ -444,21 +443,16 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
     Hours = total_hours(df),
     `Avg events / participants` = mean(by_pid$events, na.rm = TRUE),
     `Avg active days` = avg_days,
-    Sparklines = "" # plot_tt() will draw mini-plots here
   )
 }
 
 # ---- table rows (order preserved) ----
 # Filter telemetry to only include participants who completed at least one survey
-steam_survey <- steam |>
-  mutate(pid = as.character(pid)) |>
-  filter(pid %in% survey_pids)
-nintendo_survey <- nintendo |>
-  mutate(pid = as.character(pid)) |>
-  filter(pid %in% survey_pids)
-xbox_survey <- xbox |>
-  mutate(pid = as.character(pid)) |>
-  filter(pid %in% survey_pids)
+steam_survey <- steam |> filter(pid %in% survey_pids)
+nintendo_survey <- nintendo |> filter(pid %in% survey_pids)
+xbox_survey <- xbox |> filter(pid %in% survey_pids)
+ios_survey <- ios |> filter(pid %in% survey_pids)
+android_survey <- android |> filter(pid %in% survey_pids)
 
 overview <- bind_rows(
   summ_basic(intake, pid, "Intake survey", avg_days = 1),
@@ -486,12 +480,9 @@ overview <- bind_rows(
     "Nintendo",
     avg_days = avg_days_platform("Nintendo", survey_pids)
   ),
-  summ_basic(
-    xbox_survey,
-    pid,
-    "Xbox",
-    avg_days = avg_days_platform("Xbox", survey_pids)
-  )
+  summ_basic(xbox_survey, pid, "Xbox", avg_days = avg_days_platform("Xbox", survey_pids)),
+  summ_basic(ios_survey, pid, "iOS", avg_days = avg_days_platform("iOS")),
+  summ_basic(android_survey, pid, "Android", avg_days = avg_days_platform("Android"))
 ) |>
   mutate(
     Participants = number(
@@ -507,7 +498,7 @@ overview <- bind_rows(
     ),
     Hours = number(
       Hours,
-      accuracy = 1,
+      accuracy = 0.1,
       big.mark = ",",
       scale_cut = cut_long_scale()
     ),
@@ -525,74 +516,9 @@ overview <- bind_rows(
     )
   )
 
-plot_data <- list(
-  events_per_participant(intake, pid, cap = 1),
-  events_per_participant(diary, pid, cap = 30),
-  events_per_participant(panel, pid, cap = 6),
-  events_per_participant(steam_survey, pid, cap = Inf),
-  events_per_participant(nintendo_survey, pid, cap = Inf),
-  events_per_participant(xbox_survey, pid, cap = Inf)
-)
-
-# ---- winsorize globally, then log-scale if requested ----
-all_events <- unlist(plot_data, use.names = FALSE)
-cap_global <- quantile(all_events, CAP_PROB, na.rm = TRUE)
-plot_data_w <- lapply(plot_data, \(v) pmin(v, cap_global))
-
-xf <- if (USE_LOG) \(x) log1p(x) else identity
-xmax_raw <- max(c(1, cap_global), na.rm = TRUE)
-xmax_t <- xf(xmax_raw)
-
-spark_density <- function(d, xmax_t, ...) {
-  d <- data.frame(x = xf(d))
-  ggplot(d, aes(x = x)) +
-    geom_density(
-      linewidth = LINEWIDTH,
-      fill = "grey60",
-      alpha = 0.35,
-      adjust = 1
-    ) +
-    scale_x_continuous(
-      limits = c(0, xmax_t),
-      expand = c(0, 0),
-      breaks = c(0, xmax_t),
-      labels = c("0", number(xmax_raw, accuracy = 1, big.mark = ","))
-    ) +
-    labs(x = NULL, y = NULL) +
-    theme_minimal(base_size = 8) +
-    theme(
-      panel.grid = element_blank(),
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      plot.margin = margin(1, 1, 1, 1)
-    )
-}
-
-# If you want console preview reliability:
-# options(tinytable_inline_images = TRUE)
-
-tt(
-  overview |> select(-Sparklines),
-  notes = paste0(
-    # "Sparklines: per-participant events. Per-dataset caps applied (see code). ",
-    "Winsorized at ",
-    round(CAP_PROB * 100),
-    "th percentile"
-    # if (USE_LOG) "; x-axis uses log1p scale." else "."
-  )
-) |>
+tt(overview) |>
   style_tt(fontsize = 0.8) |>
   format_tt(replace = "")
-
-# Removed until makes sense
-# plot_tt(
-#   j = which(names(overview) == "Sparklines"),
-#   fun = spark_density,
-#   data = plot_data_w,
-#   xmax_t = xmax_t,
-#   width_plot = THUMB_W,
-#   height_plot = THUMB_H
-# )
 
 ```
 
@@ -600,6 +526,7 @@ tt(
 
 ## Design
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-sankey
 #| fig-cap: Participant flow during study intake.
@@ -686,6 +613,7 @@ ggplot(
   scale_y_continuous(expand = expansion(c(0.2, 0.1))) +
   scale_fill_grey(drop = FALSE, start = 1, end = 0)
 ```
+:::
 
 The study consisted of four stages (@fig-sankey).
 
@@ -746,7 +674,7 @@ tibble(
       "b" = list(
         i = 1,
         j = 4,
-        text = "In previous research, Nintendo-published games accounted for 65% of Switch playtime [@BallouEtAl2025Perceived]."
+        text = "In previous research, Nintendo-published games accounted for 65% of Switch playtime (Ballou et al., 2025)."
       ),
       "c" = list(
         i = 2,
@@ -755,7 +683,7 @@ tibble(
       )
     )
   ) |>
-  style_tt(fontsize = 0.8)
+  style_tt(fontsize = 0.7)
 ```
 
 :::
@@ -1007,32 +935,451 @@ This study received ethical approval from the Social Sciences and Humanities Int
 Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening, £2 for the 10-minute intake survey (plus £5 for linking at least one account with recent data), £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.
 
 
-
-## Self-report measures
-
-We collected a variety of self-report measures at different time scales. We briefly describe which constucts we collected here; for further details of the specific measures and example items, see @tbl-measures.
-
-*Trait / traitlike (baseline).* We assessed chronotype, Big 5 personality, player trait typology, and gaming disorder symptoms at baseline. Gaming disorder symptoms were measured twice, at biweekly waves 1 and 6.
-
-*Daily.* Daily surveys captured: basic psychological need satisfaction and frustration in life in general; basic psychological need satisfaction and frustration in the context of video games; life satisfaction; affective valence; sleep quality; stressors; and self-reported displacement.
-
-*Biweekly.* Every two weeks we assessed: general mental wellbeing; depression symptoms; life satisfaction; basic psychological need satisfaction and frustration – video games; and subjective displacement.
-
-*Monthly (alternating biweekly).* On alternating biweekly surveys (i.e., monthly), we assessed: sleep quality; daytime sleepiness; and perceived harms and benefits of gaming.
-
-### Self-reported play
-
-*Social context of play*: Participants reported which types of social play they engaged in during the last 24 hours (single-player games only, multiplayer with real-world friends, multiplayer with online-only friends, multiplayer with strangers). Participants could select more than one option.
-
-*Self-reported Playtime*: In each biweekly survey, participants estimated the time they spent playing games on platforms they had linked during the study (e.g., excluding other platforms such as Playstation) in each of the following periods: last 24 hours, last 7 days, and last 14 days.
-
-*Self-reported recent sessions:* In each biweekly survey, participants reported details of at least 1 and up to 3 of their most recent gaming sessions (game, date, and start/end time).
+# Dataset
 
 ## Digital Trace Data
 
 As described above, we collected video game play data from five platforms: Xbox, Nintendo Switch, Steam, iOS, and Android (full details in @tbl-platforms). To recap, on Xbox and Nintendo, we have *session-level* data, characterized by the following fields: a game ID (Xbox) or title (Nintendo), a start and end time, and genre(s). On Steam we have *hourly aggregates* - every hour, how much time people spent playing for all games they played in that hour. On iOS and Android, we have *daily aggregates* - every day, how much time people spent playing each game. We describe each platform in more detail below. For concision, we do not repeat the details of @tbl-platforms in here, but direct readers to that table or our supplementary materials for the exact variables in each platform's trace data.
 
 All telemetry timestamps are stored as UTC, but can be converted to the participant's local time using the `local_timezone` variable.
+
+In @fig-heatmap, we visualize the distribution of play across days and times. As expected, we find that the likelihood of play peaks on weekends from 8-11pm, and is lowest in the early morning.
+
+::: {.place arguments='top, scope: "parent", float: true'}
+```{r}
+#| label: fig-heatmap
+#| fig-cap: "Diurnal play across Xbox, Nintendo, Steam."
+#| fig-asp: .4
+#| out.width: 95%
+
+# expected number of occurrences of each slot in telemetry span
+slot_exposure <- telemetry_spans |>
+  rowwise() |>
+  mutate(n_weeks = interval(telemetry_start, telemetry_end) %/% weeks(1) + 1) |>
+  ungroup() |>
+  crossing(dow = 1:7, hour = 0:23) |>
+  mutate(n_occurrences = n_weeks) # each slot appears once per week
+
+# total minutes actually played per slot
+slot_play <- hourly_all |>
+  mutate(
+    dow = lubridate::wday(hour_start_local, week_start = 1),
+    hour = hour(hour_start_local)
+  ) |>
+  group_by(pid, platform, dow, hour) |>
+  summarise(
+    minutes = pmin(sum(minutes, na.rm = TRUE), 60 * n()),
+    .groups = "drop"
+  )
+
+# combine: per-player–platform average minutes per occurrence
+slot_per_player <- slot_exposure |>
+  left_join(slot_play, by = c("pid", "platform", "dow", "hour")) |>
+  mutate(
+    minutes = replace_na(minutes, 0),
+    avg_minutes = minutes / n_occurrences
+  )
+
+# final: probability across players (avg minutes / 60)
+slot_summary <- slot_per_player |>
+  group_by(dow, hour) |>
+  summarise(
+    prob_playing = mean(avg_minutes / 60),
+    n_active = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    dow = factor(
+      dow,
+      levels = 1:7,
+      labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
+      ordered = TRUE
+    )
+  )
+
+
+ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
+  geom_tile() +
+  scale_x_continuous(breaks = 0:23) +
+  scale_fill_viridis_c(
+    option = "magma",
+    labels = scales::percent_format(accuracy = .1),
+    # limits = c(0, .028), breaks = seq(0, .028, .007),
+    name = "Probability of active play"
+  ) +
+  labs(
+    x = "Hour (local)",
+    y = "Day",
+    title = "Diurnal play across Xbox, Nintendo, Steam"
+  ) +
+  theme(panel.grid.major.y = element_blank())
+
+```
+:::
+
+### Self-reported Gaming
+
+We also collected self-reported gaming data in each biweekly survey. Participants estimated the time they spent playing games on platforms they had linked during the study (e.g., excluding other platforms such as Playstation) in each of the following periods: last 24 hours, last 7 days, and last 14 days. In addition, participants reported details of at least 1 and up to 3 of their most recent gaming sessions (game, date, and start/end time).
+
+@fig-paired-dotplot compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of players' true gaming is systematically uncaptured, due to factors such as  missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam). The figure therefore provides a useful overview of the relative coverage of different platforms in our telemetry data.
+
+::: {.place arguments='top, scope: "parent", float: true'}
+```{r}
+#| label: fig-paired-dotplot
+#| fig-cap: "Average weekly playtime (minutes) by platform, self-reported vs telemetry (among users with telemetry). Lines connect estimates for the same platform."
+#| fig-asp: 0.4
+#| out.width: 95%
+
+# Paired dot plot: self-report vs telemetry (normalized by exposure)
+
+telemetry_platforms <- c("Steam", "Nintendo", "Xbox")
+platforms_all <- c(telemetry_platforms, "iOS", "Android", "Other (uncaptured)")
+
+sr_users <- intake |>
+  filter(qualified) |>
+  mutate(
+    pid = as.character(pid),
+    # usage flags (keep your existing logic for captured + mobile)
+    uses_Steam    = str_detect(used_platforms %||% "", "Steam"),
+    uses_Nintendo = str_detect(used_platforms %||% "", "Nintendo"),
+    uses_Xbox     = str_detect(used_platforms %||% "", "Xbox"),
+    uses_iOS      = str_detect(used_platforms %||% "", "iOS"),
+    uses_Android  = str_detect(used_platforms %||% "", "Android"),
+    # "Other" usage is defined purely by nonzero props on uncaptured platforms
+    other_prop    = coalesce(prop_playstation, 0) + coalesce(prop_other, 0),
+    uses_Other    = other_prop > 0 & !is.na(other_prop),
+    # minutes by platform
+    Steam    = self_reported_weekly_play * coalesce(prop_steam / 100,     NA),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100,  NA),
+    Xbox     = self_reported_weekly_play * coalesce(prop_xbox / 100,      NA),
+    iOS      = self_reported_weekly_play * coalesce(prop_ios / 100,       NA),
+    Android  = self_reported_weekly_play * coalesce(prop_android / 100,   NA),
+    `Other (uncaptured)` = self_reported_weekly_play * if_else(uses_Other, other_prop / 100, NA_real_),
+    .keep = "used"
+  )
+
+sr_totals <- sr_users |>
+  pivot_longer(c(`Other (uncaptured)`, Steam, Nintendo, Xbox, iOS, Android),
+               names_to = "platform", values_to = "sr_minutes") |>
+  mutate(
+    uses = case_when(
+      platform == "Steam"              ~ uses_Steam,
+      platform == "Nintendo"           ~ uses_Nintendo,
+      platform == "Xbox"               ~ uses_Xbox,
+      platform == "iOS"                ~ uses_iOS,
+      platform == "Android"            ~ uses_Android,
+      platform == "Other (uncaptured)" ~ uses_Other,
+      TRUE ~ FALSE
+    )
+  ) |>
+  filter(uses, platform %in% platforms_all) |>
+  group_by(platform) |>
+  summarise(
+    minutes = mean(sr_minutes, na.rm = TRUE),
+    n_users = n_distinct(pid[!is.na(sr_minutes)]),
+    .groups = "drop"
+  ) |>
+  mutate(source = "Self-report")
+
+# ---- TELEMETRY (avg weekly minutes among users with telemetry; normalized) ----
+tele_exposure <- telemetry_spans |>
+  filter(platform %in% telemetry_platforms) |>
+  mutate(
+    pid = as.character(pid),
+    exposure_weeks = as.numeric(difftime(telemetry_end, telemetry_start, units = "days")) / 7
+  ) |>
+  filter(is.finite(exposure_weeks), exposure_weeks > 4) |>
+  select(pid, platform, exposure_weeks)
+
+tele_users <- daily_all |>
+  filter(platform %in% telemetry_platforms) |>
+  mutate(pid = as.character(pid)) |>
+  group_by(pid, platform) |>
+  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+  left_join(tele_exposure, by = c("pid", "platform")) |>
+  filter(!is.na(exposure_weeks), exposure_weeks > 0) |>
+  mutate(weekly_minutes = total_minutes / exposure_weeks)
+
+tele_totals <- tele_users |>
+  group_by(platform) |>
+  summarise(
+    minutes = mean(weekly_minutes, na.rm = TRUE),
+    n_users = n_distinct(pid),
+    .groups = "drop"
+  ) |>
+  mutate(source = "Telemetry")
+
+# ---- COMBINE + PLOT ----
+paired_summary <- bind_rows(sr_totals, tele_totals) |>
+  mutate(
+    platform = factor(platform, levels = platforms_all),
+    source   = factor(source, levels = c("Self-report", "Telemetry"))
+  )
+
+# segments only where both SR and Telemetry exist
+segment_df <- paired_summary |>
+  select(platform, source, minutes) |>
+  pivot_wider(names_from = source, values_from = minutes) |>
+  # filter(!is.na(`Self-report`) & !is.na(Telemetry)) |>
+  mutate(xmin = `Self-report`, xmax = Telemetry) |> 
+  mutate(platform = factor(platform, levels = c("Other (uncaptured)", "iOS", "Android", "Nintendo", "Xbox", "Steam")))
+
+ggplot(paired_summary, aes(x = minutes, y = platform)) +
+  geom_segment(
+    data = segment_df,
+    aes(x = xmin, xend = xmax, y = platform, yend = platform),
+    color = "grey70", linewidth = 0.9, alpha = 0.8, inherit.aes = FALSE
+  ) +
+  geom_point(
+    aes(shape = source, color = source, fill = source),
+    size = 4, stroke = 0.7
+  ) +
+  scale_shape_manual(values = c("Self-report" = 24, "Telemetry" = 22)) +
+  scale_color_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
+  scale_fill_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
+  scale_y_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_x_continuous(limits = c(0, 1200), expand = expansion(mult = c(0.02, 0.08))) +
+  guides(
+    shape = guide_legend(title = NULL),
+    color = guide_legend(title = NULL),
+    fill = "none"
+  ) +
+  labs(
+    x = "Average weekly minutes per active user of platform",
+    y = NULL,
+    caption = "Telemetry calculated per user of that platform,\nbased only on the period between their first and last recorded session."
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(
+    legend.position = "bottom",
+    axis.text.y = element_text(size = 12, face = "bold")
+  )
+
+```
+:::
+
+## Survey measures
+
+We collected a variety of self-report measures at different time scales. We briefly describe which constructs we collected here; for further details of the specific measures and example items, see @tbl-measures.
+
+*Trait / traitlike (baseline).* We assessed chronotype, Big 5 personality, player trait typology, and gaming disorder symptoms at baseline. Gaming disorder symptoms were measured twice, at biweekly waves 1 and 6.
+
+*Daily.* Daily surveys captured: basic psychological need satisfaction and frustration in life in general; basic psychological need satisfaction and frustration in the context of video games; life satisfaction; affective valence; sleep quality; stressors; types of social gaming engaged; and self-reported displacement.
+
+*Biweekly.* Every two weeks we assessed: general mental wellbeing; depression symptoms; life satisfaction; basic psychological need satisfaction and frustration – video games; and subjective displacement.
+
+*Monthly (alternating biweekly).* On alternating biweekly surveys (i.e., monthly), we assessed: sleep quality; daytime sleepiness; and perceived harms and benefits of gaming.
+
+@fig-case-study illustrates the temporal dynamics of gaming behavior and mental wellbeing through three representative case studies.
+
+::: {.place arguments='top, scope: "parent", float: true'}
+```{r}
+#| label: fig-case-study
+#| fig-cap: "Daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green). Orange line shows biweekly mental wellbeing scores (WEMWBS, range 14-70) measured at six study waves. Participants were selected as closest representatives of the 25th, 50th, and 75th percentiles of total playtime distribution across the full 84-day study period."
+#| fig-asp: .8
+#| out.width: 80%
+
+
+# Find each participant's study start date (first panel wave)
+study_start_dates <- panel |>
+  group_by(pid) |>
+  summarise(study_start = min(date, na.rm = TRUE), .groups = "drop") |>
+  mutate(pid = as.character(pid))
+
+# Join study start dates and calculate study day
+daily_with_study_day <- daily_all |>
+  left_join(study_start_dates, by = "pid") |>
+  filter(!is.na(study_start)) |>
+  mutate(
+    study_day = as.integer(floor(as.numeric(difftime(day_local, study_start, units = "days")))) + 1
+  ) |>
+  filter(study_day >= 1 & study_day <= 84)
+
+# Calculate total playtime per participant (sum across all platforms and days 1-84)
+total_playtime <- daily_with_study_day |>
+  group_by(pid) |>
+  summarise(
+    total_minutes = sum(minutes, na.rm = TRUE),
+    n_platforms = n_distinct(platform[minutes > 0]),
+    .groups = "drop"
+  )
+
+# Calculate percentiles
+percentiles <- quantile(total_playtime$total_minutes, probs = c(0.25, 0.50, 0.75), na.rm = TRUE)
+
+# Find participant closest to each percentile based on total playtime
+find_closest_participant <- function(target_value, data) {
+  data |>
+    mutate(distance = abs(total_minutes - target_value)) |>
+    slice_min(distance, n = 1, with_ties = FALSE) |>
+    pull(pid)
+}
+
+selected_pids <- c(
+  "p25" = find_closest_participant(percentiles[1], total_playtime),
+  "p50" = find_closest_participant(percentiles[2], total_playtime),
+  "p75" = find_closest_participant(percentiles[3], total_playtime)
+)
+
+# Process panel data to get wellbeing scores
+panel_wellbeing <- panel |>
+  mutate(pid = as.character(pid)) |>
+  left_join(study_start_dates, by = "pid") |>
+  filter(!is.na(study_start)) |>
+  mutate(
+    study_day = as.integer(floor(as.numeric(difftime(date, study_start, units = "days")))) + 1
+  ) |>
+  filter(pid %in% selected_pids) |>
+  # Calculate wellbeing composite scores
+  rowwise() |>
+  mutate(
+    # WEMWBS - mental wellbeing (14 items, scale 1-5 each, summed for total score 14-70)
+    wemwbs = sum(c_across(starts_with("wemwbs_")), na.rm = TRUE)
+  ) |>
+  ungroup() |>
+  select(pid, study_day, wave, wemwbs) |>
+  mutate(
+    percentile = case_when(
+      pid == selected_pids["p25"] ~ "25th Percentile",
+      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
+      pid == selected_pids["p75"] ~ "75th Percentile",
+      TRUE ~ NA_character_
+    ),
+    percentile = factor(percentile, levels = c("25th Percentile", "50th Percentile (Median)", "75th Percentile"))
+  )
+
+# Prepare data for selected participants
+plot_data <- daily_with_study_day |>
+  filter(pid %in% selected_pids) |>
+  mutate(
+    percentile = case_when(
+      pid == selected_pids["p25"] ~ "25th Percentile",
+      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
+      pid == selected_pids["p75"] ~ "75th Percentile",
+      TRUE ~ NA_character_
+    ),
+    percentile = factor(percentile, levels = c("25th Percentile", "50th Percentile (Median)", "75th Percentile"))
+  )
+
+# Create a complete grid of study days for each participant
+complete_grid <- expand_grid(
+  pid = selected_pids,
+  study_day = 1:84,
+  platform = unique(daily_all$platform)
+) |>
+  mutate(
+    percentile = case_when(
+      pid == selected_pids["p25"] ~ "25th Percentile",
+      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
+      pid == selected_pids["p75"] ~ "75th Percentile",
+      TRUE ~ NA_character_
+    ),
+    percentile = factor(percentile, levels = c("25th Percentile", "50th Percentile (Median)", "75th Percentile"))
+  )
+
+# Fill in missing days with 0 minutes
+plot_data_complete <- complete_grid |>
+  left_join(plot_data |> select(pid, study_day, platform, minutes), 
+            by = c("pid", "study_day", "platform")) |>
+  mutate(minutes = replace_na(minutes, 0))
+
+# Calculate global max playtime across all percentiles for fixed y-axis
+global_max_playtime <- plot_data_complete |>
+  group_by(percentile, study_day) |>
+  summarise(daily_total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
+  pull(daily_total) |>
+  max(na.rm = TRUE)
+
+# Calculate coefficient for dual axis (wellbeing 70 maps to global max playtime)
+# This will be the same for all panels
+coeff <- global_max_playtime / 56
+y_max_for_wb70 <- (70 - 14) * coeff
+
+# Create separate plots for each percentile to handle dual y-axes properly
+plots_list <- list()
+pct_levels <- levels(plot_data_complete$percentile)
+
+for (i in seq_along(pct_levels)) {
+  pct_level <- pct_levels[i]
+  is_bottom <- (i == length(pct_levels))
+  is_middle <- (i == 2)  # Middle facet for y-axis labels
+  
+  # Filter data for this percentile
+  plot_data_pct <- plot_data_complete |> filter(percentile == pct_level)
+  wellbeing_data_pct <- panel_wellbeing |> filter(percentile == pct_level)
+  
+  p_temp <- ggplot() +
+    # Playtime bars (primary y-axis)
+    geom_col(
+      data = plot_data_pct,
+      aes(x = study_day, y = minutes, fill = platform),
+      width = 1
+    ) +
+    # Wellbeing line (secondary y-axis) - transform to playtime scale
+    geom_line(
+      data = wellbeing_data_pct,
+      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
+      color = "#FF6B35",
+      linewidth = 1.2,
+      linetype = "solid"
+    ) +
+    geom_point(
+      data = wellbeing_data_pct,
+      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
+      color = "#FF6B35",
+      size = 3,
+      shape = 21,
+      fill = "white",
+      stroke = 1.5
+    ) +
+    scale_fill_manual(
+      values = c(
+        "Nintendo" = "#E60012",  # Nintendo red
+        "Steam" = "#1B2838",     # Steam dark blue
+        "Xbox" = "#107C10"       # Xbox green
+      ),
+      name = "Platform"
+    ) +
+    scale_x_continuous(
+      name = if (is_bottom) "Study Day" else NULL,
+      breaks = seq(0, 84, by = 14),
+      expand = c(0, 0)
+    ) +
+    scale_y_continuous(
+      name = if (is_middle) "Total Daily Playtime (minutes)" else NULL,
+      limits = c(0, y_max_for_wb70 * 1.05),
+      expand = c(0, 0),
+      sec.axis = sec_axis(
+        transform = ~ . / coeff + 14,
+        name = if (is_middle) "Wellbeing (WEMWBS)" else NULL,
+        breaks = seq(14, 70, by = 14)
+      )
+    ) +
+    ggtitle(pct_level) +
+    theme(
+      axis.title.y.right = if (is_middle) element_text(color = "#FF6B35", size = 10) else element_blank(),
+      axis.text.y.right = element_text(color = "#FF6B35", size = 9),
+      axis.title.y.left = if (is_middle) element_text(size = 10) else element_blank(),
+      plot.title = element_text(size = 11, hjust = 0.5),
+      axis.title.x = if (is_bottom) element_text() else element_blank()
+    )
+  
+  plots_list[[pct_level]] <- p_temp
+}
+
+# Combine plots using patchwork
+wrap_plots(plots_list, ncol = 1, guides = "collect") +
+  plot_annotation(
+    title = "Daily Gaming Patterns and Wellbeing Across Platforms",
+    subtitle = "Sample gaming timeseries with biweekly wellbeing (WEMWBS)",
+    theme = theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 11)
+    )
+  ) &
+  theme(legend.position = "bottom")
+```
+:::
 
 ## Attention Control
 
@@ -1042,9 +1389,54 @@ The Simon Squared task is a short and validated measure of attention control tha
 
 After reading the instructions, participants practice for 30 seconds with auditory and text feedback for response accuracy. They then see their score from the practice trials, review the instructions again, and are given 90 seconds to gain as many points as possible. Participants gain one point for each correct response, and lose one point for each incorrect response. After the 90 seconds, the number of correct responses minus the number of incorrect responses is the participant's task score. For a complete task description, see @burgoyneNatureMeasurementAttention2023 and Figure 6 therein.
 
+
+```{r}
+#| label: simon-calculate-summary
+
+simon_n <- simon |>
+  reframe(n = n(), .by = wave)
+simon_sdl <- simon |>
+  reframe(
+    mean_sdl(score_final, mult = 1),
+    .by = c(wave, device_type)
+  )
+```
+
+Overall, `{r} knitr::combine_words(simon_n$n)` participants completed the Simon task at panel waves 1, 3, and 5. The average performances were approximately 10 points lower than in the in-person study of @burgoyneNatureMeasurementAttention2023 (Figure 16). Participants on mobile devices generally attained lower scores than those not on mobile devices (@fig-simon, rows), but performance was generally stable across the three waves (@fig-simon, columns).
+
+```{r}
+#| label: fig-simon
+#| fig-cap: Histograms of participants' Simon Squared task scores across study waves. Points and bars indicate means ±1 standard deviation.
+#| fig-asp: 0.3
+
+simon |>
+  ggplot() +
+  aes(score_final) +
+  scale_y_continuous(
+    "Count",
+    expand = expansion(c(0, 0.1))
+  ) +
+  scale_x_continuous("Final score") +
+  geom_histogram(fill = "grey70") +
+  geom_pointrange(
+    data = simon_sdl,
+    aes(x = y, xmin = ymin, xmax = ymax, y = 0),
+    linewidth = 3,
+    fatten = 14,
+    shape = "|"
+  ) +
+  facet_grid(
+    device_type ~ wave,
+    labeller = labeller(.cols = as_labeller(~ str_glue("Wave {.}"))),
+    scales = "free_y"
+  )
+```
+
+
 ## Time Use
 
 TODO
+
 
 ## Data Quality Checks
 
@@ -1058,6 +1450,7 @@ We implemented a variety of data quality checks.
 
 As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by region (US and UK) and data type (Survey, Telemetry, and Cognitive Task).
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-missingness
 #| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, observations actually collected, missing observations, median number of missing observations per participant, and percentage of data completeness for each measure. Retention plots (right columns) visualize the proportion of participants remaining active over time: for surveys and tasks, retention is calculated across study days or waves; for telemetry, across the 84-day study period. Density plots show the distribution of observations per participant."
@@ -1612,543 +2005,7 @@ if (knitr::is_html_output()) {
     style_tt(fontsize = 0.8)
 }
 ```
-
-# Dataset
-
-Here we visualize key aspects of the data to provide an overview of its contents and properties.
-
-@fig-paired-dotplot compares the average self-reported distribution of play across platforms to the distribution in our digital trace data capture. It is vital to note that the self-report data not be treated as ground truth: we have good evidence that people's self-reports of media use are inaccurate [@KahnEtAl2014why; @ParryEtAl2021systematic], with some previous work finding systemic overestimation of video game play [@JohannesEtAl2021Video]. Nonetheless, it is likely that some portion of players' true gaming is systematically uncaptured, due to factors such as  missing titles (e.g., Nintendo third party), or player privacy settings (e.g., playing in invisible mode; setting certain games to private on Steam). The figure therefore provides a useful overview of the relative coverage of different platforms in our telemetry data.
-
-::: {.callout-warning}
-I'm halfway through making changes to the stacked bar chart preprocessing, ignore the actual values.
 :::
-
-```{r}
-#| label: fig-paired-dotplot
-
-# Paired dot plot: self-report vs telemetry (normalized by exposure)
-
-telemetry_platforms <- c("Steam", "Nintendo", "Xbox")
-platforms_all <- c(telemetry_platforms, "iOS", "Android", "Other (uncaptured)")
-
-sr_users <- intake |>
-  filter(qualified) |>
-  mutate(
-    pid = as.character(pid),
-    # usage flags (keep your existing logic for captured + mobile)
-    uses_Steam = str_detect(used_platforms %||% "", "Steam"),
-    uses_Nintendo = str_detect(used_platforms %||% "", "Nintendo"),
-    uses_Xbox = str_detect(used_platforms %||% "", "Xbox"),
-    uses_iOS = str_detect(used_platforms %||% "", "iOS"),
-    uses_Android = str_detect(used_platforms %||% "", "Android"),
-    # "Other" usage is defined purely by nonzero props on uncaptured platforms
-    other_prop = coalesce(prop_playstation, 0) + coalesce(prop_other, 0),
-    uses_Other = other_prop > 0 & !is.na(other_prop),
-    # minutes by platform
-    Steam = self_reported_weekly_play * coalesce(prop_steam / 100, NA),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, NA),
-    Xbox = self_reported_weekly_play * coalesce(prop_xbox / 100, NA),
-    iOS = self_reported_weekly_play * coalesce(prop_ios / 100, NA),
-    Android = self_reported_weekly_play * coalesce(prop_android / 100, NA),
-    `Other (uncaptured)` = self_reported_weekly_play *
-      if_else(uses_Other, other_prop / 100, NA_real_),
-    .keep = "used"
-  )
-
-sr_totals <- sr_users |>
-  pivot_longer(
-    c(`Other (uncaptured)`, Steam, Nintendo, Xbox, iOS, Android),
-    names_to = "platform",
-    values_to = "sr_minutes"
-  ) |>
-  mutate(
-    uses = case_when(
-      platform == "Steam" ~ uses_Steam,
-      platform == "Nintendo" ~ uses_Nintendo,
-      platform == "Xbox" ~ uses_Xbox,
-      platform == "iOS" ~ uses_iOS,
-      platform == "Android" ~ uses_Android,
-      platform == "Other (uncaptured)" ~ uses_Other,
-      TRUE ~ FALSE
-    )
-  ) |>
-  filter(uses, platform %in% platforms_all) |>
-  group_by(platform) |>
-  summarise(
-    minutes = mean(sr_minutes, na.rm = TRUE),
-    n_users = n_distinct(pid[!is.na(sr_minutes)]),
-    .groups = "drop"
-  ) |>
-  mutate(source = "Self-report")
-
-# ---- TELEMETRY (avg weekly minutes among users with telemetry; normalized) ----
-tele_exposure <- telemetry_spans |>
-  filter(platform %in% telemetry_platforms) |>
-  mutate(
-    pid = as.character(pid),
-    exposure_weeks = as.numeric(difftime(
-      telemetry_end,
-      telemetry_start,
-      units = "days"
-    )) /
-      7
-  ) |>
-  filter(is.finite(exposure_weeks), exposure_weeks > 4) |>
-  select(pid, platform, exposure_weeks)
-
-tele_users <- daily_all |>
-  filter(platform %in% telemetry_platforms) |>
-  mutate(pid = as.character(pid)) |>
-  group_by(pid, platform) |>
-  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
-  left_join(tele_exposure, by = c("pid", "platform")) |>
-  filter(!is.na(exposure_weeks), exposure_weeks > 0) |>
-  mutate(weekly_minutes = total_minutes / exposure_weeks)
-
-tele_totals <- tele_users |>
-  group_by(platform) |>
-  summarise(
-    minutes = mean(weekly_minutes, na.rm = TRUE),
-    n_users = n_distinct(pid),
-    .groups = "drop"
-  ) |>
-  mutate(source = "Telemetry")
-
-# ---- COMBINE + PLOT ----
-paired_summary <- bind_rows(sr_totals, tele_totals) |>
-  mutate(
-    platform = factor(platform, levels = platforms_all),
-    source = factor(source, levels = c("Self-report", "Telemetry"))
-  )
-
-# segments only where both SR and Telemetry exist
-segment_df <- paired_summary |>
-  select(platform, source, minutes) |>
-  pivot_wider(names_from = source, values_from = minutes) |>
-  # filter(!is.na(`Self-report`) & !is.na(Telemetry)) |>
-  mutate(xmin = `Self-report`, xmax = Telemetry) |>
-  mutate(
-    platform = factor(
-      platform,
-      levels = c(
-        "Other (uncaptured)",
-        "iOS",
-        "Android",
-        "Nintendo",
-        "Xbox",
-        "Steam"
-      )
-    )
-  )
-
-ggplot(paired_summary, aes(x = minutes, y = platform)) +
-  geom_segment(
-    data = segment_df,
-    aes(x = xmin, xend = xmax, y = platform, yend = platform),
-    color = "grey70",
-    linewidth = 0.9,
-    alpha = 0.8,
-    inherit.aes = FALSE
-  ) +
-  geom_point(
-    aes(shape = source, color = source, fill = source),
-    size = 4,
-    stroke = 0.7
-  ) +
-  scale_shape_manual(values = c("Self-report" = 24, "Telemetry" = 22)) +
-  scale_color_manual(
-    values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")
-  ) +
-  scale_fill_manual(
-    values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")
-  ) +
-  scale_y_discrete(expand = expansion(mult = c(0.1, 0.1))) +
-  scale_x_continuous(
-    limits = c(0, 1200),
-    expand = expansion(mult = c(0.02, 0.08))
-  ) +
-  guides(
-    shape = guide_legend(title = NULL),
-    color = guide_legend(title = NULL),
-    fill = "none"
-  ) +
-  labs(
-    x = "Average weekly minutes per active user of platform",
-    y = NULL,
-    caption = "Telemetry calculated per user with any telemetry on that platform, based only on the period between their first and last recorded session."
-  ) +
-  theme_minimal(base_size = 10) +
-  theme(
-    legend.position = "bottom",
-    axis.text.y = element_text(size = 12, face = "bold")
-  )
-
-```
-
-In @fig-heatmap, we visualize the distribution of play across days and times. As expected, we find that the likelihood of play peaks on weekends from 8-11pm, and is lowest in the early morning.
-
-```{r}
-#| label: fig-heatmap
-
-# expected number of occurrences of each slot in telemetry span
-slot_exposure <- telemetry_spans |>
-  rowwise() |>
-  mutate(n_weeks = interval(telemetry_start, telemetry_end) %/% weeks(1) + 1) |>
-  ungroup() |>
-  crossing(dow = 1:7, hour = 0:23) |>
-  mutate(n_occurrences = n_weeks) # each slot appears once per week
-
-# total minutes actually played per slot
-slot_play <- hourly_all |>
-  mutate(
-    dow = lubridate::wday(hour_start_local, week_start = 1),
-    hour = hour(hour_start_local)
-  ) |>
-  group_by(pid, platform, dow, hour) |>
-  summarise(
-    minutes = pmin(sum(minutes, na.rm = TRUE), 60 * n()),
-    .groups = "drop"
-  )
-
-# combine: per-player–platform average minutes per occurrence
-slot_per_player <- slot_exposure |>
-  left_join(slot_play, by = c("pid", "platform", "dow", "hour")) |>
-  mutate(
-    minutes = replace_na(minutes, 0),
-    avg_minutes = minutes / n_occurrences
-  )
-
-# final: probability across players (avg minutes / 60)
-slot_summary <- slot_per_player |>
-  group_by(dow, hour) |>
-  summarise(
-    prob_playing = mean(avg_minutes / 60),
-    n_active = n(),
-    .groups = "drop"
-  ) |>
-  mutate(
-    dow = factor(
-      dow,
-      levels = 1:7,
-      labels = c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"),
-      ordered = TRUE
-    )
-  )
-
-
-ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
-  geom_tile() +
-  scale_x_continuous(breaks = 0:23) +
-  scale_fill_viridis_c(
-    option = "magma",
-    labels = scales::percent_format(accuracy = .1),
-    # limits = c(0, .028), breaks = seq(0, .028, .007),
-    name = "Probability of active play"
-  ) +
-  labs(
-    x = "Hour (local)",
-    y = "Day",
-    title = "Diurnal play across Xbox, Nintendo, Steam"
-  ) +
-  theme(panel.grid.major.y = element_blank())
-
-```
-
-@fig-case-study illustrates the temporal dynamics of gaming behavior and mental wellbeing through three representative case studies.
-
-```{r}
-#| label: fig-case-study
-#| fig-cap: "Daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green). Orange line shows biweekly mental wellbeing scores (WEMWBS, range 14-70) measured at six study waves. Participants were selected as closest representatives of the 25th, 50th, and 75th percentiles of total playtime distribution across the full 84-day study period."
-#| fig-asp: 1.2
-
-# Find each participant's study start date (first panel wave)
-study_start_dates <- panel |>
-  group_by(pid) |>
-  summarise(study_start = min(date, na.rm = TRUE), .groups = "drop") |>
-  mutate(pid = as.character(pid))
-
-# Join study start dates and calculate study day
-daily_with_study_day <- daily_all |>
-  left_join(study_start_dates, by = "pid") |>
-  filter(!is.na(study_start)) |>
-  mutate(
-    study_day = as.integer(floor(as.numeric(difftime(
-      day_local,
-      study_start,
-      units = "days"
-    )))) +
-      1
-  ) |>
-  filter(study_day >= 1 & study_day <= 84)
-
-# Calculate total playtime per participant (sum across all platforms and days 1-84)
-total_playtime <- daily_with_study_day |>
-  group_by(pid) |>
-  summarise(
-    total_minutes = sum(minutes, na.rm = TRUE),
-    n_platforms = n_distinct(platform[minutes > 0]),
-    .groups = "drop"
-  )
-
-# Calculate percentiles
-percentiles <- quantile(
-  total_playtime$total_minutes,
-  probs = c(0.25, 0.50, 0.75),
-  na.rm = TRUE
-)
-
-# Find participant closest to each percentile based on total playtime
-find_closest_participant <- function(target_value, data) {
-  data |>
-    mutate(distance = abs(total_minutes - target_value)) |>
-    slice_min(distance, n = 1, with_ties = FALSE) |>
-    pull(pid)
-}
-
-selected_pids <- c(
-  "p25" = find_closest_participant(percentiles[1], total_playtime),
-  "p50" = find_closest_participant(percentiles[2], total_playtime),
-  "p75" = find_closest_participant(percentiles[3], total_playtime)
-)
-
-# Process panel data to get wellbeing scores
-panel_wellbeing <- panel |>
-  mutate(pid = as.character(pid)) |>
-  left_join(study_start_dates, by = "pid") |>
-  filter(!is.na(study_start)) |>
-  mutate(
-    study_day = as.integer(floor(as.numeric(difftime(
-      date,
-      study_start,
-      units = "days"
-    )))) +
-      1
-  ) |>
-  filter(pid %in% selected_pids) |>
-  # Calculate wellbeing composite scores
-  rowwise() |>
-  mutate(
-    # WEMWBS - mental wellbeing (14 items, scale 1-5 each, summed for total score 14-70)
-    wemwbs = sum(c_across(starts_with("wemwbs_")), na.rm = TRUE)
-  ) |>
-  ungroup() |>
-  select(pid, study_day, wave, wemwbs) |>
-  mutate(
-    percentile = case_when(
-      pid == selected_pids["p25"] ~ "25th Percentile",
-      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
-      pid == selected_pids["p75"] ~ "75th Percentile",
-      TRUE ~ NA_character_
-    ),
-    percentile = factor(
-      percentile,
-      levels = c(
-        "25th Percentile",
-        "50th Percentile (Median)",
-        "75th Percentile"
-      )
-    )
-  )
-
-# Prepare data for selected participants
-plot_data <- daily_with_study_day |>
-  filter(pid %in% selected_pids) |>
-  mutate(
-    percentile = case_when(
-      pid == selected_pids["p25"] ~ "25th Percentile",
-      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
-      pid == selected_pids["p75"] ~ "75th Percentile",
-      TRUE ~ NA_character_
-    ),
-    percentile = factor(
-      percentile,
-      levels = c(
-        "25th Percentile",
-        "50th Percentile (Median)",
-        "75th Percentile"
-      )
-    )
-  )
-
-# Create a complete grid of study days for each participant
-complete_grid <- expand_grid(
-  pid = selected_pids,
-  study_day = 1:84,
-  platform = unique(daily_all$platform)
-) |>
-  mutate(
-    percentile = case_when(
-      pid == selected_pids["p25"] ~ "25th Percentile",
-      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
-      pid == selected_pids["p75"] ~ "75th Percentile",
-      TRUE ~ NA_character_
-    ),
-    percentile = factor(
-      percentile,
-      levels = c(
-        "25th Percentile",
-        "50th Percentile (Median)",
-        "75th Percentile"
-      )
-    )
-  )
-
-# Fill in missing days with 0 minutes
-plot_data_complete <- complete_grid |>
-  left_join(
-    plot_data |> select(pid, study_day, platform, minutes),
-    by = c("pid", "study_day", "platform")
-  ) |>
-  mutate(minutes = replace_na(minutes, 0))
-
-# Calculate global max playtime across all percentiles for fixed y-axis
-global_max_playtime <- plot_data_complete |>
-  group_by(percentile, study_day) |>
-  summarise(daily_total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
-  pull(daily_total) |>
-  max(na.rm = TRUE)
-
-# Calculate coefficient for dual axis (wellbeing 70 maps to global max playtime)
-# This will be the same for all panels
-coeff <- global_max_playtime / 56
-y_max_for_wb70 <- (70 - 14) * coeff
-
-# Create separate plots for each percentile to handle dual y-axes properly
-plots_list <- list()
-pct_levels <- levels(plot_data_complete$percentile)
-
-for (i in seq_along(pct_levels)) {
-  pct_level <- pct_levels[i]
-  is_bottom <- (i == length(pct_levels))
-  is_middle <- (i == 2) # Middle facet for y-axis labels
-
-  # Filter data for this percentile
-  plot_data_pct <- plot_data_complete |> filter(percentile == pct_level)
-  wellbeing_data_pct <- panel_wellbeing |> filter(percentile == pct_level)
-
-  p_temp <- ggplot() +
-    # Playtime bars (primary y-axis)
-    geom_col(
-      data = plot_data_pct,
-      aes(x = study_day, y = minutes, fill = platform),
-      width = 1
-    ) +
-    # Wellbeing line (secondary y-axis) - transform to playtime scale
-    geom_line(
-      data = wellbeing_data_pct,
-      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
-      color = "#FF6B35",
-      linewidth = 1.2,
-      linetype = "solid"
-    ) +
-    geom_point(
-      data = wellbeing_data_pct,
-      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
-      color = "#FF6B35",
-      size = 3,
-      shape = 21,
-      fill = "white",
-      stroke = 1.5
-    ) +
-    scale_fill_manual(
-      values = c(
-        "Nintendo" = "#E60012", # Nintendo red
-        "Steam" = "#1B2838", # Steam dark blue
-        "Xbox" = "#107C10" # Xbox green
-      ),
-      name = "Platform"
-    ) +
-    scale_x_continuous(
-      name = if (is_bottom) "Study Day" else NULL,
-      breaks = seq(0, 84, by = 14),
-      expand = c(0, 0)
-    ) +
-    scale_y_continuous(
-      name = if (is_middle) "Total Daily Playtime (minutes)" else NULL,
-      limits = c(0, y_max_for_wb70 * 1.05),
-      expand = c(0, 0),
-      sec.axis = sec_axis(
-        transform = ~ . / coeff + 14,
-        name = if (is_middle) "Wellbeing (WEMWBS)" else NULL,
-        breaks = seq(14, 70, by = 7)
-      )
-    ) +
-    ggtitle(pct_level) +
-    theme(
-      axis.title.y.right = if (is_middle) {
-        element_text(color = "#FF6B35", size = 10)
-      } else {
-        element_blank()
-      },
-      axis.text.y.right = element_text(color = "#FF6B35", size = 9),
-      axis.title.y.left = if (is_middle) {
-        element_text(size = 10)
-      } else {
-        element_blank()
-      },
-      plot.title = element_text(size = 11, hjust = 0.5),
-      axis.title.x = if (is_bottom) element_text() else element_blank()
-    )
-
-  plots_list[[pct_level]] <- p_temp
-}
-
-# Combine plots using patchwork
-wrap_plots(plots_list, ncol = 1, guides = "collect") +
-  plot_annotation(
-    title = "Daily Gaming Patterns and Wellbeing Across Platforms",
-    subtitle = "Sample gaming timeseries with biweekly wellbeing (WEMWBS)",
-    theme = theme(
-      plot.title = element_text(size = 14, face = "bold"),
-      plot.subtitle = element_text(size = 11)
-    )
-  ) &
-  theme(legend.position = "bottom")
-```
-
-## Attention control
-
-```{r}
-#| label: simon-calculate-summary
-
-simon_n <- simon |>
-  reframe(n = n(), .by = wave)
-simon_sdl <- simon |>
-  reframe(
-    mean_sdl(score_final, mult = 1),
-    .by = c(wave, device_type)
-  )
-```
-
-Overall, `{r} knitr::combine_words(simon_n$n)` participants completed the Simon task at panel waves 1, 3, and 5. The average performances were approximately 10 points lower than in the in-person study of @burgoyneNatureMeasurementAttention2023 (Figure 16). Participants on mobile devices generally attained lower scores than those not on mobile devices (@fig-simon, rows), but performance was generally stable across the three waves (@fig-simon, columns).
-
-```{r}
-#| label: fig-simon
-#| fig-cap: Histograms of participants' Simon Squared task scores across study waves. Points and bars indicate means ±1 standard deviation.
-#| fig-asp: 0.5
-
-simon |>
-  ggplot() +
-  aes(score_final) +
-  scale_y_continuous(
-    "Count",
-    expand = expansion(c(0, 0.1))
-  ) +
-  scale_x_continuous("Final score") +
-  geom_histogram(fill = "grey70") +
-  geom_pointrange(
-    data = simon_sdl,
-    aes(x = y, xmin = ymin, xmax = ymax, y = 0),
-    linewidth = 3,
-    fatten = 14,
-    shape = "|"
-  ) +
-  facet_grid(
-    device_type ~ wave,
-    labeller = labeller(.cols = as_labeller(~ str_glue("Wave {.}"))),
-    scales = "free_y"
-  )
-```
 
 # Discussion
 
