@@ -2142,6 +2142,7 @@ calc_steam_visibility_missingness <- function(pids, region) {
   )
 }
 
+
 # Helper function to calculate telemetry missingness
 calc_telemetry_missingness <- function(
   telemetry_data,
