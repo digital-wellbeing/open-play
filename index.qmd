@@ -47,7 +47,7 @@ author:
   - name: Thomas Hakman
     corresponding: false
     orcid: 0009-0009-8292-2482
-    email: nick@nickballou.com
+    email: thomas.hakman@oii.ox.ac.uk
     affiliations:
       - ref: 1
     # roles:
@@ -119,17 +119,17 @@ nocite: |
   @BuysseEtAl1989Pittsburgh
   @Johns1991New
 format:
-  # html:
-  #   theme:
-  #     light: united
-  #     dark: darkly
-  #   toc: true
-  #   toc-depth: 2
-  #   fontsize: 13pt
-  #   other-links:
-  #     - text: Stage 1 Registered Report
-  #       href: https://osf.io/pb5nu
-  #       icon: file-pdf
+  html:
+    theme:
+      light: united
+      dark: darkly
+    toc: true
+    toc-depth: 2
+    fontsize: 13pt
+    other-links:
+      - text: Stage 1 Registered Report
+        href: https://osf.io/pb5nu
+        icon: file-pdf
   preprint-typst:
     wordcount: true
     theme: jou
@@ -138,7 +138,7 @@ format:
     sansfont: "Liberation Sans"
     include-before-body:
       - text: "#show <refs>: set par(hanging-indent: 1.4em)"
-  # docx: default
+  docx: default
 ---
 
 ```{r}
@@ -210,6 +210,8 @@ nintendo <- read_csv("data/clean/nintendo.csv.gz")
 steam <- read_csv("data/clean/steam.csv.gz")
 xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
+ios <- read_csv("data/clean/ios.csv.gz")
+android <- read_csv("data/clean/android.csv.gz")
 ```
 
 ```{r}
@@ -330,7 +332,9 @@ daily_all <- hourly_all |>
     day_local = as.Date(hour_start_local),
   ) |>
   group_by(pid, platform, day_local) |>
-  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |> 
+  bind_rows(ios) |> 
+  bind_rows(android)
 
 # --- 4) weekly
 weekly_all <- daily_all |>
@@ -383,13 +387,6 @@ The dataset is openly available under a {{< meta data-license >}} license at {{<
 #| label: tbl-overview
 #| tbl-cap: "Overview of the dataset and sources."
 
-# ===== tuning knobs =====
-CAP_PROB <- 0.99 # winsorize at global 99th percentile (after per-dataset caps)
-USE_LOG <- TRUE
-THUMB_W <- 400
-THUMB_H <- 200
-LINEWIDTH <- 1.0
-
 # ---- helpers ----
 # Get PIDs of participants who completed at least one survey
 survey_pids <- union(
@@ -441,15 +438,16 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
     Hours = total_hours(df),
     `Avg events / participants` = mean(by_pid$events, na.rm = TRUE),
     `Avg active days` = avg_days,
-    Sparklines = "" # plot_tt() will draw mini-plots here
   )
 }
 
 # ---- table rows (order preserved) ----
 # Filter telemetry to only include participants who completed at least one survey
-steam_survey <- steam |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
-nintendo_survey <- nintendo |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
-xbox_survey <- xbox |> mutate(pid = as.character(pid)) |> filter(pid %in% survey_pids)
+steam_survey <- steam |> filter(pid %in% survey_pids)
+nintendo_survey <- nintendo |> filter(pid %in% survey_pids)
+xbox_survey <- xbox |> filter(pid %in% survey_pids)
+ios_survey <- ios |> filter(pid %in% survey_pids)
+android_survey <- android |> filter(pid %in% survey_pids)
 
 overview <- bind_rows(
   summ_basic(intake, pid, "Intake survey", avg_days = 1),
@@ -472,7 +470,9 @@ overview <- bind_rows(
     "Nintendo",
     avg_days = avg_days_platform("Nintendo", survey_pids)
   ),
-  summ_basic(xbox_survey, pid, "Xbox", avg_days = avg_days_platform("Xbox", survey_pids))
+  summ_basic(xbox_survey, pid, "Xbox", avg_days = avg_days_platform("Xbox", survey_pids)),
+  summ_basic(ios_survey, pid, "iOS", avg_days = avg_days_platform("iOS")),
+  summ_basic(android_survey, pid, "Android", avg_days = avg_days_platform("Android"))
 ) |>
   mutate(
     Participants = number(
@@ -488,7 +488,7 @@ overview <- bind_rows(
     ),
     Hours = number(
       Hours,
-      accuracy = 1,
+      accuracy = 0.1,
       big.mark = ",",
       scale_cut = cut_long_scale()
     ),
@@ -506,74 +506,9 @@ overview <- bind_rows(
     )
   )
 
-plot_data <- list(
-  events_per_participant(intake, pid, cap = 1),
-  events_per_participant(diary, pid, cap = 30),
-  events_per_participant(panel, pid, cap = 6),
-  events_per_participant(steam_survey, pid, cap = Inf),
-  events_per_participant(nintendo_survey, pid, cap = Inf),
-  events_per_participant(xbox_survey, pid, cap = Inf)
-)
-
-# ---- winsorize globally, then log-scale if requested ----
-all_events <- unlist(plot_data, use.names = FALSE)
-cap_global <- quantile(all_events, CAP_PROB, na.rm = TRUE)
-plot_data_w <- lapply(plot_data, \(v) pmin(v, cap_global))
-
-xf <- if (USE_LOG) \(x) log1p(x) else identity
-xmax_raw <- max(c(1, cap_global), na.rm = TRUE)
-xmax_t <- xf(xmax_raw)
-
-spark_density <- function(d, xmax_t, ...) {
-  d <- data.frame(x = xf(d))
-  ggplot(d, aes(x = x)) +
-    geom_density(
-      linewidth = LINEWIDTH,
-      fill = "grey60",
-      alpha = 0.35,
-      adjust = 1
-    ) +
-    scale_x_continuous(
-      limits = c(0, xmax_t),
-      expand = c(0, 0),
-      breaks = c(0, xmax_t),
-      labels = c("0", number(xmax_raw, accuracy = 1, big.mark = ","))
-    ) +
-    labs(x = NULL, y = NULL) +
-    theme_minimal(base_size = 8) +
-    theme(
-      panel.grid = element_blank(),
-      axis.text.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      plot.margin = margin(1, 1, 1, 1)
-    )
-}
-
-# If you want console preview reliability:
-# options(tinytable_inline_images = TRUE)
-
-tt(
-  overview |> select(-Sparklines),
-  notes = paste0(
-    # "Sparklines: per-participant events. Per-dataset caps applied (see code). ",
-    "Winsorized at ",
-    round(CAP_PROB * 100),
-    "th percentile"
-    # if (USE_LOG) "; x-axis uses log1p scale." else "."
-  )
-) |>
+tt(overview) |>
   style_tt(fontsize = 0.8) |>
   format_tt(replace = "")
-
-# Removed until makes sense
-# plot_tt(
-#   j = which(names(overview) == "Sparklines"),
-#   fun = spark_density,
-#   data = plot_data_w,
-#   xmax_t = xmax_t,
-#   width_plot = THUMB_W,
-#   height_plot = THUMB_H
-# )
 
 ```
 
