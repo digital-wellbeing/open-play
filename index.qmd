@@ -1602,6 +1602,8 @@ get_platform_players <- function(platform_name, pids = NULL) {
           platform_name == "Xbox" ~ coalesce(prop_xbox, 0) > 0,
           platform_name == "Nintendo" ~ coalesce(prop_nintendo, 0) > 0,
           platform_name == "Steam" ~ coalesce(prop_steam, 0) > 0,
+          platform_name == "iOS" ~ coalesce(prop_ios, 0) > 0,
+          platform_name == "Android" ~ coalesce(prop_android, 0) > 0,
           TRUE ~ FALSE
         )
     ) |>
@@ -1613,6 +1615,120 @@ get_platform_players <- function(platform_name, pids = NULL) {
   }
 
   return(as.character(result))
+}
+
+# Helper function to calculate daily aggregate missingness (for iOS/Android)
+calc_daily_aggregate_missingness <- function(
+  telemetry_data,
+  platform_name,
+  pids,
+  region
+) {
+  # Ensure pid is character for consistency
+  telemetry_data <- telemetry_data |> mutate(pid = as.character(pid))
+  telemetry_pids <- unique(telemetry_data$pid)
+  players <- get_platform_players(platform_name, pids)
+
+  # For daily data, expected observations = N participants * 84 days
+  expected_days_per_participant <- 84
+  total_expected <- length(players) * expected_days_per_participant
+
+  by_participant <- telemetry_data |>
+    filter(pid %in% players) |>
+    count(pid, name = "observed") |>
+    complete(pid = players, fill = list(observed = 0))
+
+  # Total observed day-level observations
+  total_observed <- telemetry_data |>
+    filter(pid %in% players) |>
+    nrow()
+
+  # Calculate missing observations per participant
+  by_participant <- by_participant |>
+    mutate(missing = expected_days_per_participant - observed)
+
+  obs_values <- by_participant$observed
+  has_complete_missingness <- length(intersect(players, telemetry_pids)) == 0
+
+  if (has_complete_missingness) {
+    obs_for_plot <- c(0, 0)
+  } else if (any(obs_values > 0)) {
+    q1 <- quantile(obs_values, 0.25, na.rm = TRUE)
+    q3 <- quantile(obs_values, 0.75, na.rm = TRUE)
+    iqr <- q3 - q1
+    lower_bound <- max(0, q1 - 1.5 * iqr)
+    upper_bound <- q3 + 1.5 * iqr
+    obs_for_plot <- obs_values[
+      obs_values >= lower_bound & obs_values <= upper_bound
+    ]
+    if (length(obs_for_plot) < 2) obs_for_plot <- obs_values
+  } else {
+    obs_for_plot <- obs_values
+  }
+
+  if (length(obs_for_plot) < 2) {
+    obs_for_plot <- if (length(obs_for_plot) == 1) {
+      c(obs_for_plot, obs_for_plot)
+    } else {
+      c(0, 0)
+    }
+  }
+
+  # Calculate retention over time (84 days) for daily data
+  if (
+    has_complete_missingness ||
+      nrow(telemetry_data |> filter(pid %in% players)) == 0
+  ) {
+    retention_data <- rep(0, 84)
+  } else {
+    enrollment_lookup <- intake |>
+      filter(pid %in% players) |>
+      select(pid, enrollment_date) |>
+      distinct()
+
+    last_activity_by_participant <- telemetry_data |>
+      filter(pid %in% players) |>
+      left_join(enrollment_lookup, by = "pid") |>
+      mutate(
+        enrollment_datetime = as.POSIXct(
+          enrollment_date,
+          format = "%Y-%m-%dT%H:%M:%SZ",
+          tz = "UTC"
+        ),
+        day_datetime = as.POSIXct(
+          day_local,
+          tz = "UTC"
+        ),
+        study_day = ceiling(as.numeric(difftime(
+          day_datetime,
+          enrollment_datetime,
+          units = "days"
+        ))) +
+          1
+      ) |>
+      filter(!is.na(study_day) & study_day >= 1 & study_day <= 84) |>
+      group_by(pid) |>
+      summarise(last_day = max(study_day, na.rm = TRUE), .groups = "drop")
+
+    retention_data <- sapply(1:84, function(day) {
+      n_retained <- sum(last_activity_by_participant$last_day >= day)
+      n_retained / length(players)
+    })
+  }
+
+  tibble(
+    region = region,
+    data_type = "Telemetry",
+    measure = platform_name,
+    n_participants = length(players),
+    total_expected = total_expected,
+    total_observed = total_observed,
+    total_missing = total_expected - total_observed,
+    median_missing_per_participant = median(by_participant$missing, na.rm = TRUE),
+    obs_per_participant = list(obs_for_plot),
+    retention_over_time = list(retention_data),
+    complete_missingness = has_complete_missingness
+  )
 }
 
 # Helper function to calculate telemetry missingness
@@ -1810,6 +1926,10 @@ nintendo_stats_uk <- calc_telemetry_missingness(
 )
 steam_stats_us <- calc_telemetry_missingness(steam, "Steam", us_pids, "US")
 steam_stats_uk <- calc_telemetry_missingness(steam, "Steam", uk_pids, "UK")
+ios_stats_us <- calc_daily_aggregate_missingness(ios, "iOS", us_pids, "US")
+ios_stats_uk <- calc_daily_aggregate_missingness(ios, "iOS", uk_pids, "UK")
+android_stats_us <- calc_daily_aggregate_missingness(android, "Android", us_pids, "US")
+android_stats_uk <- calc_daily_aggregate_missingness(android, "Android", uk_pids, "UK")
 simon_stats_us <- calc_task_missingness(simon, us_pids, "US", "Simon Task", 3)
 simon_stats_uk <- calc_task_missingness(simon, uk_pids, "UK", "Simon Task", 3)
 
@@ -1820,11 +1940,15 @@ missingness_table <- bind_rows(
   xbox_stats_us,
   nintendo_stats_us,
   steam_stats_us,
+  ios_stats_us,
+  android_stats_us,
   simon_stats_us,
   panel_stats_uk,
   xbox_stats_uk,
   nintendo_stats_uk,
   steam_stats_uk,
+  ios_stats_uk,
+  android_stats_uk,
   simon_stats_uk
 )
 
