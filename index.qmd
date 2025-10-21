@@ -2388,11 +2388,10 @@ table_data <- missingness_table |>
     `Median Missing` = ifelse(
       is.na(median_missing_per_participant),
       "—",
-      sprintf("%.1f", median_missing_per_participant)
+      sprintf("%.0f", floor(median_missing_per_participant))
     ),
     `% Complete` = sprintf("%.1f%%", pct_complete),
-    Retention = "",
-    Density = ""
+    Retention = ""
   ) |>
   group_by(region, data_type) |>
   mutate(
@@ -2413,7 +2412,6 @@ table_data <- missingness_table |>
     `Median Missing`,
     `% Complete`,
     Retention,
-    Density,
     show_type,
     show_region
   ) |>
@@ -2469,17 +2467,16 @@ if (knitr::is_html_output()) {
       line = "t",
       line_width = 0.1
     ) |>
-    style_tt(j = c(8, 9, 10), align = "c") |>
+    style_tt(j = c(8, 9), align = "c") |>
     style_tt(fontsize = 0.8)
 
-  # Apply retention and density plots to all rows EXCEPT UK Xbox
+  # Apply retention plots to all rows EXCEPT UK Xbox
   if (length(uk_xbox_row) > 0) {
     # Get indices for all rows except UK Xbox
     rows_to_plot <- setdiff(1:nrow(table_data), uk_xbox_row)
 
     # Create subset of plot data for non-UK-Xbox rows
     retention_subset <- retention_plot_data[rows_to_plot]
-    density_subset <- density_plot_data[rows_to_plot]
 
     # Apply plots to non-UK-Xbox rows
     tbl_html <- tbl_html |>
@@ -2488,13 +2485,6 @@ if (knitr::is_html_output()) {
         j = 9,
         fun = "line",
         data = retention_subset,
-        color = "steelblue"
-      ) |>
-      plot_tt(
-        i = rows_to_plot,
-        j = 10,
-        fun = "density",
-        data = density_subset,
         color = "steelblue"
       )
   } else {
@@ -2505,12 +2495,6 @@ if (knitr::is_html_output()) {
         fun = "line",
         data = retention_plot_data,
         color = "steelblue"
-      ) |>
-      plot_tt(
-        j = 10,
-        fun = "density",
-        data = density_plot_data,
-        color = "steelblue"
       )
   }
 
@@ -2518,7 +2502,7 @@ if (knitr::is_html_output()) {
 } else {
   # Other formats: table without plot columns to avoid path issues
   table_data_no_plots <- table_data |>
-    select(-Retention, -Density)
+    select(-Retention)
 
   tt(table_data_no_plots) |>
     style_tt(i = 0, bold = TRUE) |>
