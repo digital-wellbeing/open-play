@@ -1197,21 +1197,27 @@ We collected a variety of self-report measures at different time scales. We brie
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-case-study
-#| fig-cap: "Daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green). Orange line shows biweekly mental wellbeing scores (WEMWBS, range 14-70) measured at six study waves. Participants were selected as closest representatives of the 25th, 50th, and 75th percentiles of total playtime distribution across the full 84-day study period."
+#| fig-cap: "Daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior."
 #| fig-asp: .8
 #| out.width: 80%
 
 
-# Find each participant's study start date (first panel wave)
-study_start_dates <- panel |>
+# Identify participants who completed between 1 and 6 biweekly panel responses
+# Exclude participants with 0 or more than 6 panel responses
+panel_participants <- panel |>
   group_by(pid) |>
-  summarise(study_start = min(date, na.rm = TRUE), .groups = "drop") |>
+  summarise(
+    study_start = min(date, na.rm = TRUE),
+    n_panels = n(),
+    .groups = "drop"
+  ) |>
+  filter(n_panels >= 1 & n_panels <= 6) |>  # Only 1-6 panel responses
   mutate(pid = as.character(pid))
 
 # Join study start dates and calculate study day
+# Only include participants who completed between 1-6 biweekly panels
 daily_with_study_day <- daily_all |>
-  left_join(study_start_dates, by = "pid") |>
-  filter(!is.na(study_start)) |>
+  inner_join(panel_participants |> select(pid, study_start), by = "pid") |>
   mutate(
     study_day = as.integer(floor(as.numeric(difftime(day_local, study_start, units = "days")))) + 1
   ) |>
@@ -1229,25 +1235,43 @@ total_playtime <- daily_with_study_day |>
 # Calculate percentiles
 percentiles <- quantile(total_playtime$total_minutes, probs = c(0.25, 0.50, 0.75), na.rm = TRUE)
 
-# Find participant closest to each percentile based on total playtime
-find_closest_participant <- function(target_value, data) {
-  data |>
+# Find participant closest to each percentile with most varied platform usage
+# Strategy: Among candidates within 10% of target percentile, select the one with most platforms
+find_closest_multiplatform_participant <- function(target_value, data) {
+  # Calculate tolerance as 10% of target value (or minimum 60 minutes for low values)
+  tolerance <- max(target_value * 0.10, 60)
+
+  # First, filter candidates within tolerance
+  candidates <- data |>
     mutate(distance = abs(total_minutes - target_value)) |>
-    slice_min(distance, n = 1, with_ties = FALSE) |>
-    pull(pid)
+    filter(distance <= tolerance)
+
+  # If we have candidates, select the one with most platforms, breaking ties by closest distance
+  if (nrow(candidates) > 0) {
+    candidates |>
+      arrange(desc(n_platforms), distance) |>
+      slice(1) |>
+      pull(pid)
+  } else {
+    # Fallback: if no candidates in tolerance band, just pick closest
+    data |>
+      mutate(distance = abs(total_minutes - target_value)) |>
+      slice_min(distance, n = 1, with_ties = FALSE) |>
+      pull(pid)
+  }
 }
 
 selected_pids <- c(
-  "p25" = find_closest_participant(percentiles[1], total_playtime),
-  "p50" = find_closest_participant(percentiles[2], total_playtime),
-  "p75" = find_closest_participant(percentiles[3], total_playtime)
+  "p25" = find_closest_multiplatform_participant(percentiles[1], total_playtime),
+  "p50" = find_closest_multiplatform_participant(percentiles[2], total_playtime),
+  "p75" = find_closest_multiplatform_participant(percentiles[3], total_playtime)
 )
 
 # Process panel data to get wellbeing scores
+# Only include participants who completed at least one biweekly panel
 panel_wellbeing <- panel |>
   mutate(pid = as.character(pid)) |>
-  left_join(study_start_dates, by = "pid") |>
-  filter(!is.na(study_start)) |>
+  inner_join(panel_participants |> select(pid, study_start), by = "pid") |>
   mutate(
     study_day = as.integer(floor(as.numeric(difftime(date, study_start, units = "days")))) + 1
   ) |>
@@ -1260,6 +1284,7 @@ panel_wellbeing <- panel |>
   ) |>
   ungroup() |>
   select(pid, study_day, wave, wemwbs) |>
+  filter(!is.na(wemwbs) & wemwbs >= 14) |>  # Remove invalid/missing wellbeing scores
   mutate(
     percentile = case_when(
       pid == selected_pids["p25"] ~ "25th Percentile",
@@ -1305,17 +1330,13 @@ plot_data_complete <- complete_grid |>
             by = c("pid", "study_day", "platform")) |>
   mutate(minutes = replace_na(minutes, 0))
 
-# Calculate global max playtime across all percentiles for fixed y-axis
-global_max_playtime <- plot_data_complete |>
+# Calculate panel-specific max playtime for free gaming time y-axis
+# Wellbeing axis will be fixed at 14-70 across all panels
+panel_max_playtime <- plot_data_complete |>
   group_by(percentile, study_day) |>
   summarise(daily_total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
-  pull(daily_total) |>
-  max(na.rm = TRUE)
-
-# Calculate coefficient for dual axis (wellbeing 70 maps to global max playtime)
-# This will be the same for all panels
-coeff <- global_max_playtime / 56
-y_max_for_wb70 <- (70 - 14) * coeff
+  group_by(percentile) |>
+  summarise(max_playtime = max(daily_total, na.rm = TRUE), .groups = "drop")
 
 # Create separate plots for each percentile to handle dual y-axes properly
 plots_list <- list()
@@ -1325,11 +1346,29 @@ for (i in seq_along(pct_levels)) {
   pct_level <- pct_levels[i]
   is_bottom <- (i == length(pct_levels))
   is_middle <- (i == 2)  # Middle facet for y-axis labels
-  
+
   # Filter data for this percentile
   plot_data_pct <- plot_data_complete |> filter(percentile == pct_level)
   wellbeing_data_pct <- panel_wellbeing |> filter(percentile == pct_level)
-  
+
+  # Get panel-specific max playtime
+  panel_max <- panel_max_playtime |> filter(percentile == pct_level) |> pull(max_playtime)
+
+  # Calculate panel-specific coefficient for dual axis
+  # Wellbeing is fixed at 14-70 (range of 56), gaming time y-axis is free per panel
+  wb_range <- 56  # Fixed wellbeing range (70 - 14)
+
+  # The coefficient determines how wellbeing values map to the playtime y-axis
+  # We set it based on panel_max, but need to ensure y-axis limit shows full wellbeing range
+  coeff <- panel_max / wb_range
+
+  # Calculate the y-axis maximum to ensure wellbeing 14-70 is fully visible
+  # We need the y-axis to extend to at least (70-14)*coeff in playtime units
+  # Add more buffer to ensure the 70 tick is displayed by ggplot2
+  # Using a larger multiplier to give more headroom
+  y_for_wb70 <- (70 - 14) * coeff  # Playtime value corresponding to wellbeing=70
+  y_axis_max <- y_for_wb70 + (y_for_wb70 * 0.15)  # Add 15% headroom above wellbeing=70
+
   p_temp <- ggplot() +
     # Playtime bars (primary y-axis)
     geom_col(
@@ -1343,22 +1382,35 @@ for (i in seq_along(pct_levels)) {
       aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
       color = "#FF6B35",
       linewidth = 1.2,
-      linetype = "solid"
+      linetype = "solid",
+      alpha = 0.7,
+      na.rm = TRUE
     ) +
+    # Slightly larger background-colored points to mask the line
+    geom_point(
+      data = wellbeing_data_pct,
+      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
+      size = 3.5,
+      shape = 16,  # solid circle
+      color = "grey98"  # Match panel background
+    ) +
+    # Transparent outline points on top
     geom_point(
       data = wellbeing_data_pct,
       aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
       color = "#FF6B35",
       size = 3,
-      shape = 21,
-      fill = "white",
-      stroke = 1.5
+      shape = 1,  # hollow circle
+      stroke = 1.5,
+      alpha = 0.7
     ) +
     scale_fill_manual(
       values = c(
         "Nintendo" = "#E60012",  # Nintendo red
         "Steam" = "#1B2838",     # Steam dark blue
-        "Xbox" = "#107C10"       # Xbox green
+        "Xbox" = "#107C10",      # Xbox green
+        "iOS" = "#555555",       # iOS grey
+        "Android" = "#3DDC84"    # Android green
       ),
       name = "Platform"
     ) +
@@ -1369,7 +1421,7 @@ for (i in seq_along(pct_levels)) {
     ) +
     scale_y_continuous(
       name = if (is_middle) "Total Daily Playtime (minutes)" else NULL,
-      limits = c(0, y_max_for_wb70 * 1.05),
+      limits = c(0, y_axis_max),
       expand = c(0, 0),
       sec.axis = sec_axis(
         transform = ~ . / coeff + 14,
@@ -1379,13 +1431,14 @@ for (i in seq_along(pct_levels)) {
     ) +
     ggtitle(pct_level) +
     theme(
+      panel.background = element_rect(fill = "grey98", color = NA),
       axis.title.y.right = if (is_middle) element_text(color = "#FF6B35", size = 10) else element_blank(),
       axis.text.y.right = element_text(color = "#FF6B35", size = 9),
       axis.title.y.left = if (is_middle) element_text(size = 10) else element_blank(),
       plot.title = element_text(size = 11, hjust = 0.5),
       axis.title.x = if (is_bottom) element_text() else element_blank()
     )
-  
+
   plots_list[[pct_level]] <- p_temp
 }
 
