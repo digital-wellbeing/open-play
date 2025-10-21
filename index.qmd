@@ -204,11 +204,33 @@ theme_update(
 ```{r}
 #| label: data-read
 
-intake <- read_csv("data/clean/intake.csv.gz")
+intake <- read_csv("data/clean/intake.csv.gz") |>
+  mutate(
+    enrollment_datetime = as.POSIXct(
+      enrollment_date,
+      format = "%Y-%m-%dT%H:%M:%SZ",
+      tz = "UTC"
+    ),
+    study_end_datetime = enrollment_datetime + days(84)
+  )
 diary <- read_csv("data/clean/diary.csv.gz")
 panel <- read_csv("data/clean/panel.csv.gz")
 nintendo <- read_csv("data/clean/nintendo.csv.gz")
-steam <- read_csv("data/clean/steam.csv.gz")
+steam <- read_csv("data/clean/steam.csv.gz") |>
+  mutate(
+    timestamp = as.POSIXct(timestamp, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    hour_start = floor_date(timestamp, "hour")
+  )
+steam_visibility <- read_csv(
+  "data/raw/telemetry_steam_account_linking_raw.csv",
+  show_col_types = FALSE
+) |>
+  filter(platform == "steam") |>
+  mutate(
+    timestamp = as.POSIXct(timestamp, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    is_public = event == "steamDataPublic"
+  ) |>
+  select(pid, timestamp, event, is_public)
 xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
 ios <- read_csv("data/clean/ios.csv.gz")
@@ -1450,6 +1472,8 @@ We implemented a variety of data quality checks.
 
 As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by region (US and UK) and data type (Survey, Telemetry, and Cognitive Task).
 
+The unit of observation differs across data types. For surveys and cognitive tasks, the unit is a completed survey or task. For telemetry, the unit varies by platform: Xbox and Nintendo use binary account linking, with data coverage considered maximal once linked (data provided directly by platform holders); Steam is measured hourly, with observations representing whether the participant's profile was publicly visible in each hour; iOS and Android are measured daily, with observations representing whether a valid screenshot was submitted covering that day's gaming.
+
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-missingness
@@ -1731,6 +1755,351 @@ calc_daily_aggregate_missingness <- function(
   )
 }
 
+# Helper function to calculate Steam visibility coverage for a single participant
+calculate_steam_visibility_coverage <- function(participant_id,
+                                                visibility_data,
+                                                gaming_data,
+                                                enrollment_data) {
+  #' Calculate Steam Profile Visibility Coverage
+  #'
+  #' For a given participant, calculates how many hours during their 84-day
+  #' study period their Steam profile was visible (public) to researchers.
+  #'
+  #' @param participant_id Character. The participant ID (pid)
+  #' @param visibility_data Data frame. Steam visibility events with columns:
+  #'   pid, timestamp, event, is_public
+  #' @param gaming_data Data frame. Steam gaming data with columns:
+  #'   pid, hour_start
+  #' @param enrollment_data Data frame. Enrollment info with columns:
+  #'   pid, enrollment_datetime, study_end_datetime
+  #'
+  #' @return Named list with:
+  #'   - hours_visible: Total hours profile was visible/public
+  #'   - hours_hidden: Total hours profile was confirmed private
+  #'   - hours_unknown: Total hours with unknown status
+  #'   - hours_total: Total hours in study period (typically 2016)
+  #'   - proportion_visible: Proportion of study period visible (0-1)
+  #'   - has_gaming_data: Boolean, whether participant has any gaming data
+  #'   - has_visibility_events: Boolean, whether participant has visibility events
+
+  # Get enrollment info
+  participant_info <- enrollment_data |> filter(pid == participant_id)
+
+  if (nrow(participant_info) == 0) {
+    warning(paste("No enrollment data found for participant:", participant_id))
+    return(list(
+      hours_visible = NA,
+      hours_hidden = NA,
+      hours_unknown = NA,
+      hours_total = NA,
+      proportion_visible = NA,
+      has_gaming_data = FALSE,
+      has_visibility_events = FALSE
+    ))
+  }
+
+  enroll_dt <- participant_info$enrollment_datetime
+  end_dt <- participant_info$study_end_datetime
+  expected_hours <- as.numeric(difftime(end_dt, enroll_dt, units = "hours"))
+
+  # Check for gaming data during study period
+  gaming_hours <- gaming_data |>
+    filter(
+      pid == participant_id,
+      hour_start >= enroll_dt,
+      hour_start < end_dt
+    ) |>
+    distinct(hour_start) |>
+    nrow()
+
+  has_gaming <- gaming_hours > 0
+
+  # Get visibility events during study period
+  events_during <- visibility_data |>
+    filter(
+      pid == participant_id,
+      timestamp >= enroll_dt,
+      timestamp <= end_dt
+    ) |>
+    arrange(timestamp)
+
+  has_events <- nrow(events_during) > 0
+
+  # Calculate visibility hours based on events
+  if (has_events) {
+    # Get gaming hours for this participant during study period
+    gaming_times <- gaming_data |>
+      filter(
+        pid == participant_id,
+        hour_start >= enroll_dt,
+        hour_start < end_dt
+      ) |>
+      pull(hour_start) |>
+      sort()
+
+    # Calculate duration of each visibility state, accounting for gaming data
+    # that signals transition from private to public
+    events_with_duration <- events_during |>
+      mutate(
+        next_timestamp = lead(timestamp, default = end_dt),
+        next_event_is_public = lead(is_public, default = NA)
+      ) |>
+      rowwise() |>
+      mutate(
+        # For private periods, check if gaming data occurs before next event
+        # Gaming data signals profile became public again
+        gaming_during_period = {
+          if (!is_public && length(gaming_times) > 0) {
+            first_gaming <- gaming_times[gaming_times >= timestamp & gaming_times < next_timestamp]
+            if (length(first_gaming) > 0) as.numeric(min(first_gaming)) else NA_real_
+          } else {
+            NA_real_
+          }
+        },
+        # If we're in a private period and there's gaming data,
+        # split it: private until gaming, then public
+        actual_end = if (!is.na(gaming_during_period)) {
+          as.POSIXct(gaming_during_period, origin = "1970-01-01", tz = "UTC")
+        } else {
+          next_timestamp
+        },
+        duration_hours = as.numeric(difftime(actual_end, timestamp, units = "hours"))
+      ) |>
+      ungroup()
+
+    # Calculate private hours (before gaming data interrupts)
+    hours_private_from_events <- events_with_duration |>
+      filter(!is_public) |>
+      pull(duration_hours) |>
+      sum(na.rm = TRUE)
+
+    # Calculate public hours from explicit public events
+    hours_public_from_events <- events_with_duration |>
+      filter(is_public) |>
+      mutate(duration_hours = as.numeric(difftime(next_timestamp, timestamp, units = "hours"))) |>
+      pull(duration_hours) |>
+      sum(na.rm = TRUE)
+
+    # Add public hours from gaming data that occurred during private periods
+    # (these are periods that became public due to gaming activity)
+    hours_public_from_gaming_during_private <- events_with_duration |>
+      filter(!is_public, !is.na(gaming_during_period)) |>
+      mutate(
+        duration_after_gaming = as.numeric(difftime(next_timestamp,
+                                                    as.POSIXct(gaming_during_period, origin = "1970-01-01", tz = "UTC"),
+                                                    units = "hours"))
+      ) |>
+      pull(duration_after_gaming) |>
+      sum(na.rm = TRUE)
+
+    # Total public hours = explicit public periods + gaming-triggered public periods
+    hours_public_total <- hours_public_from_events + hours_public_from_gaming_during_private
+
+    # Check for any gap BEFORE the first event
+    first_event_time <- min(events_during$timestamp)
+    hours_before_first_event <- as.numeric(difftime(first_event_time, enroll_dt, units = "hours"))
+
+    if (hours_before_first_event > 0) {
+      # Check if there's gaming data before the first event
+      gaming_before_first <- any(gaming_times < first_event_time)
+      if (gaming_before_first) {
+        # Has gaming before first event, assume public for that period
+        hours_public_total <- hours_public_total + hours_before_first_event
+        hours_unknown <- 0
+      } else {
+        # No gaming before first event, status unknown for that period
+        hours_unknown <- hours_before_first_event
+      }
+    } else {
+      hours_unknown <- 0
+    }
+
+    hours_visible <- hours_public_total
+    hours_hidden <- hours_private_from_events
+
+  } else {
+    # No visibility events
+    if (has_gaming) {
+      # Gaming data proves visibility
+      # If we successfully polled them and got gaming data at various times,
+      # we can assume their profile was public the entire study period
+      # (they just didn't play during the other hours)
+      hours_visible <- expected_hours
+      hours_hidden <- 0
+      hours_unknown <- 0
+    } else {
+      # No visibility events and no gaming data
+      # We don't know if they were public or private - completely unknown
+      hours_visible <- 0
+      hours_hidden <- 0
+      hours_unknown <- expected_hours
+    }
+  }
+
+  list(
+    hours_visible = hours_visible,
+    hours_hidden = hours_hidden,
+    hours_unknown = hours_unknown,
+    hours_total = expected_hours,
+    proportion_visible = hours_visible / expected_hours,
+    has_gaming_data = has_gaming,
+    has_visibility_events = has_events
+  )
+}
+
+# Helper function to calculate Steam visibility-based missingness
+calc_steam_visibility_missingness <- function(pids, region) {
+  # Get Steam players for this region
+  players <- get_platform_players("Steam", pids)
+
+  # Ensure pids are character
+  steam_data <- steam |> mutate(pid = as.character(pid))
+  steam_vis_data <- steam_visibility |> mutate(pid = as.character(pid))
+  intake_data <- intake |> mutate(pid = as.character(pid))
+
+  # Calculate visibility coverage for each Steam player
+  visibility_results <- map(players, function(pid) {
+    calculate_steam_visibility_coverage(
+      participant_id = pid,
+      visibility_data = steam_vis_data,
+      gaming_data = steam_data,
+      enrollment_data = intake_data
+    )
+  })
+
+  # Extract hours_visible for each participant
+  hours_visible_per_participant <- map_dbl(visibility_results, "hours_visible")
+  hours_visible_per_participant[is.na(hours_visible_per_participant)] <- 0
+
+  # Extract hours_hidden and hours_unknown for each participant
+  hours_hidden_per_participant <- map_dbl(visibility_results, "hours_hidden")
+  hours_hidden_per_participant[is.na(hours_hidden_per_participant)] <- 0
+
+  hours_unknown_per_participant <- map_dbl(visibility_results, "hours_unknown")
+  hours_unknown_per_participant[is.na(hours_unknown_per_participant)] <- 0
+
+  # Calculate non-public hours per participant (hidden + unknown)
+  hours_non_public_per_participant <- hours_hidden_per_participant + hours_unknown_per_participant
+  median_non_public_hours <- median(hours_non_public_per_participant, na.rm = TRUE)
+
+  # Calculate total expected and observed hours
+  total_expected_hours <- length(players) * 2016  # 84 days * 24 hours
+  total_observed_hours <- sum(hours_visible_per_participant, na.rm = TRUE)
+
+  # For obs_per_participant (density plot), keep gaming session counts
+  # This matches current behavior as requested by user
+  steam_pids <- unique(steam_data$pid)
+  by_participant <- steam_data |>
+    filter(pid %in% players) |>
+    count(pid, name = "observed") |>
+    complete(pid = players, fill = list(observed = 0))
+
+  obs_values <- by_participant$observed
+  has_complete_missingness <- length(intersect(players, steam_pids)) == 0
+
+  # Prepare obs_for_plot (same logic as calc_telemetry_missingness)
+  if (has_complete_missingness) {
+    obs_for_plot <- c(0, 0)
+  } else if (any(obs_values > 0)) {
+    q1 <- quantile(obs_values, 0.25, na.rm = TRUE)
+    q3 <- quantile(obs_values, 0.75, na.rm = TRUE)
+    iqr <- q3 - q1
+    lower_bound <- max(0, q1 - 1.5 * iqr)
+    upper_bound <- q3 + 1.5 * iqr
+    obs_for_plot <- obs_values[
+      obs_values >= lower_bound & obs_values <= upper_bound
+    ]
+    if (length(obs_for_plot) < 2) obs_for_plot <- obs_values
+  } else {
+    obs_for_plot <- obs_values
+  }
+
+  if (length(obs_for_plot) < 2) {
+    obs_for_plot <- if (length(obs_for_plot) == 1) {
+      c(obs_for_plot, obs_for_plot)
+    } else {
+      c(0, 0)
+    }
+  }
+
+  # Calculate retention over time (84 days) based on visibility hours
+  if (has_complete_missingness || total_observed_hours == 0) {
+    retention_data <- rep(0, 84)
+  } else {
+    # Calculate retention based on last day with visibility
+    enrollment_lookup <- intake_data |>
+      filter(pid %in% players) |>
+      select(pid, enrollment_datetime, study_end_datetime) |>
+      distinct()
+
+    # For each participant, determine last day with visibility
+    last_visible_day_by_participant <- map_dfr(players, function(pid) {
+      result <- visibility_results[[which(players == pid)]]
+      if (result$has_gaming_data || result$has_visibility_events) {
+        # Find last hour with evidence of visibility
+        participant_gaming <- steam_data |>
+          filter(pid == !!pid) |>
+          filter(!is.na(hour_start))
+
+        participant_events <- steam_vis_data |>
+          filter(pid == !!pid, is_public == TRUE)
+
+        participant_enrollment <- enrollment_lookup |>
+          filter(pid == !!pid)
+
+        if (nrow(participant_enrollment) > 0) {
+          enroll_dt <- participant_enrollment$enrollment_datetime[1]
+
+          # Find last timestamp with visibility evidence
+          last_gaming <- if (nrow(participant_gaming) > 0) {
+            max(participant_gaming$hour_start, na.rm = TRUE)
+          } else {
+            as.POSIXct(NA)
+          }
+
+          last_event <- if (nrow(participant_events) > 0) {
+            max(participant_events$timestamp, na.rm = TRUE)
+          } else {
+            as.POSIXct(NA)
+          }
+
+          last_visible <- max(c(last_gaming, last_event), na.rm = TRUE)
+
+          if (!is.na(last_visible) && !is.infinite(last_visible)) {
+            last_day <- ceiling(as.numeric(difftime(
+              last_visible,
+              enroll_dt,
+              units = "days"
+            ))) + 1
+
+            return(tibble(pid = pid, last_day = min(last_day, 84)))
+          }
+        }
+      }
+      return(tibble(pid = pid, last_day = NA_real_))
+    })
+
+    retention_data <- sapply(1:84, function(day) {
+      n_retained <- sum(last_visible_day_by_participant$last_day >= day, na.rm = TRUE)
+      n_retained / length(players)
+    })
+  }
+
+  tibble(
+    region = region,
+    data_type = "Telemetry",
+    measure = "Steam",
+    n_participants = length(players),
+    total_expected = total_expected_hours,
+    total_observed = total_observed_hours,
+    total_missing = total_expected_hours - total_observed_hours,
+    median_missing_per_participant = median_non_public_hours,
+    obs_per_participant = list(obs_for_plot),
+    retention_over_time = list(retention_data),
+    complete_missingness = has_complete_missingness
+  )
+}
+
 # Helper function to calculate telemetry missingness
 calc_telemetry_missingness <- function(
   telemetry_data,
@@ -1924,8 +2293,8 @@ nintendo_stats_uk <- calc_telemetry_missingness(
   uk_pids,
   "UK"
 )
-steam_stats_us <- calc_telemetry_missingness(steam, "Steam", us_pids, "US")
-steam_stats_uk <- calc_telemetry_missingness(steam, "Steam", uk_pids, "UK")
+steam_stats_us <- calc_steam_visibility_missingness(us_pids, "US")
+steam_stats_uk <- calc_steam_visibility_missingness(uk_pids, "UK")
 ios_stats_us <- calc_daily_aggregate_missingness(ios, "iOS", us_pids, "US")
 ios_stats_uk <- calc_daily_aggregate_missingness(ios, "iOS", uk_pids, "UK")
 android_stats_us <- calc_daily_aggregate_missingness(android, "Android", us_pids, "US")
