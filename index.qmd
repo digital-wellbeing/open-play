@@ -1197,7 +1197,7 @@ We collected a variety of self-report measures at different time scales. We brie
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-case-study
-#| fig-cap: "Daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior."
+#| fig-cap: "Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior."
 #| fig-asp: .8
 #| out.width: 80%
 
@@ -1386,22 +1386,13 @@ for (i in seq_along(pct_levels)) {
       alpha = 0.7,
       na.rm = TRUE
     ) +
-    # Slightly larger background-colored points to mask the line
-    geom_point(
-      data = wellbeing_data_pct,
-      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
-      size = 3.5,
-      shape = 16,  # solid circle
-      color = "grey98"  # Match panel background
-    ) +
-    # Transparent outline points on top
+    # Filled square points
     geom_point(
       data = wellbeing_data_pct,
       aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
       color = "#FF6B35",
-      size = 3,
-      shape = 1,  # hollow circle
-      stroke = 1.5,
+      size = 2,
+      shape = 15,  # solid square
       alpha = 0.7
     ) +
     scale_fill_manual(
@@ -1445,8 +1436,6 @@ for (i in seq_along(pct_levels)) {
 # Combine plots using patchwork
 wrap_plots(plots_list, ncol = 1, guides = "collect") +
   plot_annotation(
-    title = "Daily Gaming Patterns and Wellbeing Across Platforms",
-    subtitle = "Sample gaming timeseries with biweekly wellbeing (WEMWBS)",
     theme = theme(
       plot.title = element_text(size = 14, face = "bold"),
       plot.subtitle = element_text(size = 11)
