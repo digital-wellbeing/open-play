@@ -222,7 +222,7 @@ steam <- read_csv("data/clean/steam.csv.gz") |>
     hour_start = floor_date(timestamp, "hour")
   )
 steam_visibility <- read_csv(
-  "data/raw/telemetry_steam_account_linking_raw.csv",
+  "data/raw/telemetry_steam_account_linking_raw.csv.gz",
   show_col_types = FALSE
 ) |>
   filter(platform == "steam") |>
