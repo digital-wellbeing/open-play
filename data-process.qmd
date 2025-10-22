@@ -149,7 +149,7 @@ nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
   slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |>
   ungroup() |> 
   mutate(duration = dur_sec / 60) |> 
-  select(pid, title_id, session_start, session_end, duration) |>
+  select(pid, title_id, session_start, session_end, duration, device_type, operation_mode) |>
   filter(duration <= 600) |>
   as_tibble()
 ```
