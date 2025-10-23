@@ -1516,10 +1516,9 @@ As with most longitudinal studies, attrition and missing data present important 
 
 The unit of observation differs across data types. For surveys and cognitive tasks, the unit is a completed survey or task. For telemetry, the unit varies by platform: Xbox and Nintendo use binary account linking, with data coverage considered maximal once linked (data provided directly by platform holders); Steam is measured hourly, with observations representing whether the participant's profile was publicly visible in each hour; iOS and Android are measured daily, with observations representing whether a valid screenshot was submitted covering that day's gaming.
 
-::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-missingness
-#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, observations actually collected, missing observations, median number of missing observations per participant, and percentage of data completeness for each measure. Retention plots (right columns) visualize the proportion of participants remaining active over time: for surveys and tasks, retention is calculated across study days or waves; for telemetry, across the 84-day study period. Density plots show the distribution of observations per participant."
+#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, median number of missing observations per participant (with maximum in parentheses), and percentage of data completeness for each measure."
 
 # Helper function to calculate study days from enrollment date
 get_study_days <- function(dates, pid, intake_data) {
@@ -1649,6 +1648,10 @@ calc_survey_missingness <- function(
     total_observed = actual_observed,
     total_missing = length(pids) * expected_n - actual_observed,
     median_missing_per_participant = median(
+      by_participant$missing,
+      na.rm = TRUE
+    ),
+    max_missing_per_participant = max(
       by_participant$missing,
       na.rm = TRUE
     ),
@@ -1791,6 +1794,7 @@ calc_daily_aggregate_missingness <- function(
     total_observed = total_observed,
     total_missing = total_expected - total_observed,
     median_missing_per_participant = median(by_participant$missing, na.rm = TRUE),
+    max_missing_per_participant = max(by_participant$missing, na.rm = TRUE),
     obs_per_participant = list(obs_for_plot),
     retention_over_time = list(retention_data),
     complete_missingness = has_complete_missingness
@@ -2136,6 +2140,7 @@ calc_steam_visibility_missingness <- function(pids, region) {
     total_observed = total_observed_hours,
     total_missing = total_expected_hours - total_observed_hours,
     median_missing_per_participant = median_non_public_hours,
+    max_missing_per_participant = max(hours_non_public_per_participant, na.rm = TRUE),
     obs_per_participant = list(obs_for_plot),
     retention_over_time = list(retention_data),
     complete_missingness = has_complete_missingness
@@ -2239,6 +2244,7 @@ calc_telemetry_missingness <- function(
     total_observed = length(intersect(players, telemetry_pids)),
     total_missing = length(no_telemetry),
     median_missing_per_participant = NA_real_,
+    max_missing_per_participant = NA_real_,
     obs_per_participant = list(obs_for_plot),
     retention_over_time = list(retention_data),
     complete_missingness = has_complete_missingness
@@ -2289,6 +2295,10 @@ calc_task_missingness <- function(
     total_expected = length(pids) * expected_n,
     total_observed = actual_observed,
     median_missing_per_participant = median(
+      by_participant$missing,
+      na.rm = TRUE
+    ),
+    max_missing_per_participant = max(
       by_participant$missing,
       na.rm = TRUE
     ),
@@ -2388,7 +2398,9 @@ table_data <- missingness_table |>
     `Median Missing` = ifelse(
       is.na(median_missing_per_participant),
       "—",
-      sprintf("%.0f", floor(median_missing_per_participant))
+      sprintf("%.0f (%.0f)",
+              floor(median_missing_per_participant),
+              floor(max_missing_per_participant))
     ),
     `% Complete` = sprintf("%.1f%%", pct_complete),
     Retention = ""
@@ -2408,7 +2420,6 @@ table_data <- missingness_table |>
     Measure = measure,
     `N`,
     Expected,
-    Observed,
     `Median Missing`,
     `% Complete`,
     Retention,
@@ -2429,102 +2440,75 @@ data_type_starts <- table_data |>
   filter(`Data Type` != "") |>
   pull(row_num)
 
-# Create table - with plots for HTML, without for other formats
-if (knitr::is_html_output()) {
-  # Find the row index for UK Xbox telemetry
-  uk_xbox_row <- which(
-    missingness_table$region == "UK" &
-      missingness_table$data_type == "Telemetry" &
-      missingness_table$measure == "Xbox"
+# Create footnote annotations for Expected column based on data_type and measure
+# We need to map each row to the appropriate footnote
+footnote_mapping <- missingness_table |>
+  mutate(
+    row_num = row_number(),
+    footnote = case_when(
+      data_type == "Survey" ~ "a",
+      data_type == "Telemetry" & measure %in% c("Xbox", "Nintendo") ~ "b",
+      data_type == "Telemetry" & measure == "Steam" ~ "c",
+      data_type == "Telemetry" & measure %in% c("iOS", "Android") ~ "d",
+      data_type == "Task" ~ "e",
+      TRUE ~ NA_character_
+    )
   )
 
-  # Prepare percentage complete data for bar plot
-  pct_complete_values <- as.list(
-    (missingness_table$total_observed / missingness_table$total_expected)
+# Build the notes list for tinytable
+# Footnotes appear on Expected column (column index 5 after removing Observed)
+expected_notes <- list(
+  "a" = list(
+    i = footnote_mapping$row_num[footnote_mapping$footnote == "a"],
+    j = 5,
+    text = "Surveys: Number of participants × expected responses (30 for Daily Diary, 6 for Biweekly Panel)"
+  ),
+  "b" = list(
+    i = footnote_mapping$row_num[footnote_mapping$footnote == "b"],
+    j = 5,
+    text = "Telemetry (Xbox/Nintendo): Number of participants who linked the platform (data provided directly by platform holders once linked)"
+  ),
+  "c" = list(
+    i = footnote_mapping$row_num[footnote_mapping$footnote == "c"],
+    j = 5,
+    text = "Telemetry (Steam): Number of participants × 2,016 hours (84 days × 24 hours)"
+  ),
+  "d" = list(
+    i = footnote_mapping$row_num[footnote_mapping$footnote == "d"],
+    j = 5,
+    text = "Telemetry (iOS/Android): Number of participants × 84 days"
+  ),
+  "e" = list(
+    i = footnote_mapping$row_num[footnote_mapping$footnote == "e"],
+    j = 5,
+    text = "Cognitive Task: Number of participants × 3 test administrations"
   )
+)
 
-  # Create initial table with % complete bar plots
-  tbl_html <- tt(table_data) |>
-    plot_tt(
-      j = 8,
-      fun = "bar",
-      data = pct_complete_values,
-      color = c("steelblue", "lightgrey"),
-      xlim = c(0, 1)
-    ) |>
-    style_tt(i = 0, bold = TRUE) |>
-    style_tt(
-      i = c(us_start, uk_start),
-      j = 1,
-      bold = TRUE,
-      line = "t",
-      line_width = 0.15
-    ) |>
-    style_tt(
-      i = data_type_starts,
-      j = 2,
-      bold = TRUE,
-      line = "t",
-      line_width = 0.1
-    ) |>
-    style_tt(j = c(8, 9), align = "c") |>
-    style_tt(fontsize = 0.8)
+# Create table - remove Retention column for all formats
+table_data_no_plots <- table_data |>
+  select(-Retention)
 
-  # Apply retention plots to all rows EXCEPT UK Xbox
-  if (length(uk_xbox_row) > 0) {
-    # Get indices for all rows except UK Xbox
-    rows_to_plot <- setdiff(1:nrow(table_data), uk_xbox_row)
-
-    # Create subset of plot data for non-UK-Xbox rows
-    retention_subset <- retention_plot_data[rows_to_plot]
-
-    # Apply plots to non-UK-Xbox rows
-    tbl_html <- tbl_html |>
-      plot_tt(
-        i = rows_to_plot,
-        j = 9,
-        fun = "line",
-        data = retention_subset,
-        color = "steelblue"
-      )
-  } else {
-    # No UK Xbox row found, plot all rows normally
-    tbl_html <- tbl_html |>
-      plot_tt(
-        j = 9,
-        fun = "line",
-        data = retention_plot_data,
-        color = "steelblue"
-      )
-  }
-
-  tbl_html
-} else {
-  # Other formats: table without plot columns to avoid path issues
-  table_data_no_plots <- table_data |>
-    select(-Retention)
-
-  tt(table_data_no_plots) |>
-    style_tt(i = 0, bold = TRUE) |>
-    style_tt(
-      i = c(us_start, uk_start),
-      j = 1,
-      bold = TRUE,
-      line = "t",
-      line_width = 0.15
-    ) |>
-    style_tt(
-      i = data_type_starts,
-      j = 2,
-      bold = TRUE,
-      line = "t",
-      line_width = 0.1
-    ) |>
-    style_tt(j = 8, align = "c") |>
-    style_tt(fontsize = 0.8)
-}
+# Create table with footnotes
+tt(table_data_no_plots, notes = expected_notes, width = 1, escape = TRUE) |>
+  style_tt(i = 0, bold = TRUE) |>
+  style_tt(
+    i = c(us_start, uk_start),
+    j = 1,
+    bold = TRUE,
+    line = "t",
+    line_width = 0.15
+  ) |>
+  style_tt(
+    i = data_type_starts,
+    j = 2,
+    bold = TRUE,
+    line = "t",
+    line_width = 0.1
+  ) |>
+  style_tt(j = 7, align = "c") |>
+  style_tt(fontsize = 0.8)
 ```
-:::
 
 # Discussion
 
@@ -2560,8 +2544,8 @@ All data, materials, and code related to the dataset and this manuscript are ava
 
 # References
 
-::: {#refs}
-:::
+:::: {#refs}
+::::
 
 ```{=typst}
 #show: appendix.with()
