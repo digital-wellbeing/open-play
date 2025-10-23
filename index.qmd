@@ -244,6 +244,7 @@ xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
 ios <- read_csv("data/clean/ios.csv.gz")
 android <- read_csv("data/clean/android.csv.gz")
+time_use <- read_csv("data/clean/timeuse.csv.gz")
 
 xbox_raw <- read_csv("data/raw/telemetry_xbox_raw.csv.gz") |> 
   filter(title_placement == "Full") |>
@@ -540,7 +541,7 @@ tt(overview) |>
 #| label: fig-sankey
 #| fig-cap: Participant flow during study intake.
 #| fig-asp: 0.37
-#| out-width: 90%
+#| out-width: 95%
 
 lvl <- c(
   "Screened",
@@ -1500,6 +1501,136 @@ simon |>
 
 ## Time Use
 
+
+```{r}
+#| label: fig-time-use
+
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+person_id  <- "p7710043675"
+survey_day <- as.Date("2025-06-19")
+
+# --- local timezone for this participant (fallback to "UTC" if missing) ---
+tz_local <- intake |>
+  filter(pid == person_id) |>
+  summarise(tz = first(na.omit(local_timezone))) |>
+  pull(tz)
+if (length(tz_local) == 0) tz_local <- "UTC"
+
+# --- 4am→4am window in LOCAL time ---
+window_start <- as.POSIXct(paste(survey_day - 1, "04:00:00"), tz = tz_local)
+window_end   <- as.POSIXct(paste(survey_day,     "04:00:00"), tz = tz_local)
+
+# --- helper: overlap + clip to window (expects start/end cols) ---
+clip_to_window <- function(df) {
+  df |>
+    filter(end > window_start, start < window_end) |>
+    mutate(
+      start = pmax(start, window_start),
+      end   = pmin(end,   window_end)
+    ) |>
+    filter(end > start)
+}
+
+# --- DIARY (already local) ---
+diary_df <- time_use |>
+  filter(pid == person_id) |>
+  transmute(
+    activity,
+    start = as.POSIXct(start_time),
+    end   = as.POSIXct(end_time)
+  ) |>
+  clip_to_window()
+
+# --- SESSIONS (UTC -> LOCAL using participant tz) ---
+sessions_df <- sessions_all |>
+  filter(pid == person_id) |>
+  transmute(
+    platform = if ("platform" %in% names(.)) platform else "Gaming",
+    start = ymd_hms(session_start, tz = "UTC") |> with_tz(tz_local),
+    end   = ymd_hms(session_end,   tz = "UTC") |> with_tz(tz_local)
+  ) |>
+  clip_to_window()
+
+# --- SURVEY (previous day's submission that falls inside the window; already local) ---
+survey_col <- if ("submitted_at" %in% names(daily)) "submitted_at" else "date"
+survey_df <- daily |>
+  filter(pid == person_id) |>
+  mutate(ts = as.POSIXct(.data[[survey_col]])) |>
+  filter(as.Date(ts) == (survey_day - 1), ts >= window_start, ts < window_end) |>
+  select(ts)
+
+# --- nicer colors ---
+activity_colors <- c(
+  "Sleep"                      = "#355C7D",
+  "Personal Care"              = "#6C5B7B",
+  "Video Gaming"               = "#2A9D8F",
+  "Offline Leisure & Social Life" = "#E76F51",
+  "Other Digital Media Use"    = "#8D6E63"
+)
+platform_colors <- c(
+  "Xbox" = "#107C10",
+  "Gaming" = "#2A9D8F"
+)
+
+ggplot() +
+  # Diary lane (top)
+  geom_rect(
+    data = diary_df,
+    aes(xmin = start, xmax = end, ymin = 2.6, ymax = 3.4, fill = activity),
+    color = NA, alpha = 0.95
+  ) +
+  # Gaming lane (middle)
+  geom_segment(
+    data = sessions_df,
+    aes(x = start, xend = end, y = 2, yend = 2, color = platform),
+    linewidth = 8, lineend = "butt", alpha = 0.9
+  ) +
+  # Survey lane (bottom)
+  geom_point(
+    data = survey_df, aes(x = ts, y = 1),
+    shape = 21, size = 3, stroke = 0.6, fill = "#FF6B35"
+  ) +
+  geom_segment(
+    data = survey_df, aes(x = ts, xend = ts, y = 0.6, yend = 3.4),
+    linetype = "dashed", linewidth = 0.3, alpha = 0.35
+  ) +
+  scale_x_datetime(
+    limits = c(window_start, window_end),
+    breaks = seq(window_start, window_end, by = "2 hours"),
+    date_labels = "%H:%M",
+    expand = expansion(mult = c(0, 0))
+  ) +
+  scale_y_continuous(
+    breaks = c(1, 2, 3), labels = c("Survey", "Gaming", "Diary"),
+    limits = c(0.6, 3.4), expand = expansion(mult = 0)
+  ) +
+  scale_fill_manual(values = activity_colors, guide = guide_legend(title = "Diary activity")) +
+  scale_color_manual(values = platform_colors, name = "Platform") +
+  labs(
+    x = paste0(
+      "Local time from ", format(window_start, "%Y-%m-%d %H:%M"),
+      " to ", format(window_end, "%Y-%m-%d %H:%M"), " (", tz_local, ")"
+    ),
+    y = NULL,
+    title = paste("Example 4am–4am day for", person_id)
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 10) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.title.y = element_blank(),
+    plot.title = element_text(face = "bold"),
+    legend.position = "bottom",
+    legend.box = "vertical"
+  )
+
+
+```
+
 TODO
 
 
@@ -1507,9 +1638,9 @@ TODO
 
 We implemented a variety of data quality checks.
 
-1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r propFailedDailyAttnCheck`% flagged, biweekly: `r propFailedBiweeklyAttnCheck`).
-2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 10 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we excluded 
-3.  In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any
+1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r propFailedDailyAttnCheck`% flagged, biweekly: `r propFailedBiweeklyAttnCheck`%).
+2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 10 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we excluded TODO
+3.  In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any TODO
 
 ## Missingness
 
