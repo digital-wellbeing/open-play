@@ -161,6 +161,7 @@ library(tinytable)
 library(litedown)
 library(sparkline)
 library(Hmisc)
+library(ggtext)
 
 # avoid conflicts
 library(conflicted)
@@ -197,6 +198,8 @@ theme_set(theme_minimal())
 theme_update(
   strip.background = element_rect(fill = "black"),
   strip.text = element_text(color = "white", size = 10),
+  axis.text.y = element_text(color = "black", size = 10),
+  axis.text.x = element_text(color = "black", size = 10),
   panel.grid.minor = element_blank(),
   panel.border = element_rect(
     colour = "black",
@@ -204,13 +207,6 @@ theme_update(
     linewidth = 1
   ),
 )
-
-# color palette
-nintendo_red <- "#E60012"
-steam_blue <- "#00ADEE"
-xbox_green <- "#107C10"
-ios_purple <- "#BF5AF2"
-android_orange <- "#FF9100"
 
 ```
 
@@ -430,50 +426,26 @@ Here, we present a longitudinal dataset of digital trace data across multiple ga
 
 The dataset is openly available under a {{< meta data-license >}} license at {{< meta data-url >}} for unrestricted reuse. @tbl-overview shows a high-level overview of the dataset.
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-overview
 #| tbl-cap: "Overview of the dataset and sources."
-
 # ---- helpers ----
-# Get PIDs of participants who completed at least one survey
-survey_pids <- union(
-  biweekly |> pull(pid) |> unique(),
-  daily |> pull(pid) |> unique()
-)
+survey_pids <- unique(c(biweekly$pid, daily$pid))
 
 avg_days_platform <- function(pltf, pids_filter = NULL) {
-  data <- daily_all |>
-    filter(platform == pltf)
-
-  if (!is.null(pids_filter)) {
-    data <- data |> filter(pid %in% pids_filter)
-  }
-
+  data <- daily_all |> filter(platform == pltf)
+  if (!is.null(pids_filter)) data <- data |> filter(pid %in% pids_filter)
   data |>
     group_by(pid) |>
     summarise(days = sum(minutes > 0, na.rm = TRUE), .groups = "drop") |>
-    summarise(avg = mean(days, na.rm = TRUE), .groups = "drop") |>
-    pull(avg) %||%
-    NA_real_
+    summarise(avg = median(days, na.rm = TRUE), .groups = "drop") |>
+    pull(avg) %||% NA_real_
 }
 
 total_hours <- function(df) {
-  mm <- if ("duration" %in% names(df)) {
-    df$duration
-  } else if ("minutes" %in% names(df)) {
-    df$minutes
-  } else {
-    NULL
-  }
+  mm <- if ("duration" %in% names(df)) df$duration else if ("minutes" %in% names(df)) df$minutes else NULL
   if (is.null(mm)) NA_real_ else sum(mm, na.rm = TRUE) / 60
-}
-
-# Cap events per participant at a per-dataset ceiling
-events_per_participant <- function(df, pid, cap = Inf) {
-  df |>
-    count({{ pid }}, name = "events") |>
-    mutate(events = pmin(events, cap)) |>
-    pull(events)
 }
 
 summ_basic <- function(df, pid, label, avg_days = NA_real_) {
@@ -483,86 +455,81 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
     Participants = n_distinct(pull(df, {{ pid }})),
     Events = nrow(df),
     Hours = total_hours(df),
-    `Avg events / participants` = mean(by_pid$events, na.rm = TRUE),
-    `Avg active days` = avg_days,
+    `Median events / user` = median(by_pid$events, na.rm = TRUE),
+    `Median active days` = avg_days
   )
 }
 
 # ---- table rows (order preserved) ----
-# Filter telemetry to only include participants who completed at least one survey
-steam_survey <- steam |> filter(pid %in% survey_pids)
+steam_survey    <- steam    |> filter(pid %in% survey_pids)
 nintendo_survey <- nintendo |> filter(pid %in% survey_pids)
-xbox_survey <- xbox |> filter(pid %in% survey_pids)
-ios_survey <- ios |> filter(pid %in% survey_pids)
-android_survey <- android |> filter(pid %in% survey_pids)
+xbox_survey     <- xbox     |> filter(pid %in% survey_pids)
+ios_survey      <- ios      |> filter(pid %in% survey_pids)
+android_survey  <- android  |> filter(pid %in% survey_pids)
 
 overview <- bind_rows(
-  summ_basic(intake, pid, "Intake survey", avg_days = 1),
-  summ_basic(
-    daily,
-    pid,
-    "Daily surveys",
-    avg_days = nrow(daily) / n_distinct(daily$pid)
-  ),
-  summ_basic(
-    biweekly,
-    pid,
-    "Biweekly surveys",
-    avg_days = nrow(biweekly) / n_distinct(biweekly$pid)
-  ),
-  summ_basic(
-    steam_survey,
-    pid,
-    "Steam",
-    avg_days = avg_days_platform("Steam", survey_pids)
-  ),
-  summ_basic(
-    nintendo_survey,
-    pid,
-    "Nintendo",
-    avg_days = avg_days_platform("Nintendo", survey_pids)
-  ),
-  summ_basic(xbox_survey, pid, "Xbox", avg_days = avg_days_platform("Xbox", survey_pids)),
-  summ_basic(ios_survey, pid, "iOS", avg_days = avg_days_platform("iOS")),
-  summ_basic(android_survey, pid, "Android", avg_days = avg_days_platform("Android"))
+  summ_basic(intake,   pid, "Intake survey",  avg_days = 1),
+  summ_basic(daily,    pid, "Daily surveys",  avg_days = nrow(daily) / n_distinct(daily$pid)),
+  summ_basic(biweekly, pid, "Biweekly surveys", avg_days = nrow(biweekly) / n_distinct(biweekly$pid)),
+  summ_basic(steam_survey,    pid, "Steam",    avg_days = avg_days_platform("Steam", survey_pids)),
+  summ_basic(nintendo_survey, pid, "Nintendo", avg_days = avg_days_platform("Nintendo", survey_pids)),
+  summ_basic(xbox_survey,     pid, "Xbox",     avg_days = avg_days_platform("Xbox", survey_pids)),
+  summ_basic(ios_survey,      pid, "iOS",      avg_days = avg_days_platform("iOS")),
+  summ_basic(android_survey,  pid, "Android",  avg_days = avg_days_platform("Android"))
 ) |>
-  mutate(
-    Participants = number(
-      Participants,
-      accuracy = 1,
-      big.mark = ","
-    ),
-    Events = number(
-      Events,
-      accuracy = 1,
-      big.mark = ",",
-      scale_cut = cut_long_scale()
-    ),
-    Hours = number(
-      Hours,
-      accuracy = 0.1,
-      big.mark = ",",
-      scale_cut = cut_long_scale()
-    ),
-    `Avg events / participants` = number(
-      `Avg events / participants`,
-      accuracy = 0.1,
-      big.mark = ",",
-      scale_cut = cut_long_scale()
-    ),
-    `Avg active days` = number(
-      `Avg active days`,
-      accuracy = 0.1,
-      big.mark = ",",
-      scale_cut = cut_long_scale()
-    )
+  rename(`Survey Participants` = Participants)
+
+# ---- telemetry totals (all users) ----
+telemetry_pairs <- list(
+  list(label = "Steam",    full = steam,    overlap = steam_survey),
+  list(label = "Nintendo", full = nintendo, overlap = nintendo_survey),
+  list(label = "Xbox",     full = xbox,     overlap = xbox_survey),
+  list(label = "iOS",      full = ios,      overlap = ios_survey),
+  list(label = "Android",  full = android,  overlap = android_survey)
+)
+
+telemetry_stats <- map_dfr(telemetry_pairs, function(x) {
+  by_pid_full <- x$full |> count(pid, name = "events")
+  tibble(
+    `Data type` = x$label,
+    `Total users w/ trace data` = n_distinct(x$full$pid),
+    `Median events / user (all telemetry)` = median(by_pid_full$events, na.rm = TRUE)
   )
+})
+
+# Join + replace telemetry medians; add telemetry-only participants
+overview <- overview |>
+  left_join(telemetry_stats, by = "Data type") |>
+  mutate(
+    `Median events / user` = coalesce(`Median events / user (all telemetry)`, `Median events / user`),
+    `Total users w/ trace data` = coalesce(`Total users w/ trace data`, NA_real_)
+  ) |>
+  select(-`Median events / user (all telemetry)`)
+
+# ---- formatting + final column order ----
+overview <- overview |>
+  mutate(
+    `Survey Participants` = number(`Survey Participants`, accuracy = 1, big.mark = ","),
+    `Total users w/ trace data` = if_else(
+      is.na(`Total users w/ trace data`), "",
+      number(`Total users w/ trace data`, accuracy = 1, big.mark = ",")
+    ),
+    Events = number(Events, accuracy = 1, big.mark = ",", scale_cut = cut_long_scale()),
+    Hours  = number(Hours,  accuracy = 0.1, big.mark = ",", scale_cut = cut_long_scale()),
+    `Median events / user` = number(`Median events / user`, accuracy = 0.1, big.mark = ",",
+                                    scale_cut = cut_long_scale()),
+    `Median active days` = number(`Median active days`, accuracy = 1, big.mark = ",",
+                               scale_cut = cut_long_scale())
+  ) |>
+  select(`Data type`, `Survey Participants`, `Total users w/ trace data`,
+         Events, Hours, `Median events / user`, `Median active days`)
 
 tt(overview) |>
   style_tt(fontsize = 0.8) |>
   format_tt(replace = "")
 
 ```
+:::
 
 # Method
 
@@ -573,13 +540,16 @@ tt(overview) |>
 #| label: fig-sankey
 #| fig-cap: Participant flow during study intake.
 #| fig-asp: 0.37
+#| out-width: 90%
 
 lvl <- c(
   "Screened",
   "Ineligible",
+  "No trace data",
   "No recent trace data",
   "Did not begin surveys",
   "Linked ≥1 account",
+  "Any trace data",
   "Recent trace data",
   "Began surveys"
 )
@@ -588,8 +558,9 @@ node_counts <- intake |>
   mutate(
     stage1 = "Screened",
     stage2 = ifelse(is.na(linked_platforms), "Ineligible", "Linked ≥1 account"),
-    stage3 = ifelse(qualified, "Recent trace data", "No recent trace data"),
-    stage4 = ifelse(
+    stage3 = ifelse(pid %in% c(xbox$pid, nintendo$pid, steam$pid), "Any trace data", "No trace data"),
+    stage4 = ifelse(qualified, "Recent trace data", "No recent trace data"),
+    stage5 = ifelse(
       pid %in% biweekly$pid,
       "Began surveys",
       "Did not begin surveys"
@@ -608,7 +579,12 @@ sankey_data <- intake |>
       "Ineligible",
       "Linked ≥1 account"
     ),
-    `Account Validation` = ifelse(
+    `Account Validation 1` = ifelse(
+      pid %in% c(xbox$pid, nintendo$pid, steam$pid), 
+      "Any trace data", 
+      "No trace data"
+    ),
+    `Account Validation 2` = ifelse(
       qualified,
       "Recent trace data",
       "No recent trace data"
@@ -620,7 +596,7 @@ sankey_data <- intake |>
     ),
     .keep = "none"
   ) |>
-  make_long(Screening, Linking, `Account Validation`, Surveys) |>
+  make_long(Screening, Linking, `Account Validation 1`, `Account Validation 2`, Surveys) |>
   left_join(node_counts, by = "node") |>
   mutate(
     node = factor(node, levels = rev(lvl)),
@@ -991,8 +967,8 @@ In @fig-heatmap, we visualize the distribution of play across days and times. As
 ```{r}
 #| label: fig-heatmap
 #| fig-cap: "Diurnal play across Xbox, Nintendo, Steam."
-#| fig-asp: .4
-#| out.width: 95%
+#| fig-asp: 0.4
+#| out-width: 95%
 
 # expected number of occurrences of each slot in telemetry span
 slot_exposure <- telemetry_spans |>
@@ -1041,7 +1017,7 @@ slot_summary <- slot_per_player |>
 
 
 ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
-  geom_tile() +
+  geom_raster() +
   scale_x_continuous(breaks = 0:23) +
   scale_fill_viridis_c(
     option = "magma",
@@ -1053,7 +1029,8 @@ ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
     x = "Hour (local)",
     y = "Day",
   ) +
-  theme(panel.grid.major.y = element_blank())
+  theme(panel.grid.major.y = element_blank(),
+        axis.text.x = element_text(angle = 30))
 
 ```
 :::
@@ -1067,7 +1044,7 @@ We also collected self-reported gaming data in each biweekly survey. Participant
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-paired-dotplot
-#| fig-cap: "Average weekly playtime (minutes) by platform, self-reported vs telemetry (among users with telemetry). Lines connect estimates for the same platform."
+#| fig-cap: "Average weekly playtime (minutes) by platform, self-reported vs telemetry (among users with telemetry). Lines connect estimates for the same platform. Telemetry calculated per user-platform, based only on the period between their first and last recorded session."
 #| fig-asp: 0.4
 #| out.width: 95%
 
@@ -1175,22 +1152,21 @@ ggplot(paired_summary, aes(x = hours, y = platform)) +
   ) +
   geom_point(
     aes(shape = source, color = source, fill = source),
-    size = 4, stroke = 0.7
+    size = 2.5, stroke = 0.7
   ) +
   scale_shape_manual(values = c("Self-report" = 24, "Telemetry" = 22)) +
-  scale_color_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
-  scale_fill_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
+  scale_color_manual(values = c("Self-report" = "#D95F0E", "Telemetry" = "#2B8CBE")) +
+  scale_fill_manual(values = c("Self-report" = "#D95F0E", "Telemetry" = "#2B8CBE")) +
   scale_y_discrete(expand = expansion(mult = c(0.2, 0.2))) +
   scale_x_continuous(limits = c(0, 20), breaks = seq(0, 20, 4), expand = expansion(mult = c(0.02, 0.08))) +
   guides(
     shape = guide_legend(title = NULL),
     color = guide_legend(title = NULL),
-    fill = "none"
+    fill = guide_legend(title = NULL),
   ) +
   labs(
     x = "Average weekly hours per active user of platform",
     y = NULL,
-    caption = "Telemetry calculated per user of that platform,\nbased only on the period between their first and last recorded session."
   ) +
   theme(
     legend.position = "bottom",
@@ -1407,17 +1383,16 @@ for (i in seq_along(pct_levels)) {
       data = wellbeing_data_pct,
       aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
       color = "#FF6B35",
-      size = 2,
+      size = 2.5,
       shape = 15,  # solid square
-      alpha = 0.7
     ) +
     scale_fill_manual(
       values = c(
         "Nintendo" = "#E60012",  # Nintendo red
-        "Steam" = "#1B2838",     # Steam dark blue
+        "Steam" = "#215e8a",     # Steam dark blue
         "Xbox" = "#107C10",      # Xbox green
-        "iOS" = "#555555",       # iOS grey
-        "Android" = "#3DDC84"    # Android green
+        "iOS" = "#b43bf5",       # iOS
+        "Android" = "#f5f53b"    # Android 
       ),
       name = "Platform"
     ) +
@@ -1438,38 +1413,35 @@ for (i in seq_along(pct_levels)) {
     ) +
     ggtitle(pct_level) +
     theme(
-      panel.background = element_rect(fill = "grey98", color = NA),
-      axis.title.y.right = if (is_middle) element_text(color = "#FF6B35", size = 10) else element_blank(),
-      axis.text.y.right = element_text(color = "#FF6B35", size = 9),
-      axis.title.y.left = if (is_middle) element_text(size = 10) else element_blank(),
-      plot.title = element_text(size = 11, hjust = 0.5),
-      axis.title.x = if (is_bottom) element_text() else element_blank(),
-      strip.background = element_rect(fill = "black"),
-      strip.text = element_text(color = "white", size = 10),
+      plot.background  = element_blank(),
+      panel.background = element_rect(fill = "white", color = NA),
+      panel.grid.major = element_line(color = "#333333", linewidth = 0.3),
       panel.grid.minor = element_blank(),
-      panel.border = element_rect(
-        colour = "black",
-        fill = NA,
-        linewidth = 1
+      panel.border     = element_rect(colour = "black", fill = NA, linewidth = 0.6),
+      axis.title.y.right = element_text(color = "#FF6B35"),
+      axis.text.y.right  = element_text(color = "#FF6B35"),
+      plot.title = ggtext::element_textbox_simple(
+        padding = margin(4, 6, 4, 6),
+        margin  = margin(0, 0, 6, 0),
+        fill    = "#0f0f0f",   # strip fill
+        color   = "white",
+        size   = 10,              # smaller font (pt)
+        halign = 0.5
       )
     )
-
+  
   plots_list[[pct_level]] <- p_temp
 }
 
 # Combine plots using patchwork
 wrap_plots(plots_list, ncol = 1, guides = "collect") +
   plot_annotation(
-    theme = theme(
-      plot.title = element_text(size = 14, face = "bold"),
-      plot.subtitle = element_text(size = 11),
-      legend.key.height = unit(3, "mm"),
-      legend.key.width  = unit(5, "mm"),
-      legend.text = element_text(size = 8),
-      legend.title = element_text(size = 9)
-    )
   ) &
-  theme(legend.position = "bottom")
+  theme(legend.position = "bottom",
+        legend.key.height = unit(5, "mm"),
+        legend.key.width  = unit(5, "mm"),
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 9))
 ```
 :::
 
@@ -1499,7 +1471,8 @@ Overall, `{r} knitr::combine_words(simon_n$n)` participants completed the Simon 
 ```{r}
 #| label: fig-simon
 #| fig-cap: Histograms of participants' Simon Squared task scores across study waves. Points and bars indicate means ±1 standard deviation.
-#| fig-asp: 0.4
+#| fig-asp: 0.5
+#| out.width: 90%
 
 simon |>
   ggplot() +
