@@ -202,6 +202,16 @@ ios <- ios |>
 
 ```
 
+```{r}
+#| label: preprocess-surveys
+
+diary <- diary |> 
+  filter(wave <= 30)
+
+
+```
+
+
 ## Write clean data files
 
 ```{r}

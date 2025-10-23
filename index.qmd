@@ -164,12 +164,17 @@ library(Hmisc)
 
 # avoid conflicts
 library(conflicted)
-conflict_prefer("filter", "dplyr")
-conflict_prefer("summarise", "dplyr")
-conflict_prefer("summarize", "dplyr")
-conflict_prefer("lag", "dplyr")
-conflict_prefer("select", "dplyr")
-
+conflicts_prefer(
+  dplyr::filter,
+  dplyr::summarise,
+  dplyr::summarize,
+  dplyr::lag,
+  dplyr::select,
+  dplyr::recode,
+  dplyr::first,
+  dplyr::recode,
+  lubridate::hour
+)
 
 # Load custom functions
 source("R/helpers.R")
@@ -235,6 +240,12 @@ xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
 ios <- read_csv("data/clean/ios.csv.gz")
 android <- read_csv("data/clean/android.csv.gz")
+
+xbox_raw <- read_csv("data/raw/telemetry_xbox_raw.csv.gz") |> 
+  filter(title_placement == "Full") |>
+  filter(genres != "Video") |> 
+  filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7")
+
 ```
 
 ```{r}
@@ -280,33 +291,19 @@ tz_map <- intake |>
 # aggregate data at each level of granularity (session, hourly, daily)
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
 sessions_all <- bind_rows(
-  xbox |>
-    mutate(
-      pid = as.character(pid),
-      platform = "Xbox",
-      start_utc = session_start,
-      end_utc = session_end,
-      .keep = "none"
-    ),
-  nintendo |>
-    mutate(
-      pid = as.character(pid),
-      platform = "Nintendo",
-      start_utc = session_start,
-      end_utc = session_end,
-      .keep = "none"
-    )
+  xbox |> mutate(platform = "Xbox"),
+  nintendo |> mutate(platform = "Nintendo")
 ) |>
   left_join(tz_map, by = "pid") |>
   mutate(
-    start_local = start_utc + off,
-    end_local = end_utc + off,
-    duration_min = as.numeric(difftime(end_utc, start_utc, units = "mins"))
+    start_local = session_start + off,
+    end_local = session_end + off,
+    duration_min = as.numeric(difftime(session_end, session_start, units = "mins"))
   ) |>
   filter(
-    !is.na(start_utc),
-    !is.na(end_utc),
-    end_utc > start_utc,
+    !is.na(session_start),
+    !is.na(session_end),
+    session_end > session_start,
     duration_min >= 1
   )
 
@@ -332,12 +329,12 @@ hourly_from_sessions <- sessions_all |>
     ),
     hour_start_utc = hour_start_local - off
   ) |>
-  select(pid, platform, hour_start_local, hour_start_utc, minutes) |>
-  group_by(pid, platform, hour_start_local, hour_start_utc) |>
+  select(pid, platform, title_id, hour_start_local, hour_start_utc, minutes) |>
+  group_by(pid, platform, title_id, hour_start_local, hour_start_utc) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
 hourly_from_steam <- steam |>
-  select(pid, datetime_hour_start, minutes) |>
+  select(pid, title_id, datetime_hour_start, minutes) |>
   mutate(pid = as.character(pid)) |>
   left_join(tz_map, by = "pid") |>
   mutate(
@@ -346,9 +343,10 @@ hourly_from_steam <- steam |>
     hour_start_utc = datetime_hour_start,
     hour_start_local = datetime_hour_start + off,
     minutes,
+    title_id,
     .keep = "none"
   ) |>
-  group_by(pid, platform, hour_start_local, hour_start_utc) |>
+  group_by(pid, platform, title_id, hour_start_local, hour_start_utc) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
 hourly_all <- bind_rows(hourly_from_sessions, hourly_from_steam)
@@ -381,15 +379,29 @@ weekly_all <- daily_all |>
 #             day_local = <local_date>, day_utc = <utc_date>, minutes = <minutes>)
 # daily_all <- bind_rows(daily_all, ios_daily, android_daily)
 
-telemetry_spans <- hourly_all |>
+telemetry_spans <- daily_all |>
   group_by(pid, platform) |>
   summarise(
-    telemetry_start = min(hour_start_local, na.rm = TRUE),
-    telemetry_end = max(hour_start_local, na.rm = TRUE) + hours(1), # end of last hour bin
+    telemetry_start = min(day_local, na.rm = TRUE),
+    telemetry_end = max(day_local, na.rm = TRUE) + hours(1), # end of last hour bin
     week = floor_date(telemetry_end, "week"),
     .groups = "drop"
   )
 ```
+
+```{r}
+#| label: stats
+
+nHours <- number(sum(daily_all$minutes/60), accuracy = 0.1, big.mark = ",", scale_cut = cut_long_scale())
+nUsers <- number(n_distinct(daily_all$pid), accuracy = 1, big.mark = ",")
+nGames <- number(n_distinct(hourly_all$title_id), accuracy = 1, big.mark = ",")
+propFailedDiaryAttnCheck <- number(sum(diary$bpnsfs_failed_att_check)/nrow(diary)*100, accuracy = .1)
+propFailedPanelAttnCheck <- number(sum(panel$bangs_failed_att_check)/nrow(panel)*100, accuracy = .1)
+
+propDroppedXboxSessions <- number((1-(nrow(xbox) / nrow(xbox_raw))) * 100, accuracy = 0.1)
+
+```
+
 
 ---
 abstract: |
@@ -673,7 +685,7 @@ tibble(
   `Account Linking Process` = c(
     "Participants share an identifier contained within a QR code on Nintendo web interface. Nintendo of America/Europe uses this identifier to retrieve gameplay data and share it with the research team.",
     "Participants consent to data sharing by opting in to the study on Xbox Insiders with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in pseudonymized form.",
-    "Participants sign up for Gameplay.Science (https://gameplay.science), an o pen-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID).",
+    "Participants sign up for Gameplay.Science (https://gameplay.science), an open-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID).",
     "In each biweekly survey, participants submitted screenshots from the built-in iOS Screen Time app. These show details of the previous 3 weeks' of gaming app use (what games were played and for how long). Data was extracted using OCR.",
     "In each biweekly survey, participants submitted screenshots from the Digital Screen Time app, if available on their Android OS. These show details of the previous 3 weeks' of phone use (what app categories are used and for how long). Data was extracted using OCR."
   ),
@@ -961,7 +973,7 @@ Prolific participants were paid at a rate of £12/hour for all study components,
 
 ## Digital Trace Data
 
-As described above, we collected video game play data from five platforms: Xbox, Nintendo Switch, Steam, iOS, and Android (full details in @tbl-platforms). To recap, on Xbox and Nintendo, we have *session-level* data, characterized by the following fields: a game ID (Xbox) or title (Nintendo), a start and end time, and genre(s). On Steam we have *hourly aggregates* - every hour, how much time people spent playing for all games they played in that hour. On iOS and Android, we have *daily aggregates* - every day, how much time people spent playing each game. We describe each platform in more detail below. For concision, we do not repeat the details of @tbl-platforms in here, but direct readers to that table or our supplementary materials for the exact variables in each platform's trace data.
+As described above, we collected video game play data from five platforms: Xbox, Nintendo Switch, Steam, iOS, and Android (full details in @tbl-platforms). To recap, on Xbox and Nintendo, we have *session-level* data, characterized by the following fields: a game ID (Xbox) or title (Nintendo), a start and end time, and genre(s). On Steam we have *hourly game-level aggregates* - every hour, how much time people spent playing each games they played that hour. On iOS and Android, we have *daily aggregates* - every day, how much time people spent playing games as a whole. We describe each platform in more detail below. For concision, we do not repeat the details of @tbl-platforms in here, but direct readers to that table or our supplementary materials for the exact variables in each platform's trace data.
 
 All telemetry timestamps are stored as UTC, but can be converted to the participant's local time using the `local_timezone` variable.
 
@@ -1054,60 +1066,13 @@ We also collected self-reported gaming data in each biweekly survey. Participant
 
 # Paired dot plot: self-report vs telemetry (normalized by exposure)
 
-telemetry_platforms <- c("Steam", "Nintendo", "Xbox")
-platforms_all <- c(telemetry_platforms, "iOS", "Android", "Other (uncaptured)")
-
-sr_users <- intake |>
-  filter(qualified) |>
-  mutate(
-    pid = as.character(pid),
-    # usage flags (keep your existing logic for captured + mobile)
-    uses_Steam    = str_detect(used_platforms %||% "", "Steam"),
-    uses_Nintendo = str_detect(used_platforms %||% "", "Nintendo"),
-    uses_Xbox     = str_detect(used_platforms %||% "", "Xbox"),
-    uses_iOS      = str_detect(used_platforms %||% "", "iOS"),
-    uses_Android  = str_detect(used_platforms %||% "", "Android"),
-    # "Other" usage is defined purely by nonzero props on uncaptured platforms
-    other_prop    = coalesce(prop_playstation, 0) + coalesce(prop_other, 0),
-    uses_Other    = other_prop > 0 & !is.na(other_prop),
-    # minutes by platform
-    Steam    = self_reported_weekly_play * coalesce(prop_steam / 100,     NA),
-    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100,  NA),
-    Xbox     = self_reported_weekly_play * coalesce(prop_xbox / 100,      NA),
-    iOS      = self_reported_weekly_play * coalesce(prop_ios / 100,       NA),
-    Android  = self_reported_weekly_play * coalesce(prop_android / 100,   NA),
-    `Other (uncaptured)` = self_reported_weekly_play * if_else(uses_Other, other_prop / 100, NA_real_),
-    .keep = "used"
-  )
-
-sr_totals <- sr_users |>
-  pivot_longer(c(`Other (uncaptured)`, Steam, Nintendo, Xbox, iOS, Android),
-               names_to = "platform", values_to = "sr_minutes") |>
-  mutate(
-    uses = case_when(
-      platform == "Steam"              ~ uses_Steam,
-      platform == "Nintendo"           ~ uses_Nintendo,
-      platform == "Xbox"               ~ uses_Xbox,
-      platform == "iOS"                ~ uses_iOS,
-      platform == "Android"            ~ uses_Android,
-      platform == "Other (uncaptured)" ~ uses_Other,
-      TRUE ~ FALSE
-    )
-  ) |>
-  filter(uses, platform %in% platforms_all) |>
-  group_by(platform) |>
-  summarise(
-    minutes = mean(sr_minutes, na.rm = TRUE),
-    n_users = n_distinct(pid[!is.na(sr_minutes)]),
-    .groups = "drop"
-  ) |>
-  mutate(source = "Self-report")
+telemetry_platforms <- c("Steam", "Nintendo", "Xbox", "iOS", "Android")
+platforms_all <- c(telemetry_platforms, "Other (uncaptured)")
 
 # ---- TELEMETRY (avg weekly minutes among users with telemetry; normalized) ----
 tele_exposure <- telemetry_spans |>
   filter(platform %in% telemetry_platforms) |>
   mutate(
-    pid = as.character(pid),
     exposure_weeks = as.numeric(difftime(telemetry_end, telemetry_start, units = "days")) / 7
   ) |>
   filter(is.finite(exposure_weeks), exposure_weeks > 4) |>
@@ -1115,7 +1080,6 @@ tele_exposure <- telemetry_spans |>
 
 tele_users <- daily_all |>
   filter(platform %in% telemetry_platforms) |>
-  mutate(pid = as.character(pid)) |>
   group_by(pid, platform) |>
   summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop") |>
   left_join(tele_exposure, by = c("pid", "platform")) |>
@@ -1131,22 +1095,72 @@ tele_totals <- tele_users |>
   ) |>
   mutate(source = "Telemetry")
 
+# --- self-report -----
+
+valid_pairs <- tele_users |> 
+  distinct(pid, platform) |> 
+  mutate(has_tel = TRUE)
+
+sr_totals <- intake |> 
+  filter(qualified) |> 
+  mutate(
+    uses_Steam    = str_detect(used_platforms %||% "", "Steam"),
+    uses_Nintendo = str_detect(used_platforms %||% "", "Nintendo"),
+    uses_Xbox     = str_detect(used_platforms %||% "", "Xbox"),
+    uses_iOS      = str_detect(used_platforms %||% "", "iOS"),
+    uses_Android  = str_detect(used_platforms %||% "", "Android"),
+    other_prop    = coalesce(prop_playstation, 0) + coalesce(prop_other, 0),
+    uses_Other    = other_prop > 0 & !is.na(other_prop),
+    Steam    = self_reported_weekly_play * coalesce(prop_steam / 100,    NA),
+    Nintendo = self_reported_weekly_play * coalesce(prop_nintendo / 100, NA),
+    Xbox     = self_reported_weekly_play * coalesce(prop_xbox / 100,     NA),
+    iOS      = self_reported_weekly_play * coalesce(prop_ios / 100,      NA),
+    Android  = self_reported_weekly_play * coalesce(prop_android / 100,  NA),
+    `Other (uncaptured)` = self_reported_weekly_play *
+      if_else(uses_Other, other_prop / 100, NA_real_)
+  ) |> 
+  pivot_longer(c(`Other (uncaptured)`, Steam, Nintendo, Xbox, iOS, Android),
+               names_to = "platform", values_to = "sr_minutes") |> 
+  mutate(
+    uses = case_when(
+      platform == "Steam"              ~ uses_Steam,
+      platform == "Nintendo"           ~ uses_Nintendo,
+      platform == "Xbox"               ~ uses_Xbox,
+      platform == "iOS"                ~ uses_iOS,
+      platform == "Android"            ~ uses_Android,
+      platform == "Other (uncaptured)" ~ uses_Other,
+      TRUE ~ FALSE
+    )
+  ) |> 
+  filter(uses, platform %in% platforms_all) |> 
+  left_join(valid_pairs, by = c("pid", "platform")) |> 
+  filter(platform == "Other (uncaptured)" | has_tel)  |> 
+  group_by(platform) |> 
+  summarise(
+    minutes = mean(sr_minutes, na.rm = TRUE),
+    n_users = n_distinct(pid[!is.na(sr_minutes)]),
+    .groups = "drop"
+  ) |> 
+  mutate(source = "Self-report")
+
 # ---- COMBINE + PLOT ----
 paired_summary <- bind_rows(sr_totals, tele_totals) |>
   mutate(
     platform = factor(platform, levels = platforms_all),
-    source   = factor(source, levels = c("Self-report", "Telemetry"))
+    source   = factor(source, levels = c("Self-report", "Telemetry")),
+    hours = minutes/60,
+    .keep = "used"
   )
 
 # segments only where both SR and Telemetry exist
 segment_df <- paired_summary |>
-  select(platform, source, minutes) |>
-  pivot_wider(names_from = source, values_from = minutes) |>
+  select(platform, source, hours) |>
+  pivot_wider(names_from = source, values_from = hours) |>
   # filter(!is.na(`Self-report`) & !is.na(Telemetry)) |>
   mutate(xmin = `Self-report`, xmax = Telemetry) |> 
   mutate(platform = factor(platform, levels = c("Other (uncaptured)", "iOS", "Android", "Nintendo", "Xbox", "Steam")))
 
-ggplot(paired_summary, aes(x = minutes, y = platform)) +
+ggplot(paired_summary, aes(x = hours, y = platform)) +
   geom_segment(
     data = segment_df,
     aes(x = xmin, xend = xmax, y = platform, yend = platform),
@@ -1160,18 +1174,17 @@ ggplot(paired_summary, aes(x = minutes, y = platform)) +
   scale_color_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
   scale_fill_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
   scale_y_discrete(expand = expansion(mult = c(0.1, 0.1))) +
-  scale_x_continuous(limits = c(0, 1200), expand = expansion(mult = c(0.02, 0.08))) +
+  scale_x_continuous(limits = c(0, 20), breaks = seq(0, 20, 4), expand = expansion(mult = c(0.02, 0.08))) +
   guides(
     shape = guide_legend(title = NULL),
     color = guide_legend(title = NULL),
     fill = "none"
   ) +
   labs(
-    x = "Average weekly minutes per active user of platform",
+    x = "Average weekly hours per active user of platform",
     y = NULL,
     caption = "Telemetry calculated per user of that platform,\nbased only on the period between their first and last recorded session."
   ) +
-  theme_minimal(base_size = 10) +
   theme(
     legend.position = "bottom",
     axis.text.y = element_text(size = 12, face = "bold")
@@ -1506,8 +1519,8 @@ TODO
 
 We implemented a variety of data quality checks.
 
-1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding.
-2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: sessions beginning or ending in the future (indicative of clock manipulation or other errors), sessions longer than 12 hours long, 3 or more games being played simultaneously [TODO: other heuristics]
+1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r propFailedDiaryAttnCheck`% flagged, biweekly: `r propFailedPanelAttnCheck`).
+2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 10 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we excluded 
 3.  In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any
 
 ## Missingness
@@ -2528,25 +2541,29 @@ if (knitr::is_html_output()) {
 
 # Discussion
 
-We believe this dataset has potential to address a wide variety of common research questions in the field.
+Spanning `r nHours` hours, `r nUsers` user-platform combinations, and `r nGames`, the dataset presented here represents a major advance in the comprehensiveness and scale at which video game play has been captured. Previous studies on games and health have typically used (1) self-report data with substantial limitations on accuracy, time range, and detail; (2) large-scale but anonymized data not linkable to individuals or survey responses and thus lacking good measures of ground truth for questions about player health [@]; or (3) small-scale trace data from single platforms or games, limiting generalizability [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly; @BallouEtAl2024Registered; @BallouEtAl2025Perceived].
 
-Some of these questions will be addressed in forthcoming registered reports: specifically, we have plans to test (1) key hypotheses from the Basic Needs in Games model [@BallouDeterding2024Basic] about how gaming relates to basic psychological needs over time, (2) the relationship between late-night gaming and sleep, and (3) the relationship between playtime in different genres and wellbeing.
+## Empirical Opportunities  
 
-Nonetheless, the richness of this data means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). To stimulate ideas, we present a few questions we think the data are well-suited to answering.
+We believe this dataset has potential to address a wide variety of pertinent research questions for the field. Some of these questions will be addressed in forthcoming registered reports: specifically, we have plans to test (1) key hypotheses from the Basic Needs in Games model [@BallouDeterding2024Basic] about how gaming relates to basic psychological needs over time, (2) the relationship between late-night gaming and sleep, and (3) the relationship between playtime in different genres and wellbeing.
 
-*How do seasons and weather impact playtime?* Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. By quantifying these effects, researchers can better distinguish weather‐related demand from other drivers (like work schedules or weekend routines), improving the precision of studies on gaming’s impact on wellbeing, motivation, and cognition.
+The richness of this data means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). To stimulate ideas, we present a few questions we think the data are well-suited to answering.
 
-*How do neurotypical and neurodiverse players differ in their gaming behavior?* Using the neurodivergence data we collected (which includes, for example, `r table(intake$neuroIdenCondition_1)[1]` participants who identify as having autism and `r table(intake$neuroIdenCondition_2)[1]` who identify as having ADHD), researchers can. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods
+*How do neurotypical and neurodiverse players differ in their gaming behavior?* Using the neurodivergence data we collected (which includes, for example, `r table(intake$neuroIdenCondition_1)[1]` participants who identify as having autism and `r table(intake$neuroIdenCondition_2)[1]` who identify as having ADHD), researchers can explore differences in the types of games, gaming experiences, and trajectory of play over time between neurotypical and neurodiverse players. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods [@KilmerEtAl2023Therapeuticallya; ], with some researchers noting that research focuses on therapeutic interventions delivered through games to "cure" neurodivergent players of undesirable traits [@@SpielGerling2021Purpose]. Research on neurodivergent players' naturalistic gaming behaviour across platforms has to date received less attention. 
 
-Accuracy of self-reported data - inference from other papers
+*How do seasons and weather impact playtime?* Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. Quantifying these effects can better distinguish environmental factors driving video game play from other drivers (like work schedules or weekend routines) and improve our ability to predict regional changes to gaming behaviour on a day-to-day basis [@Palomba2019Digital], or the behavioural impacts of climate change in the long term.
+
+*Does irregular, extended, or overnight play predict subsequent rises in problematic play, and can telemetry provide early warning signals?* Using the data we collected about displacement---the extent to which gaming supports or interferes with other areas of life---as well as about gaming disorder (at Waves 1 and 6), telemetry can provide insights into patterns of gaming that coincide or lead to subsequent changes in the degree of problematic play. Long-term, more accurately identifying the longitudinal behavioural correlates of maladaptive gaming---beyond simple heuristics such as the average amount of weekly play in the last 6 months---can help us create personalized models and early warning systems for players and parents. 
 
 We encourage researchers from a wide range of disciplines to explore these or other questions using the data we present, which is freely available for reuse under a CC0 license.
 
 ## Limitations
 
-While this dataset represents a substantial step forward in holistic coverage of video game play, it remains imperfect: we did not capture data on PlayStation (\~19% of gaming market) or computer games played outside the Steam platform (\~11% of gaming market); on Nintendo, we do not have access to third-party titles (`r third_party_prop` of Nintendo play), and our coverage of smartphone play is limited by the difficulties and inconsistencies of screenshot-based donation and OCR retrieval.
+While this dataset represents a substantial step forward in holistic coverage of video game play, it remains imperfect: we did not capture data on PlayStation (\~19% of gaming market) or computer games played outside the Steam platform (\~11% of gaming market); on Nintendo, we do not have access to third-party titles (`r third_party_prop` of Nintendo play); our coverage of smartphone play is limited by the onerous workflow limiting the response rate, and the difficulties of reliable OCR extraction.
 
 We further are unable to identify idle time (when players have a game open but are not actively playing it) and account sharing (when players let friends or family use their account); some playtime values may therefore be overestimates of the person's true playtime, though we are unable to say by how much.
+
+Finally, while our sample is large, diverse, and reasonably well matched with national averages on certain demographic characteristics (e.g., ethnicity and education), is it unlikely to be representative either of the general population or the population of adults who play games. Selection effects are inherent to our study: not all players will be willing to share their gaming history and identifiable information with researchers, or to participate in an intensive battery of surveys. However, we are largely unable to quantify representativeness, as the (adult) gaming population is poorly understood in its own right. Although we have broad estimates of engagement among key demographic segments showing, for example, that men are more likely to play games [@Ofcom2023Online; @EntertainmentSoftwareAssociation20242024], digital trace data describing gaming in terms of amount, seasonality, specific titles and genres, or other factors remains lacking. In other words, we cannot say how representative our sample is of players in the US or UK, because we do not yet know what representative gaming behavior looks like [see e.g., @RehbeinEtAl2016Video]---or whether representativeness is even a meaningful aim [@Kaye2019Gaming].
 
 ## Future Work
 
@@ -2798,9 +2815,9 @@ appendix_tbl <- bind_rows(
       levels = c(
         "Once (baseline)",
         "Twice (biweekly waves 1 & 6)",
-        "Daily",
+        "Monthly (alternating biweekly surveys)",
         "Biweekly (every 2 weeks)",
-        "Monthly (alternating biweekly surveys)"
+        "Daily"
       ),
       ordered = TRUE
     )
