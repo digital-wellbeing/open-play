@@ -204,12 +204,20 @@ theme_update(
     linewidth = 1
   ),
 )
+
+# color palette
+nintendo_red <- "#E60012"
+steam_blue <- "#00ADEE"
+xbox_green <- "#107C10"
+ios_purple <- "#BF5AF2"
+android_orange <- "#FF9100"
+
 ```
 
 ```{r}
 #| label: data-read
 
-intake <- read_csv("data/clean/intake.csv.gz") |>
+intake <- read_csv("data/clean/survey_intake.csv.gz") |>
   mutate(
     enrollment_datetime = as.POSIXct(
       enrollment_date,
@@ -218,8 +226,8 @@ intake <- read_csv("data/clean/intake.csv.gz") |>
     ),
     study_end_datetime = enrollment_datetime + days(84)
   )
-diary <- read_csv("data/clean/diary.csv.gz")
-panel <- read_csv("data/clean/panel.csv.gz")
+daily <- read_csv("data/clean/survey_daily.csv.gz")
+biweekly <- read_csv("data/clean/survey_biweekly.csv.gz")
 nintendo <- read_csv("data/clean/nintendo.csv.gz")
 steam <- read_csv("data/clean/steam.csv.gz") |>
   mutate(
@@ -251,9 +259,9 @@ xbox_raw <- read_csv("data/raw/telemetry_xbox_raw.csv.gz") |>
 ```{r}
 #| label: summary-stats
 
-n_participants <- print_num(length(unique(panel$pid)))
-n_daily <- print_num(nrow(diary))
-n_biweekly <- print_num(nrow(panel))
+n_participants <- print_num(length(unique(biweekly$pid)))
+n_daily <- print_num(nrow(daily))
+n_biweekly <- print_num(nrow(biweekly))
 n_sessions <- print_num(nrow(nintendo) + nrow(xbox) + nrow(steam))
 n_hours <- print_num(
   (sum(nintendo$duration, na.rm = TRUE) +
@@ -395,8 +403,8 @@ telemetry_spans <- daily_all |>
 nHours <- number(sum(daily_all$minutes/60), accuracy = 0.1, big.mark = ",", scale_cut = cut_long_scale())
 nUsers <- number(n_distinct(daily_all$pid), accuracy = 1, big.mark = ",")
 nGames <- number(n_distinct(hourly_all$title_id), accuracy = 1, big.mark = ",")
-propFailedDiaryAttnCheck <- number(sum(diary$bpnsfs_failed_att_check)/nrow(diary)*100, accuracy = .1)
-propFailedPanelAttnCheck <- number(sum(panel$bangs_failed_att_check)/nrow(panel)*100, accuracy = .1)
+propFailedDailyAttnCheck <- number(sum(daily$bpnsfs_failed_att_check)/nrow(daily)*100, accuracy = .1)
+propFailedBiweeklyAttnCheck <- number(sum(biweekly$bangs_failed_att_check)/nrow(biweekly)*100, accuracy = .1)
 
 propDroppedXboxSessions <- number((1-(nrow(xbox) / nrow(xbox_raw))) * 100, accuracy = 0.1)
 
@@ -429,8 +437,8 @@ The dataset is openly available under a {{< meta data-license >}} license at {{<
 # ---- helpers ----
 # Get PIDs of participants who completed at least one survey
 survey_pids <- union(
-  panel |> mutate(pid = as.character(pid)) |> pull(pid) |> unique(),
-  diary |> mutate(pid = as.character(pid)) |> pull(pid) |> unique()
+  biweekly |> pull(pid) |> unique(),
+  daily |> pull(pid) |> unique()
 )
 
 avg_days_platform <- function(pltf, pids_filter = NULL) {
@@ -491,16 +499,16 @@ android_survey <- android |> filter(pid %in% survey_pids)
 overview <- bind_rows(
   summ_basic(intake, pid, "Intake survey", avg_days = 1),
   summ_basic(
-    diary,
+    daily,
     pid,
     "Daily surveys",
-    avg_days = nrow(diary) / n_distinct(diary$pid)
+    avg_days = nrow(daily) / n_distinct(daily$pid)
   ),
   summ_basic(
-    panel,
+    biweekly,
     pid,
     "Biweekly surveys",
-    avg_days = nrow(panel) / n_distinct(panel$pid)
+    avg_days = nrow(biweekly) / n_distinct(biweekly$pid)
   ),
   summ_basic(
     steam_survey,
@@ -582,7 +590,7 @@ node_counts <- intake |>
     stage2 = ifelse(is.na(linked_platforms), "Ineligible", "Linked ≥1 account"),
     stage3 = ifelse(qualified, "Recent trace data", "No recent trace data"),
     stage4 = ifelse(
-      pid %in% panel$pid,
+      pid %in% biweekly$pid,
       "Began surveys",
       "Did not begin surveys"
     ),
@@ -606,7 +614,7 @@ sankey_data <- intake |>
       "No recent trace data"
     ),
     Surveys = ifelse(
-      pid %in% panel$pid,
+      pid %in% biweekly$pid,
       "Began surveys",
       "Did not begin surveys"
     ),
@@ -956,7 +964,7 @@ tt(
   style_tt(fontsize = 0.8)
 ```
 
-Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(panel$pid))` also completed at least one survey. On average, participants were. Due to errors in screening, four participants over the age of 40 were included.
+Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(biweekly$pid))` also completed at least one survey. On average, participants were. Due to errors in screening, four participants over the age of 40 were included.
 
 @tbl-demographics shows demographic characteristics of the final sample alongside general population benchmarks. Our participants are more likely to be male, non-binary, and bi- or multiracial than the general population. Although the demographics of the population of people who play video games are less well understood, our sample's demographics are broadly consistent with previously reported data [e.g., @EntertainmentSoftwareAssociation20242024].
 
@@ -1044,7 +1052,6 @@ ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
   labs(
     x = "Hour (local)",
     y = "Day",
-    title = "Diurnal play across Xbox, Nintendo, Steam"
   ) +
   theme(panel.grid.major.y = element_blank())
 
@@ -1173,7 +1180,7 @@ ggplot(paired_summary, aes(x = hours, y = platform)) +
   scale_shape_manual(values = c("Self-report" = 24, "Telemetry" = 22)) +
   scale_color_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
   scale_fill_manual(values = c("Self-report" = "#2B8CBE", "Telemetry" = "#D95F0E")) +
-  scale_y_discrete(expand = expansion(mult = c(0.1, 0.1))) +
+  scale_y_discrete(expand = expansion(mult = c(0.2, 0.2))) +
   scale_x_continuous(limits = c(0, 20), breaks = seq(0, 20, 4), expand = expansion(mult = c(0.02, 0.08))) +
   guides(
     shape = guide_legend(title = NULL),
@@ -1187,7 +1194,6 @@ ggplot(paired_summary, aes(x = hours, y = platform)) +
   ) +
   theme(
     legend.position = "bottom",
-    axis.text.y = element_text(size = 12, face = "bold")
   )
 
 ```
@@ -1215,22 +1221,20 @@ We collected a variety of self-report measures at different time scales. We brie
 #| out.width: 80%
 
 
-# Identify participants who completed between 1 and 6 biweekly panel responses
-# Exclude participants with 0 or more than 6 panel responses
-panel_participants <- panel |>
+# Identify participants who completed between 1 and 6 biweekly surveys
+biweekly_participants <- biweekly |>
   group_by(pid) |>
   summarise(
     study_start = min(date, na.rm = TRUE),
-    n_panels = n(),
+    n_surveys = n(),
     .groups = "drop"
   ) |>
-  filter(n_panels >= 1 & n_panels <= 6) |>  # Only 1-6 panel responses
-  mutate(pid = as.character(pid))
+  filter(n_surveys >= 1 & n_surveys <= 6) # Only 1-6 biweekly responses
 
 # Join study start dates and calculate study day
-# Only include participants who completed between 1-6 biweekly panels
+# Only include participants who completed between 1-6 biweekly surveys
 daily_with_study_day <- daily_all |>
-  inner_join(panel_participants |> select(pid, study_start), by = "pid") |>
+  inner_join(biweekly_participants |> select(pid, study_start), by = "pid") |>
   mutate(
     study_day = as.integer(floor(as.numeric(difftime(day_local, study_start, units = "days")))) + 1
   ) |>
@@ -1280,11 +1284,10 @@ selected_pids <- c(
   "p75" = find_closest_multiplatform_participant(percentiles[3], total_playtime)
 )
 
-# Process panel data to get wellbeing scores
-# Only include participants who completed at least one biweekly panel
-panel_wellbeing <- panel |>
-  mutate(pid = as.character(pid)) |>
-  inner_join(panel_participants |> select(pid, study_start), by = "pid") |>
+# Process biweekly data to get wellbeing scores
+# Only include participants who completed at least one biweekly survey
+biweekly_wellbeing <- biweekly |>
+  inner_join(biweekly_participants |> select(pid, study_start), by = "pid") |>
   mutate(
     study_day = as.integer(floor(as.numeric(difftime(date, study_start, units = "days")))) + 1
   ) |>
@@ -1343,9 +1346,9 @@ plot_data_complete <- complete_grid |>
             by = c("pid", "study_day", "platform")) |>
   mutate(minutes = replace_na(minutes, 0))
 
-# Calculate panel-specific max playtime for free gaming time y-axis
-# Wellbeing axis will be fixed at 14-70 across all panels
-panel_max_playtime <- plot_data_complete |>
+# Calculate biweekly-specific max playtime for free gaming time y-axis
+# Wellbeing axis will be fixed at 14-70 across all biweeklies
+biweekly_max_playtime <- plot_data_complete |>
   group_by(percentile, study_day) |>
   summarise(daily_total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
   group_by(percentile) |>
@@ -1362,18 +1365,18 @@ for (i in seq_along(pct_levels)) {
 
   # Filter data for this percentile
   plot_data_pct <- plot_data_complete |> filter(percentile == pct_level)
-  wellbeing_data_pct <- panel_wellbeing |> filter(percentile == pct_level)
+  wellbeing_data_pct <- biweekly_wellbeing |> filter(percentile == pct_level)
 
-  # Get panel-specific max playtime
-  panel_max <- panel_max_playtime |> filter(percentile == pct_level) |> pull(max_playtime)
+  # Get biweekly-specific max playtime
+  biweekly_max <- biweekly_max_playtime |> filter(percentile == pct_level) |> pull(max_playtime)
 
-  # Calculate panel-specific coefficient for dual axis
-  # Wellbeing is fixed at 14-70 (range of 56), gaming time y-axis is free per panel
+  # Calculate biweekly-specific coefficient for dual axis
+  # Wellbeing is fixed at 14-70 (range of 56), gaming time y-axis is free per biweekly
   wb_range <- 56  # Fixed wellbeing range (70 - 14)
 
   # The coefficient determines how wellbeing values map to the playtime y-axis
-  # We set it based on panel_max, but need to ensure y-axis limit shows full wellbeing range
-  coeff <- panel_max / wb_range
+  # We set it based on biweekly_max, but need to ensure y-axis limit shows full wellbeing range
+  coeff <- biweekly_max / wb_range
 
   # Calculate the y-axis maximum to ensure wellbeing 14-70 is fully visible
   # We need the y-axis to extend to at least (70-14)*coeff in playtime units
@@ -1440,7 +1443,15 @@ for (i in seq_along(pct_levels)) {
       axis.text.y.right = element_text(color = "#FF6B35", size = 9),
       axis.title.y.left = if (is_middle) element_text(size = 10) else element_blank(),
       plot.title = element_text(size = 11, hjust = 0.5),
-      axis.title.x = if (is_bottom) element_text() else element_blank()
+      axis.title.x = if (is_bottom) element_text() else element_blank(),
+      strip.background = element_rect(fill = "black"),
+      strip.text = element_text(color = "white", size = 10),
+      panel.grid.minor = element_blank(),
+      panel.border = element_rect(
+        colour = "black",
+        fill = NA,
+        linewidth = 1
+      )
     )
 
   plots_list[[pct_level]] <- p_temp
@@ -1451,7 +1462,11 @@ wrap_plots(plots_list, ncol = 1, guides = "collect") +
   plot_annotation(
     theme = theme(
       plot.title = element_text(size = 14, face = "bold"),
-      plot.subtitle = element_text(size = 11)
+      plot.subtitle = element_text(size = 11),
+      legend.key.height = unit(3, "mm"),
+      legend.key.width  = unit(5, "mm"),
+      legend.text = element_text(size = 8),
+      legend.title = element_text(size = 9)
     )
   ) &
   theme(legend.position = "bottom")
@@ -1479,12 +1494,12 @@ simon_sdl <- simon |>
   )
 ```
 
-Overall, `{r} knitr::combine_words(simon_n$n)` participants completed the Simon task at panel waves 1, 3, and 5. The average performances were approximately 10 points lower than in the in-person study of @burgoyneNatureMeasurementAttention2023 (Figure 16). Participants on mobile devices generally attained lower scores than those not on mobile devices (@fig-simon, rows), but performance was generally stable across the three waves (@fig-simon, columns).
+Overall, `{r} knitr::combine_words(simon_n$n)` participants completed the Simon task at biweekly waves 1, 3, and 5. The average performances were approximately 10 points lower than in the in-person study of @burgoyneNatureMeasurementAttention2023 (Figure 16). Participants on mobile devices generally attained lower scores than those not on mobile devices (@fig-simon, rows), but performance was generally stable across the three waves (@fig-simon, columns).
 
 ```{r}
 #| label: fig-simon
 #| fig-cap: Histograms of participants' Simon Squared task scores across study waves. Points and bars indicate means ±1 standard deviation.
-#| fig-asp: 0.3
+#| fig-asp: 0.4
 
 simon |>
   ggplot() +
@@ -1519,7 +1534,7 @@ TODO
 
 We implemented a variety of data quality checks.
 
-1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r propFailedDiaryAttnCheck`% flagged, biweekly: `r propFailedPanelAttnCheck`).
+1.  In each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r propFailedDailyAttnCheck`% flagged, biweekly: `r propFailedBiweeklyAttnCheck`).
 2.  In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 10 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we excluded 
 3.  In the time use, we flag any cases with fewer than 5 distinct activities logged in a day, or that are missing any
 
@@ -1560,36 +1575,31 @@ get_study_days <- function(dates, pid, intake_data) {
 }
 
 # Identify participants based on actual survey participation
-uk_pids <- panel |>
-  mutate(pid = as.character(pid)) |>
+uk_pids <- biweekly |>
   filter(
     pid %in%
       (intake |>
-        mutate(pid = as.character(pid)) |>
         filter(country == "UK") |>
         pull(pid))
   ) |>
   pull(pid) |>
   unique()
 
-us_pids_panel <- panel |>
-  mutate(pid = as.character(pid)) |>
+us_pids_biweekly <- biweekly |>
   filter(
     pid %in%
       (intake |>
-        mutate(pid = as.character(pid)) |>
         filter(country == "US") |>
         pull(pid))
   ) |>
   pull(pid) |>
   unique()
 
-us_pids_diary <- diary |>
-  mutate(pid = as.character(pid)) |>
+us_pids_daily <- daily |>
   pull(pid) |>
   unique()
 
-us_pids <- union(us_pids_panel, us_pids_diary)
+us_pids <- union(us_pids_biweekly, us_pids_daily)
 
 # Helper function to calculate survey missingness
 calc_survey_missingness <- function(
@@ -2313,25 +2323,25 @@ calc_task_missingness <- function(
 }
 
 # Calculate all statistics
-diary_stats_us <- calc_survey_missingness(
-  diary,
+daily_stats_us <- calc_survey_missingness(
+  daily,
   us_pids,
   "US",
   "Daily Diary",
   30
 )
-panel_stats_us <- calc_survey_missingness(
-  panel,
+biweekly_stats_us <- calc_survey_missingness(
+  biweekly,
   us_pids,
   "US",
-  "Biweekly Panel",
+  "Biweekly",
   6
 )
-panel_stats_uk <- calc_survey_missingness(
-  panel,
+biweekly_stats_uk <- calc_survey_missingness(
+  biweekly,
   uk_pids,
   "UK",
-  "Biweekly Panel",
+  "Biweekly",
   6
 )
 xbox_stats_us <- calc_telemetry_missingness(xbox, "Xbox", us_pids, "US")
@@ -2359,15 +2369,15 @@ simon_stats_uk <- calc_task_missingness(simon, uk_pids, "UK", "Simon Task", 3)
 
 # Combine all statistics
 missingness_table <- bind_rows(
-  diary_stats_us,
-  panel_stats_us,
+  daily_stats_us,
+  biweekly_stats_us,
   xbox_stats_us,
   nintendo_stats_us,
   steam_stats_us,
   ios_stats_us,
   android_stats_us,
   simon_stats_us,
-  panel_stats_uk,
+  biweekly_stats_uk,
   xbox_stats_uk,
   nintendo_stats_uk,
   steam_stats_uk,

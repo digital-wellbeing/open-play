@@ -16,8 +16,8 @@ source("R/helpers.R")
 #| label: load-data-raw
 
 intake <- read_csv("data/raw/survey_intake_raw.csv.gz")
-diary <- read_csv("data/raw/survey_diary_raw.csv.gz")
-panel <- read_csv("data/raw/survey_panel_raw.csv.gz")
+daily <- read_csv("data/raw/survey_daily_raw.csv.gz")
+biweekly <- read_csv("data/raw/survey_biweekly_raw.csv.gz")
 
 nintendo <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
 steam <- read_csv("data/raw/telemetry_steam_raw.csv.gz")
@@ -205,9 +205,8 @@ ios <- ios |>
 ```{r}
 #| label: preprocess-surveys
 
-diary <- diary |> 
+daily <- daily |> 
   filter(wave <= 30)
-
 
 ```
 
@@ -222,9 +221,9 @@ path_out <- path("data", "clean")
 dir_create(path_out)
 
 # Write files
-write_csv(intake, path(path_out, "intake", ext = "csv.gz"))
-write_csv(diary, path(path_out, "diary", ext = "csv.gz"))
-write_csv(panel, path(path_out, "panel", ext = "csv.gz"))
+write_csv(intake, path(path_out, "survey_intake", ext = "csv.gz"))
+write_csv(daily, path(path_out, "survey_daily", ext = "csv.gz"))
+write_csv(biweekly, path(path_out, "survey_biweekly", ext = "csv.gz"))
 write_csv(nintendo_clean, path(path_out, "nintendo", ext = "csv.gz"))
 write_csv(steam_clean, path(path_out, "steam", ext = "csv.gz"))
 write_csv(xbox_clean, path(path_out, "xbox", ext = "csv.gz"))
