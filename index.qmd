@@ -1202,7 +1202,7 @@ We collected a variety of self-report measures at different time scales. We brie
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-case-study
-#| fig-cap: "Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior."
+#| fig-cap: "Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (short WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior."
 #| fig-asp: .8
 #| out.width: 80%
 
@@ -1281,12 +1281,12 @@ biweekly_wellbeing <- biweekly |>
   # Calculate wellbeing composite scores
   rowwise() |>
   mutate(
-    # WEMWBS - mental wellbeing (14 items, scale 1-5 each, summed for total score 14-70)
+    # WEMWBS - mental wellbeing (short version: 7 items, scale 1-5 each, summed for total score 7-35)
     wemwbs = sum(c_across(starts_with("wemwbs_")), na.rm = TRUE)
   ) |>
   ungroup() |>
   select(pid, study_day, wave, wemwbs) |>
-  filter(!is.na(wemwbs) & wemwbs >= 14) |>  # Remove invalid/missing wellbeing scores
+  filter(!is.na(wemwbs) & wemwbs >= 7) |>  # Remove invalid/missing wellbeing scores
   mutate(
     percentile = case_when(
       pid == selected_pids["p25"] ~ "25th Percentile",
@@ -1333,12 +1333,27 @@ plot_data_complete <- complete_grid |>
   mutate(minutes = replace_na(minutes, 0))
 
 # Calculate biweekly-specific max playtime for free gaming time y-axis
-# Wellbeing axis will be fixed at 14-70 across all biweeklies
+# Wellbeing axis will be fixed at 7-35 across all biweeklies
 biweekly_max_playtime <- plot_data_complete |>
   group_by(percentile, study_day) |>
   summarise(daily_total = sum(minutes, na.rm = TRUE), .groups = "drop") |>
   group_by(percentile) |>
   summarise(max_playtime = max(daily_total, na.rm = TRUE), .groups = "drop")
+
+# Calculate global max playtime across all participants to ensure consistent wellbeing scale
+global_max_playtime <- max(biweekly_max_playtime$max_playtime, na.rm = TRUE)
+
+# Fixed wellbeing range
+wb_range <- 28  # Fixed wellbeing range (35 - 7)
+
+# Calculate fixed coefficient based on global max, ensuring wellbeing scale is consistent
+# The coefficient maps wellbeing values to the playtime y-axis
+coeff_global <- global_max_playtime / wb_range
+
+# Calculate the y-axis maximum to ensure wellbeing 7-35 is fully visible
+y_for_wb35 <- (35 - 7) * coeff_global
+y_min_for_wellbeing <- y_for_wb35 * 1.15  # Add 15% headroom
+y_axis_max_global <- max(global_max_playtime, y_min_for_wellbeing)
 
 # Create separate plots for each percentile to handle dual y-axes properly
 plots_list <- list()
@@ -1353,24 +1368,6 @@ for (i in seq_along(pct_levels)) {
   plot_data_pct <- plot_data_complete |> filter(percentile == pct_level)
   wellbeing_data_pct <- biweekly_wellbeing |> filter(percentile == pct_level)
 
-  # Get biweekly-specific max playtime
-  biweekly_max <- biweekly_max_playtime |> filter(percentile == pct_level) |> pull(max_playtime)
-
-  # Calculate biweekly-specific coefficient for dual axis
-  # Wellbeing is fixed at 14-70 (range of 56), gaming time y-axis is free per biweekly
-  wb_range <- 56  # Fixed wellbeing range (70 - 14)
-
-  # The coefficient determines how wellbeing values map to the playtime y-axis
-  # We set it based on biweekly_max, but need to ensure y-axis limit shows full wellbeing range
-  coeff <- biweekly_max / wb_range
-
-  # Calculate the y-axis maximum to ensure wellbeing 14-70 is fully visible
-  # We need the y-axis to extend to at least (70-14)*coeff in playtime units
-  # Add more buffer to ensure the 70 tick is displayed by ggplot2
-  # Using a larger multiplier to give more headroom
-  y_for_wb70 <- (70 - 14) * coeff  # Playtime value corresponding to wellbeing=70
-  y_axis_max <- y_for_wb70 + (y_for_wb70 * 0.15)  # Add 15% headroom above wellbeing=70
-
   p_temp <- ggplot() +
     # Playtime bars (primary y-axis)
     geom_col(
@@ -1381,7 +1378,7 @@ for (i in seq_along(pct_levels)) {
     # Wellbeing line (secondary y-axis) - transform to playtime scale
     geom_line(
       data = wellbeing_data_pct,
-      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
+      aes(x = study_day, y = (wemwbs - 7) * coeff_global, group = 1),
       color = "#FF6B35",
       linewidth = 1.2,
       linetype = "solid",
@@ -1391,7 +1388,7 @@ for (i in seq_along(pct_levels)) {
     # Filled square points
     geom_point(
       data = wellbeing_data_pct,
-      aes(x = study_day, y = (wemwbs - 14) * coeff, group = 1),
+      aes(x = study_day, y = (wemwbs - 7) * coeff_global, group = 1),
       color = "#FF6B35",
       size = 2.5,
       shape = 15,  # solid square
@@ -1413,12 +1410,12 @@ for (i in seq_along(pct_levels)) {
     ) +
     scale_y_continuous(
       name = if (is_middle) "Total Daily Playtime (minutes)" else NULL,
-      limits = c(0, y_axis_max),
+      limits = c(0, y_axis_max_global),
       expand = c(0, 0),
       sec.axis = sec_axis(
-        transform = ~ . / coeff + 14,
-        name = if (is_middle) "Wellbeing (WEMWBS)" else NULL,
-        breaks = seq(14, 70, by = 14)
+        transform = ~ . / coeff_global + 7,
+        name = if (is_middle) "Wellbeing (SWEMWBS)" else NULL,
+        breaks = seq(7, 35, by = 7)
       )
     ) +
     ggtitle(pct_level) +
