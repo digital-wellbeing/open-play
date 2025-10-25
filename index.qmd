@@ -611,11 +611,10 @@ sankey_data <- intake |>
   mutate(
     node = factor(node, levels = rev(lvl)),
     next_node = factor(next_node, levels = rev(lvl)),
-    # build a plotmath expression: bold("Label")~"\n"~Count
-    node_label = sprintf('atop(bold("%s"), "%s")', node, n)
+    node_label = sprintf("%s\n%s", as.character(node), n),  # force character + real newline
+    node_label = stringi::stri_replace_all_fixed(node_label, "\\n", "\n")  # just in case
   )
 
-# 2. plot with parse = TRUE
 ggplot(
   sankey_data,
   aes(
@@ -629,7 +628,7 @@ ggplot(
 ) +
   geom_sankey(flow.alpha = .6, node.color = "gray30") +
   # pass parse = TRUE into the label layer
-  geom_sankey_label(parse = TRUE, size = 3, color = "white", fill = "gray40") +
+  geom_sankey_label(parse = FALSE, size = 3, color = "white", fill = "gray40", vjust = 1.5) +
   scale_fill_viridis_d(drop = FALSE) +
   theme_sankey() +
   theme(
