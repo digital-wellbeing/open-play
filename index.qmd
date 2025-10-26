@@ -392,6 +392,7 @@ telemetry_spans <- daily_all |>
     telemetry_start = min(day_local, na.rm = TRUE),
     telemetry_end = max(day_local, na.rm = TRUE) + hours(1), # end of last hour bin
     week = floor_date(telemetry_end, "week"),
+    n_weeks = as.integer(difftime(telemetry_end, telemetry_start, units = "weeks")) + 1,
     .groups = "drop"
   )
 ```
@@ -402,6 +403,10 @@ telemetry_spans <- daily_all |>
 n_hours <- number(sum(daily_all$minutes/60), accuracy = 0.1, big.mark = ",", scale_cut = cut_long_scale())
 n_users <- number(n_distinct(daily_all$pid), accuracy = 1, big.mark = ",")
 n_games <- number(n_distinct(hourly_all$title_id), accuracy = 1, big.mark = ",")
+n_months <- number(max(telemetry_spans$n_weeks)/4.2, accuracy = 1)
+n_surveys <- number(nrow(daily) + nrow(biweekly), accuracy = 1, big.mark = ",", scale_cut = cut_long_scale())
+n_simon <- number(nrow(simon), accuracy = .1, big.mark = ",", scale_cut = cut_long_scale())
+
 prop_failed_daily_attn <- number(sum(daily$bpnsfs_failed_att_check)/nrow(daily)*100, accuracy = .1)
 prop_failed_biweekly_attn <- number(sum(biweekly$bangs_failed_att_check)/nrow(biweekly)*100, accuracy = .1)
 
@@ -420,7 +425,7 @@ n_timeuse_entries_per_day <- number(time_use |>
 
 ---
 abstract: |
-  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected over 12 weeks that included fourteen daily assessments, six biweekly surveys, three biweekly cognitive tests, and play telemetry for X months. The data include X hours of video game play across X titles, X responses to X survey instruments, and X attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
+  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected over 12 weeks that included thirty daily assessments, six biweekly surveys, three biweekly cognitive tests, and play telemetry for `{r} n_months` months. The data include `{r} n_hours` hours of video game play across `{r} n_games` titles, `{r} n_surveys` responses to 14 survey instruments, and `{r} n_simon` attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
 ---
 
 # Introduction
@@ -629,8 +634,9 @@ ggplot(
 ) +
   geom_sankey(flow.alpha = .6, node.color = "gray30") +
   # pass parse = TRUE into the label layer
-  geom_sankey_label(parse = FALSE, size = 3, color = "white", fill = "gray40", vjust = 1.5) +
+  geom_sankey_label(parse = FALSE, size = 3, color = "white", fill = "gray40", vjust = 1.4) +
   scale_fill_viridis_d(drop = FALSE) +
+  scale_x_discrete(position = "top") +
   theme_sankey() +
   theme(
     legend.position = "none",
@@ -678,17 +684,17 @@ tibble(
   ),
   `Account Linking Process` = c(
     "Participants share an identifier contained within a QR code on Nintendo web interface. Nintendo of America/Europe uses this identifier to retrieve gameplay data and share it with the research team.",
-    "Participants consent to data sharing by opting in to the study on Xbox Insiders with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in pseudonymized form.",
-    "Participants sign up for Gameplay.Science (https://gameplay.science), an open-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID).",
-    "In each biweekly survey, participants submitted screenshots from the built-in iOS Screen Time app. These show details of the previous 3 weeks' of gaming app use (what games were played and for how long). Data was extracted using OCR.",
-    "In each biweekly survey, participants submitted screenshots from the Digital Screen Time app, if available on their Android OS. These show details of the previous 3 weeks' of phone use (what app categories are used and for how long). Data was extracted using OCR."
+    "Participants consent to data sharing by opting in to the study on Xbox Insiders with their Xbox account. Microsoft retrieved and shared pseudonymized gameplay data for all consented accounts.",
+    "Using Gameplay.Science (https://gameplay.science), an open-source platform for tracking Steam gameplay, participants consented to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID).",
+    "Screenshots from the iOS Screen Time app, showing details of up to 3 prior weeks of gaming. Data was extracted using OCR.",
+    "Screenshots from the Digital Screen Time interface (if available), showing details of up to 3 prior weeks of gaming. Data was extracted using OCR."
   ),
   `Type of Data Collected` = c(
-    "Session records (what game was played, at what time, for how long) for 1st party games (games published in whole or in part by Nintendo, but not by third party publishers such as Electronic Arts).",
-    "Session records (what game was played, at what time, for how long). The name of the game replaced with a random persistent identifier for all third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared.",
-    "Incremental playtime per game (every hour, the total time spent playing during the previous hour)",
-    "Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)",
-    "Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)"
+    "Session records (what game was played, at what time, for how long) for first-party games only (games published in whole or in part by Nintendo).",
+    "Session records (what game was played, at what time, for how long). Game titles were replaced with a random persistent identifier for third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared.",
+    "Hourly aggregates per game (every hour, the total time spent playing during the previous hour)",
+    "Daily aggregates (e.g., 2 total hours of gaming)",
+    "Daily aggregates (e.g., 2 total hours of gaming)"
   )
 ) |>
   tt(
@@ -1512,7 +1518,7 @@ simon |>
 
 ```{r}
 #| label: fig-time-use
-#| fig-cap: "Illustrative single-day overview of one study day, consisting of a participant's time use diary (top panel), gaming as recorded through telemetry (middle panel), and survey completion (bottom panel)."
+#| fig-cap: "Illustrative single-day overview of one study day, consisting of a participant's time use diary (top row), gaming as recorded through telemetry (middle row), and daily survey completion (bottom row)."
 #| fig-asp: 0.4
 #| out.width: 95%
 
