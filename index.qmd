@@ -162,6 +162,7 @@ library(litedown)
 library(sparkline)
 library(Hmisc)
 library(ggtext)
+library(svglite)
 
 # avoid conflicts
 library(conflicted)
@@ -734,6 +735,7 @@ Daily survey links were sent every day at 2pm local time for the participant and
 
 ## Participants
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-demographics
 #| tbl-cap: "Sample demographics for qualified participants with general-population benchmarks (where available)."
@@ -948,6 +950,7 @@ tt(
 ) |>
   style_tt(fontsize = 0.8)
 ```
+:::
 
 Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(biweekly$pid))` also completed at least one survey. On average, participants were. Due to errors in screening, four participants over the age of 40 were included.
 
@@ -977,7 +980,8 @@ In @fig-heatmap, we visualize the distribution of play across days and times. As
 #| label: fig-heatmap
 #| fig-cap: "Diurnal play across Xbox, Nintendo, Steam."
 #| fig-asp: 0.4
-#| out-width: 95%
+#| out-width: 85%
+#| dev: svglite
 
 # expected number of occurrences of each slot in telemetry span
 slot_exposure <- telemetry_spans |>
@@ -1026,20 +1030,20 @@ slot_summary <- slot_per_player |>
 
 
 ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
-  geom_raster() +
+  geom_tile() +
   scale_x_continuous(breaks = 0:23) +
   scale_fill_viridis_c(
     option = "magma",
     labels = scales::percent_format(accuracy = .1),
-    # limits = c(0, .028), breaks = seq(0, .028, .007),
-    name = "Probability of active play"
+    limits = c(0, .08), breaks = seq(0, .08, .02),
+    name = "Probability of\nactive play"
   ) +
   labs(
     x = "Hour (local)",
     y = "Day",
   ) +
   theme(panel.grid.major.y = element_blank(),
-        axis.text.x = element_text(angle = 30))
+        axis.text.x = element_text(size = 10))
 
 ```
 :::
