@@ -82,3 +82,30 @@ canonicalize_xbox_sessions <- function(df, tol_sec = 60) {
   out <- out |> select(any_of(names(df)), everything())
   out
 }
+
+avg_days_platform <- function(pltf, pids_filter = NULL) {
+  data <- daily_all |> filter(platform == pltf)
+  if (!is.null(pids_filter)) data <- data |> filter(pid %in% pids_filter)
+  data |>
+    group_by(pid) |>
+    summarise(days = sum(minutes > 0, na.rm = TRUE), .groups = "drop") |>
+    summarise(avg = median(days, na.rm = TRUE), .groups = "drop") |>
+    pull(avg) %||% NA_real_
+}
+
+total_hours <- function(df) {
+  mm <- if ("duration" %in% names(df)) df$duration else if ("minutes" %in% names(df)) df$minutes else NULL
+  if (is.null(mm)) NA_real_ else sum(mm, na.rm = TRUE) / 60
+}
+
+summ_basic <- function(df, pid, label, avg_days = NA_real_) {
+  by_pid <- df |> count({{ pid }}, name = "events")
+  tibble(
+    `Data type` = label,
+    Participants = n_distinct(pull(df, {{ pid }})),
+    Events = nrow(df),
+    Hours = total_hours(df),
+    `Median events / user` = median(by_pid$events, na.rm = TRUE),
+    `Median active days` = avg_days
+  )
+}

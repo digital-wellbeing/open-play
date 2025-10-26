@@ -3,7 +3,7 @@ title: |
   A longitudinal dataset of multi-platform video game digital trace data and psychological assessments
 author:
   - name: Nick Ballou
-    corresponding: false
+    corresponding: true
     orcid: 0000-0003-4126-0696
     email: nick@nickballou.com
     affiliations:
@@ -66,7 +66,7 @@ author:
     #   - editing
 
   - name: Andrew K Przybylski
-    corresponding: true
+    corresponding: false
     email: andy.przybylski@oii.ox.ac.uk
     orcid: 0000-0001-5547-2185
     affiliations:
@@ -162,6 +162,7 @@ library(litedown)
 library(sparkline)
 library(Hmisc)
 library(ggtext)
+library(svglite)
 
 # avoid conflicts
 library(conflicted)
@@ -391,6 +392,7 @@ telemetry_spans <- daily_all |>
     telemetry_start = min(day_local, na.rm = TRUE),
     telemetry_end = max(day_local, na.rm = TRUE) + hours(1), # end of last hour bin
     week = floor_date(telemetry_end, "week"),
+    n_weeks = as.integer(difftime(telemetry_end, telemetry_start, units = "weeks")) + 1,
     .groups = "drop"
   )
 ```
@@ -401,6 +403,10 @@ telemetry_spans <- daily_all |>
 n_hours <- number(sum(daily_all$minutes/60), accuracy = 0.1, big.mark = ",", scale_cut = cut_long_scale())
 n_users <- number(n_distinct(daily_all$pid), accuracy = 1, big.mark = ",")
 n_games <- number(n_distinct(hourly_all$title_id), accuracy = 1, big.mark = ",")
+n_months <- number(max(telemetry_spans$n_weeks)/4.2, accuracy = 1)
+n_surveys <- number(nrow(daily) + nrow(biweekly), accuracy = 1, big.mark = ",", scale_cut = cut_long_scale())
+n_simon <- number(nrow(simon), accuracy = .1, big.mark = ",", scale_cut = cut_long_scale())
+
 prop_failed_daily_attn <- number(sum(daily$bpnsfs_failed_att_check)/nrow(daily)*100, accuracy = .1)
 prop_failed_biweekly_attn <- number(sum(biweekly$bangs_failed_att_check)/nrow(biweekly)*100, accuracy = .1)
 
@@ -419,20 +425,26 @@ n_timeuse_entries_per_day <- number(time_use |>
 
 ---
 abstract: |
-  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected over 12 weeks that included fourteen daily assessments, six biweekly surveys, three biweekly cognitive tests, and play telemetry for X months. The data include X hours of video game play across X titles, X responses to X survey instruments, and X attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
+  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected over 12 weeks that included thirty daily assessments, six biweekly surveys, three biweekly cognitive tests, and play telemetry for `{r} n_months` months. The data include `{r} n_hours` hours of video game play across `{r} n_games` titles, `{r} n_surveys` responses to 14 survey instruments, and `{r} n_simon` attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
 ---
 
 # Introduction
 
-Digital trace data---behavioral logs automatically collected by digital devices and online platforms---are necessary to better understand technology use and its psychological and health effects [@BurgessEtAl2024Potential; @Freelon2014Interpretation; @GriffioenEtAl2020improveda]. Self-reports of technology use do not accurately reflect objective technology use [@ParryEtAl2021systematic; @sewallRoleDepressionDiscrepancy2021], and are unsuitable for examining many phenomena of interest, such as seasonal patterns over long temporal horizons; high-frequency behavioral analysis at the level of hours, minutes, or even seconds; historical content analysis; and others due to limited accuracy and temporal resolution. Moreover, when technology use's relations to psychological survey instruments are of interest, digital trace data removes the possibility of  common methods bias.
+Digital trace data---behavioral logs automatically collected by digital devices and online platforms---are necessary to better understand technology use and its psychological and health effects [@BurgessEtAl2024Potential; @Freelon2014Interpretation; @GriffioenEtAl2020improveda]. Self-reports of technology use do not accurately reflect objective technology use [@ParryEtAl2021systematic; @sewallRoleDepressionDiscrepancy2021], and are unsuitable for examining many phenomena of interest, such as seasonal patterns over long temporal horizons; high-frequency behavioral analysis at the level of hours, minutes, or even seconds; historical content analysis; and others due to limited accuracy and temporal resolution. Moreover, when technology use's relations to psychological survey instruments are of interest, digital trace data removes the possibility of common methods bias.
 
-To combat these issues, digital trace data is increasingly used in studies of smartphone and social media use [e.g. @sewallDoesObjectivelyMeasured2022], but less so in studies of video game play---one of the world's foremost leisure activities [@Ofcom2023Online; @EntertainmentSoftwareAssociation20242024]. Trace data in video games primarily falls under the field of game analytics or data science, but (1) the majority of these studies involve the use of proprietary data that is not publicly shared, and (2) the focus of this field tends to be more on player behavior metrics with clear industry value rather than academic inquiry for the common good.
+To combat these issues, digital trace data is increasingly used in studies on the psychological effects of smartphone and social media [e.g. @sewallDoesObjectivelyMeasured2022; @SiebersEtAl2024Adolescents; @YapEtAl2024Digital]. But despite the rapid growth of research using trace data from social media and smartphones, comparable efforts in video games remain rare. This absence is notable given that games constitute one of the most popular and psychologically rich forms of digital media, engaging billions of players worldwide across diverse genres, platforms, and social contexts [@Kaye2019Gaming; @EntertainmentSoftwareAssociation20242024, @Ofcom2023Online]. As a result, our understanding of video game play is often limited to narrow slices of behavior---single titles, single platforms, or small samples--leaving open questions about how gaming affects and interacts with people’s everyday lives.
 
-Where trace data has been used in video games studies, it has largely been limited to a few games [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly] or single platform [@BallouEtAl2024Registered; @BallouEtAl2025Perceived]. However, players commonly play many games on multiple platforms. Moreover, the scope of psychological attributes in these studies tends to be limited to e.g. a small set of well-being outcomes.
+Existing use of trace data in video games typically takes the form of eithe game analytics research, often conducted in collaboration with industry at the level of an individual game, typically focused on industry-relevant behavioral rather than harms and benefits; or narrow-scope investigations into play and health within a single game or gaming platform (e.g., Xbox). Each of these approaches has limitations that constrain their utility for understanding gaming behavior in the wild.
 
-## Current dataset
+Game analytics research has made substantial contributions to understanding player behavior, engagement, and game design processes [@SifaEtAl2021LargeScale; @ElsonEtAl2014More]. However, these studies are often conducted within commercial partners using proprietary data that are not publicly shared [@KahnEtAl2014why; @LiuEtAl2024Connecting], which limits transparency, reproducibility, and opportunities for independent reanalysis. Moreover, because their objectives often center on optimizing player experience, design, or monetization rather than examining psychological or health outcomes [e.g., @RattingerEtAl2016Integrating; @CanossaEtAl2019influencers], findings may not speak directly to questions of wellbeing. In other cases, game analytics is conducted on fully anonymized data wherein researchers have access to detailed behavioral logs but little information about who the players are or survey data that could provide indicators of mental health and motivation [@ZendleEtAl2023Crosscultural; @VuorreEtAl2021largescale].
 
-Here, we present a longitudinal dataset of digital trace data across multiple gaming platforms consisting of `r n_participants` participants, `r n_daily` daily surveys, `r n_biweekly` surveys, and a total of `r n_hours` of gameplay distributed across `r n_sessions`. Digital trace data was sourced for five distinct platforms—Xbox, Nintendo, Steam, iOS, and Android—through distinct piplines detailed below. The data collection methods were preregistered as part of a Stage 1 registered report (<https://osf.io/pb5nu>).
+Trace data research into games and wellbeing comprises a much smaller part of the literature with its own set of key limitations. Where trace data has been used in video games studies, it has largely been limited to a few games [@VuorreEtAl2022Time; @JohannesEtAl2021Video; @LarrieuEtAl2023How; @PerryEtAl2018onlineonly; @LiuEtAl2024Connecting] or single platform [@BallouEtAl2024Registered; @BallouEtAl2025Perceived]. However, players commonly play many games on multiple platforms. This fragmentation obscures a key part of real-world behavior: players’ shifting engagement patterns across consoles, PCs, and mobile devices. 
+
+A multi-platform approach enables (1) more diverse samples by allowing researchers to recruit from more than one gaming platform whose players differ in both gaming engagement and wider demographics [@VahloEtAl2017Digital; @EntertainmentSoftwareAssociation20242024], and (2) more comprehensive and ecologically valid investigations of how and when people play, whether different platforms substitute or complement one another, and how these choices relate to daily routines or broader temporal rhythms (e.g., weekends, seasons, or daylight variation). 
+
+Taken together, these considerations underscore the urgent need for comprehensive (i.e., multi-platform) and transparent data to advance the scientific study of video game play. The dataset presented here directly addresses this need by combining longitudinal telemetry from multiple gaming platforms with rich psychological and cognitive measures collected under preregistered, ethically approved conditions. We leverage both industry-facilitated data access from major gaming platforms and open-source, participant-driven tools [@KingPersily2020New; @Xiao2023Debate] to achieve unprecedented coverage of naturalistic play. By making these data openly available, we aim to provide a foundation for cumulative, methodologically rigorous, and theory-driven research on digital play and its role in everyday life.
+
+Here, we present a longitudinal dataset of digital trace data across multiple gaming platforms consisting of `r n_participants` participants, `r n_daily` daily surveys, `r n_biweekly` surveys, and a total of `r n_hours` of gameplay distributed across `r n_sessions`. Digital trace data was sourced for five platforms---Xbox, Nintendo, Steam, iOS, and Android---through distinct pipelines detailed below. The data collection methods were preregistered as part of a Stage 1 registered report (<https://osf.io/pb5nu>).
 
 The dataset is openly available under a {{< meta data-license >}} license at {{< meta data-url >}} for unrestricted reuse. @tbl-overview shows a high-level overview of the dataset.
 
@@ -440,37 +452,9 @@ The dataset is openly available under a {{< meta data-license >}} license at {{<
 ```{r}
 #| label: tbl-overview
 #| tbl-cap: "Overview of the dataset and sources."
-# ---- helpers ----
+
 survey_pids <- unique(c(biweekly$pid, daily$pid))
 
-avg_days_platform <- function(pltf, pids_filter = NULL) {
-  data <- daily_all |> filter(platform == pltf)
-  if (!is.null(pids_filter)) data <- data |> filter(pid %in% pids_filter)
-  data |>
-    group_by(pid) |>
-    summarise(days = sum(minutes > 0, na.rm = TRUE), .groups = "drop") |>
-    summarise(avg = median(days, na.rm = TRUE), .groups = "drop") |>
-    pull(avg) %||% NA_real_
-}
-
-total_hours <- function(df) {
-  mm <- if ("duration" %in% names(df)) df$duration else if ("minutes" %in% names(df)) df$minutes else NULL
-  if (is.null(mm)) NA_real_ else sum(mm, na.rm = TRUE) / 60
-}
-
-summ_basic <- function(df, pid, label, avg_days = NA_real_) {
-  by_pid <- df |> count({{ pid }}, name = "events")
-  tibble(
-    `Data type` = label,
-    Participants = n_distinct(pull(df, {{ pid }})),
-    Events = nrow(df),
-    Hours = total_hours(df),
-    `Median events / user` = median(by_pid$events, na.rm = TRUE),
-    `Median active days` = avg_days
-  )
-}
-
-# ---- table rows (order preserved) ----
 steam_survey    <- steam    |> filter(pid %in% survey_pids)
 nintendo_survey <- nintendo |> filter(pid %in% survey_pids)
 xbox_survey     <- xbox     |> filter(pid %in% survey_pids)
@@ -516,7 +500,6 @@ overview <- overview |>
   ) |>
   select(-`Median events / user (all telemetry)`)
 
-# ---- formatting + final column order ----
 overview <- overview |>
   mutate(
     `Survey Participants` = number(`Survey Participants`, accuracy = 1, big.mark = ","),
@@ -589,12 +572,12 @@ sankey_data <- intake |>
       "Ineligible",
       "Linked ≥1 account"
     ),
-    `Account Validation 1` = ifelse(
+    `Account\nValidation 1` = ifelse(
       pid %in% c(xbox$pid, nintendo$pid, steam$pid), 
       "Any trace data", 
       "No trace data"
     ),
-    `Account Validation 2` = ifelse(
+    `Account\nValidation 2` = ifelse(
       qualified,
       "Recent trace data",
       "No recent trace data"
@@ -606,16 +589,15 @@ sankey_data <- intake |>
     ),
     .keep = "none"
   ) |>
-  make_long(Screening, Linking, `Account Validation 1`, `Account Validation 2`, Surveys) |>
+  make_long(Screening, Linking, `Account\nValidation 1`, `Account\nValidation 2`, Surveys) |>
   left_join(node_counts, by = "node") |>
   mutate(
     node = factor(node, levels = rev(lvl)),
     next_node = factor(next_node, levels = rev(lvl)),
-    # build a plotmath expression: bold("Label")~"\n"~Count
-    node_label = sprintf('atop(bold("%s"), "%s")', node, n)
+    node_label = sprintf("%s\n%s", as.character(node), n),  # force character + real newline
+    node_label = stringi::stri_replace_all_fixed(node_label, "\\n", "\n")  # just in case
   )
 
-# 2. plot with parse = TRUE
 ggplot(
   sankey_data,
   aes(
@@ -629,8 +611,9 @@ ggplot(
 ) +
   geom_sankey(flow.alpha = .6, node.color = "gray30") +
   # pass parse = TRUE into the label layer
-  geom_sankey_label(parse = TRUE, size = 3, color = "white", fill = "gray40") +
+  geom_sankey_label(parse = FALSE, size = 1.8, color = "white", fill = "gray40", vjust = 1.4) +
   scale_fill_viridis_d(drop = FALSE) +
+  scale_x_discrete(position = "top") +
   theme_sankey() +
   theme(
     legend.position = "none",
@@ -678,17 +661,17 @@ tibble(
   ),
   `Account Linking Process` = c(
     "Participants share an identifier contained within a QR code on Nintendo web interface. Nintendo of America/Europe uses this identifier to retrieve gameplay data and share it with the research team.",
-    "Participants consent to data sharing by opting in to the study on Xbox Insiders with their Xbox account. Microsoft retrieved gameplay data for all consented accounts, and shares it with the research team in pseudonymized form.",
-    "Participants sign up for Gameplay.Science (https://gameplay.science), an open-source platform for tracking Steam gameplay. Participants consent to have their gameplay data monitored for the duration of the study. Their Steam ID is authenticated using the official Steam authentication API (OpenID).",
-    "In each biweekly survey, participants submitted screenshots from the built-in iOS Screen Time app. These show details of the previous 3 weeks' of gaming app use (what games were played and for how long). Data was extracted using OCR.",
-    "In each biweekly survey, participants submitted screenshots from the Digital Screen Time app, if available on their Android OS. These show details of the previous 3 weeks' of phone use (what app categories are used and for how long). Data was extracted using OCR."
+    "Participants consent to data sharing by opting in to the study on Xbox Insiders with their Xbox account. Microsoft retrieved and shared pseudonymized gameplay data for all consented accounts.",
+    "Using a web app we developed (https://gameplay.science), participants consented to have their gameplay data monitored for the duration of the study. Authentication uses the official Steam API (OpenID).",
+    "Screenshots from the iOS Screen Time app, showing details of up to 3 prior weeks of gaming. Data was extracted using OCR.",
+    "Screenshots from the Digital Screen Time interface (if available), showing details of up to 3 prior weeks of gaming. Data was extracted using OCR."
   ),
   `Type of Data Collected` = c(
-    "Session records (what game was played, at what time, for how long) for 1st party games (games published in whole or in part by Nintendo, but not by third party publishers such as Electronic Arts).",
-    "Session records (what game was played, at what time, for how long). The name of the game replaced with a random persistent identifier for all third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared.",
-    "Incremental playtime per game (every hour, the total time spent playing during the previous hour)",
-    "Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)",
-    "Total weekly playtime per game (e.g., 2 hours on game X, 5 hours on game Y)"
+    "Session records (what game was played, at what time, for how long) for first-party games only (games published in whole or in part by Nintendo).",
+    "Session records (what game was played, at what time, for how long). Game titles were replaced with a random persistent identifier for third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared.",
+    "Hourly aggregates per game (every hour, the total time spent playing during the previous hour)",
+    "Daily aggregates (e.g., 2 total hours of gaming)",
+    "Daily aggregates (e.g., 2 total hours of gaming)"
   )
 ) |>
   tt(
@@ -735,6 +718,7 @@ Daily survey links were sent every day at 2pm local time for the participant and
 
 ## Participants
 
+::: {.place arguments='auto, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-demographics
 #| tbl-cap: "Sample demographics for qualified participants with general-population benchmarks (where available)."
@@ -949,6 +933,7 @@ tt(
 ) |>
   style_tt(fontsize = 0.8)
 ```
+:::
 
 Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(biweekly$pid))` also completed at least one survey. On average, participants were. Due to errors in screening, four participants over the age of 40 were included.
 
@@ -977,8 +962,9 @@ In @fig-heatmap, we visualize the distribution of play across days and times. As
 ```{r}
 #| label: fig-heatmap
 #| fig-cap: "Diurnal play across Xbox, Nintendo, Steam."
-#| fig-asp: 0.4
-#| out-width: 95%
+#| fig-asp: 0.35
+#| out-width: 80%
+#| dev: svglite
 
 # expected number of occurrences of each slot in telemetry span
 slot_exposure <- telemetry_spans |>
@@ -1027,20 +1013,20 @@ slot_summary <- slot_per_player |>
 
 
 ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
-  geom_raster() +
+  geom_tile() +
   scale_x_continuous(breaks = 0:23) +
   scale_fill_viridis_c(
     option = "magma",
     labels = scales::percent_format(accuracy = .1),
-    # limits = c(0, .028), breaks = seq(0, .028, .007),
-    name = "Probability of active play"
+    limits = c(0, .08), breaks = seq(0, .08, .02),
+    name = "Probability of\nactive play"
   ) +
   labs(
     x = "Hour (local)",
     y = "Day",
   ) +
   theme(panel.grid.major.y = element_blank(),
-        axis.text.x = element_text(angle = 30))
+        axis.text.x = element_text(size = 8.5))
 
 ```
 :::
@@ -1425,6 +1411,7 @@ for (i in seq_along(pct_levels)) {
       panel.grid.major = element_line(color = "#333333", linewidth = 0.3),
       panel.grid.minor = element_blank(),
       panel.border     = element_rect(colour = "black", fill = NA, linewidth = 0.6),
+      axis.text = element_text(size = 9),
       axis.title.y.right = element_text(color = "#FF6B35"),
       axis.text.y.right  = element_text(color = "#FF6B35"),
       plot.title = ggtext::element_textbox_simple(
@@ -1509,7 +1496,7 @@ simon |>
 
 ```{r}
 #| label: fig-time-use
-#| fig-cap: "Illustrative single-day overview of one study day, consisting of a participant's time use diary (top panel), gaming as recorded through telemetry (middle panel), and survey completion (bottom panel)."
+#| fig-cap: "Illustrative single-day overview of one study day, consisting of a participant's time use diary (top row), gaming as recorded through telemetry (middle row), and daily survey completion (bottom row)."
 #| fig-asp: 0.4
 #| out.width: 95%
 
@@ -2635,11 +2622,11 @@ We believe this dataset has potential to address a wide variety of pertinent res
 
 The richness of this data means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). To stimulate ideas, we present a few questions we think the data are well-suited to answering.
 
-*How do neurotypical and neurodiverse players differ in their gaming behavior?* Using the neurodivergence data we collected (which includes, for example, `r table(intake$neuroIdenCondition_1)[1]` participants who identify as having autism and `r table(intake$neuroIdenCondition_2)[1]` who identify as having ADHD), researchers can explore differences in the types of games, gaming experiences, and trajectory of play over time between neurotypical and neurodiverse players. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods [@KilmerEtAl2023Therapeuticallya; ], with some researchers noting that research focuses on therapeutic interventions delivered through games to "cure" neurodivergent players of undesirable traits [@@SpielGerling2021Purpose]. Research on neurodivergent players' naturalistic gaming behaviour across platforms has to date received less attention. 
+*How do neurotypical and neurodiverse players differ in their gaming behavior?* Using the neurodivergence data we collected (which includes, for example, `r table(intake$neuroIdenCondition_1)[1]` participants who identify as having autism and `r table(intake$neuroIdenCondition_2)[1]` who identify as having ADHD), researchers can explore differences in the types of games, gaming experiences, and trajectory of play over time between neurotypical and neurodiverse players. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods [@KilmerEtAl2023Therapeuticallya; ], with some researchers noting that research focuses on therapeutic interventions delivered through games to "cure" neurodivergent players of undesirable traits [@@SpielGerling2021Purpose]. Research on neurodivergent players' naturalistic gaming behavior across platforms has to date received less attention. 
 
-*How do seasons and weather impact playtime?* Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. Quantifying these effects can better distinguish environmental factors driving video game play from other drivers (like work schedules or weekend routines) and improve our ability to predict regional changes to gaming behaviour on a day-to-day basis [@Palomba2019Digital], or the behavioural impacts of climate change in the long term.
+*How do seasons and weather impact playtime?* Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. Quantifying these effects can better distinguish environmental factors driving video game play from other drivers (like work schedules or weekend routines) and improve our ability to predict regional changes to gaming behavior on a day-to-day basis [@Palomba2019Digital], or the behavioral impacts of climate change in the long term.
 
-*Does irregular, extended, or overnight play predict subsequent rises in problematic play, and can telemetry provide early warning signals?* Using the data we collected about displacement---the extent to which gaming supports or interferes with other areas of life---as well as about gaming disorder (at Waves 1 and 6), telemetry can provide insights into patterns of gaming that coincide or lead to subsequent changes in the degree of problematic play. Long-term, more accurately identifying the longitudinal behavioural correlates of maladaptive gaming---beyond simple heuristics such as the average amount of weekly play in the last 6 months---can help us create personalized models and early warning systems for players and parents. 
+*Does irregular, extended, or overnight play predict subsequent rises in problematic play, and can telemetry provide early warning signals?* Using the data we collected about displacement---the extent to which gaming supports or interferes with other areas of life---as well as about gaming disorder (at Waves 1 and 6), telemetry can provide insights into patterns of gaming that coincide or lead to subsequent changes in the degree of problematic play. Long-term, more accurately identifying the longitudinal behavioral correlates of maladaptive gaming---beyond simple heuristics such as the average amount of weekly play in the last 6 months---can help us create personalized models and early warning systems for players and parents. 
 
 We encourage researchers from a wide range of disciplines to explore these or other questions using the data we present, which is freely available for reuse under a CC0 license.
 
