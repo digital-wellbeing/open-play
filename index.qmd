@@ -376,16 +376,6 @@ weekly_all <- daily_all |>
   group_by(pid, platform, week) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
-# --- (optional) MOBILE PLACEHOLDERS ----------------------------------------
-# When iOS/Android daily datasets are ready, bind_rows() their daily tables here.
-# ios_daily <- ios_df |>
-#   transmute(pid = as.character(pid), platform = "iOS",
-#             day_local = <local_date>, day_utc = <utc_date>, minutes = <minutes>)
-# android_daily <- android_df |>
-#   transmute(pid = as.character(pid), platform = "Android",
-#             day_local = <local_date>, day_utc = <utc_date>, minutes = <minutes>)
-# daily_all <- bind_rows(daily_all, ios_daily, android_daily)
-
 telemetry_spans <- daily_all |>
   group_by(pid, platform) |>
   summarise(
