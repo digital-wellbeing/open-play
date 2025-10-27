@@ -24,7 +24,6 @@ _site/
 _freeze/R/stage_1_simulations/
 
 **/*.quarto_ipynb
-data/clean/*
 *.knit.md
 
 /.luarc.json
