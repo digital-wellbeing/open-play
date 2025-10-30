@@ -119,7 +119,7 @@ xbox_clean <- xbox |>
     session_end > session_start
   ) |>
   filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |> # something weird with this title, almost every player has played it and it accounts for 4x the playtime of the next-highest game - and it's unrated. I suspect it's the home screen or something.
-  filter(duration <= 600) |>
+  filter(duration <= 480) |>
   arrange(pid, session_start, session_end) |>
   canonicalize_xbox_sessions(tol_sec = 60)
 ```
@@ -151,7 +151,7 @@ nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
   ungroup() |> 
   mutate(duration = dur_sec / 60) |> 
   select(pid, title_id, session_start, session_end, duration, device_type, operation_mode) |>
-  filter(duration <= 600) |>
+  filter(duration <= 480) |>
   as_tibble()
 ```
 
@@ -202,6 +202,122 @@ ios <- ios |>
   select(pid, platform, day_local = date, minutes = total_gaming_minutes)
 
 ```
+
+
+```{r}
+#| label: apply-exclusions
+
+# --- Build tz map (as in your script) ---------------------------------------
+tz_map <- intake |>
+  mutate(
+    pid = as.character(pid),
+    off = offset_secs(local_timezone),
+    .keep = "none"
+  ) |>
+  distinct(pid, .keep_all = TRUE)
+
+# --- Hourly from sessions (Nintendo + Xbox) ---------------------------------
+sessions_telemetry <- bind_rows(
+  xbox_clean |> mutate(platform = "Xbox"),
+  nintendo_clean |> mutate(platform = "Nintendo")
+) |>
+  mutate(pid = as.character(pid)) |>
+  left_join(tz_map, by = "pid") |>
+  mutate(
+    start_local = session_start + off,
+    end_local   = session_end   + off,
+    duration_min = as.numeric(difftime(session_end, session_start, units = "mins"))
+  ) |>
+  filter(
+    !is.na(session_start), !is.na(session_end),
+    session_end > session_start,
+    duration_min >= 1
+  )
+
+hourly_from_sessions <- sessions_telemetry |>
+  filter(!is.na(off)) |>
+  mutate(
+    h0_local = floor_date(start_local, "hour"),
+    h1_local = floor_date(end_local - seconds(1), "hour"),
+    n_hours = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
+  ) |>
+  tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
+  mutate(
+    hour_start_local = h0_local + hours(k - 1),
+    minutes = pmax(
+      0,
+      as.numeric(difftime(
+        pmin(end_local, hour_start_local + hours(1)),
+        pmax(start_local, hour_start_local),
+        units = "mins"
+      ))
+    ),
+    hour_start_utc = hour_start_local - off
+  ) |>
+  select(pid, platform, hour_start_local, hour_start_utc, minutes)
+
+# --- Hourly from Steam (already hourly) -------------------------------------
+hourly_from_steam <- steam_clean |>
+  select(pid, datetime_hour_start, minutes) |>
+  mutate(pid = as.character(pid)) |>
+  left_join(tz_map, by = "pid") |>
+  mutate(
+    platform = "Steam",
+    hour_start_utc   = datetime_hour_start,
+    hour_start_local = datetime_hour_start + off
+  ) |>
+  select(pid, platform, hour_start_local, hour_start_utc, minutes)
+
+hourly_telemetry <- bind_rows(hourly_from_sessions, hourly_from_steam)
+
+# --- Daily totals (local day) incl. iOS/Android ------------------------------
+daily_telemetry <- hourly_telemetry |>
+  mutate(day_local = as.Date(hour_start_local)) |>
+  group_by(pid, platform, day_local) |>
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+daily_ios_android <- bind_rows(
+  ios     |> transmute(pid = as.character(pid), platform = "iOS",     day_local = as.Date(day_local), minutes),
+  android |> transmute(pid = as.character(pid), platform = "Android", day_local = as.Date(day_local), minutes)
+)
+
+daily_all <- bind_rows(daily_telemetry, daily_ios_android) |>
+  group_by(pid, day_local) |>
+  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+exclusion_days <- daily_all |>
+  filter(total_minutes > 16 * 60) |>
+  select(pid, day_local)
+
+# --- Apply exclusions back to each dataset ----------------------------------
+steam_clean <- steam_clean |>
+  left_join(tz_map, by = c("pid" = "pid")) |>
+  mutate(day_local = as.Date(datetime_hour_start + off)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local")) |>
+  select(-off, -day_local)
+
+xbox_clean <- xbox_clean |>
+  left_join(tz_map, by = "pid") |>
+  mutate(day_local = as.Date(session_start + off)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local")) |>
+  select(-off, -day_local)
+
+nintendo_clean <- nintendo_clean |>
+  left_join(tz_map, by = "pid") |>
+  mutate(day_local = as.Date(session_start + off)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local")) |>
+  select(-off, -day_local)
+
+ios <- ios |>
+  mutate(pid = as.character(pid), day_local = as.Date(day_local)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local"))
+
+android <- android |>
+  mutate(pid = as.character(pid), day_local = as.Date(day_local)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local"))
+
+```
+
 
 ```{r}
 #| label: preprocess-surveys
