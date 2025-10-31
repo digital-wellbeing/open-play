@@ -1602,7 +1602,7 @@ The unit of observation differs across data types. For surveys and cognitive tas
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-missingness
-#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), total expected observations, median number of missing observations per participant (with maximum in parentheses), and percentage of data completeness for each measure."
+#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), maximum possible observations, median number of missing observations per participant (with maximum in parentheses), and percentage of data completeness for each measure."
 
 ## ---- constants -------------------------------------------------------------
 export_end <- as.POSIXct("2025-09-30 23:59:59", tz = "UTC")
@@ -1655,120 +1655,147 @@ steam_windows <- steam_visibility |>
 ## ---- per-region participants -----------------------------------------------
 active_daily <- intake |>
   transmute(pid, country) |>
-  inner_join(daily |>
-               count(pid, name = "n_daily") |>
-               filter(n_daily > 1),
-             by = "pid")
+  inner_join(daily |> count(pid, name = "n_daily") |> filter(n_daily > 1), by = "pid")
 
 active_bw <- intake |>
   transmute(pid, country) |>
-  inner_join(biweekly |>
-               count(pid, name = "n_bw") |>
-               filter(n_bw > 1),
-             by = "pid")
+  inner_join(biweekly |> count(pid, name = "n_bw") |> filter(n_bw > 1), by = "pid")
 
 ## UK Daily anomalies: drop them here
-active_daily <- active_daily |>
-  filter(country != "UK")
+active_daily <- active_daily |> filter(country != "UK")
 
-## ---- telemetry eligibility (denominators) ----------------------------------
-## Eligible = (>1 Daily OR >1 Biweekly) AND appears in that telemetry table
-elig_union <- bind_rows(active_daily, active_bw) |>
-  distinct(pid, country)
-
+## ---- telemetry sets & totals -----------------------------------------------
 tele_sets <- list(
-  Xbox = xbox |> distinct(pid),
+  Xbox     = xbox     |> distinct(pid),
   Nintendo = nintendo |> distinct(pid),
-  iOS = ios |> distinct(pid),
-  Android = android |> distinct(pid),
-  Steam = steam |> distinct(pid)
+  iOS      = ios      |> distinct(pid),
+  Android  = android  |> distinct(pid),
+  Steam    = steam    |> distinct(pid)
 )
 
+## N total per region/platform (all telemetry pids joined to intake for region)
+tele_total <- imap(tele_sets, \(tel_df, nm) {
+  tel_df |>
+    inner_join(intake |> select(pid, country), by = "pid") |>
+    mutate(measure = nm)
+}) |> list_rbind()
+
+## Eligible = (>1 Daily OR >1 Biweekly) AND appears in that telemetry table
+elig_union <- bind_rows(active_daily, active_bw) |> distinct(pid, country)
 eligible_tel <- imap(tele_sets, \(tel_df, nm) {
   elig_union |>
     inner_join(tel_df, by = "pid") |>
     mutate(measure = nm)
-}) |>
-  list_rbind()
+}) |> list_rbind()
 
 ## ---- build rows per region --------------------------------------------------
 rows <- map_dfr(regions, \(rg) {
   ## survey sets (note UK daily = 0 by construction)
   pids_daily <- active_daily |> filter(country == rg) |> pull(pid)
-  pids_bw <- active_bw |> filter(country == rg) |> pull(pid)
+  pids_bw    <- active_bw    |> filter(country == rg) |> pull(pid)
 
   r_daily <- {
-    obs <- daily |>
-      filter(pid %in% pids_daily) |>
-      count(pid, name = "obs")
+    obs <- daily |> filter(pid %in% pids_daily) |> count(pid, name = "obs")
     base <- tibble(pid = pids_daily) |>
       left_join(obs, by = "pid") |>
       mutate(obs = coalesce(obs, 0L), miss = E_DAILY - obs)
-    fmt_row(rg, "Survey", "Daily Diary", length(pids_daily),
-            length(pids_daily) * E_DAILY, base$miss)
+    n_total <- daily |>
+      inner_join(intake |> filter(country == rg), by = "pid") |>
+      distinct(pid) |>
+      nrow()
+    fmt_row(rg, "Survey", "Daily Diary",
+            n_total = n_total,
+            n_eligible = length(pids_daily),
+            max_possible = length(pids_daily) * E_DAILY,
+            miss_vec = base$miss)
   }
 
   r_bw <- {
-    obs <- biweekly |>
-      filter(pid %in% pids_bw) |>
-      count(pid, name = "obs")
+    obs <- biweekly |> filter(pid %in% pids_bw) |> count(pid, name = "obs")
     base <- tibble(pid = pids_bw) |>
       left_join(obs, by = "pid") |>
       mutate(obs = coalesce(obs, 0L), miss = E_BIWEEKLY - obs)
-    fmt_row(rg, "Survey", "Biweekly", length(pids_bw),
-            length(pids_bw) * E_BIWEEKLY, base$miss)
+    n_total <- biweekly |>
+      inner_join(intake |> filter(country == rg), by = "pid") |>
+      distinct(pid) |>
+      nrow()
+    fmt_row(rg, "Survey", "Biweekly",
+            n_total = n_total,
+            n_eligible = length(pids_bw),
+            max_possible = length(pids_bw) * E_BIWEEKLY,
+            miss_vec = base$miss)
   }
 
-  ## telemetry eligible pids for this region
+  ## telemetry eligible & totals for this region
   elig_rg <- eligible_tel |> filter(country == rg)
+  total_rg <- tele_total |> filter(country == rg)
 
-  ## Xbox/Nintendo: binary completeness (expected = eligible count; observed = has any data)
-  bin_row <- \(meas, df_tel) {
-    p <- elig_rg |> filter(measure == meas) |> pull(pid)
-    ## since eligibility already requires appearing in the table, observed == eligible
-    miss_vec <- rep.int(0L, length(p))
-    fmt_row(rg, "Telemetry", meas, length(p), length(p), miss_vec)
+  ## Xbox/Nintendo: binary (max_possible = N eligible)
+  bin_row <- \(meas) {
+    p_eligible <- elig_rg |> filter(measure == meas) |> pull(pid)
+    n_total    <- total_rg |> filter(measure == meas) |> distinct(pid) |> nrow()
+    miss_vec   <- rep.int(0L, length(p_eligible))  # eligible implies has table presence
+    fmt_row(rg, "Telemetry", meas,
+            n_total = n_total,
+            n_eligible = length(p_eligible),
+            max_possible = length(p_eligible),   # binary “maximum possible”
+            miss_vec = miss_vec)
   }
 
-  r_xbox <- bin_row("Xbox", xbox)
-  r_ntd <- bin_row("Nintendo", nintendo)
+  r_xbox <- bin_row("Xbox")
+  r_ntd  <- bin_row("Nintendo")
 
-  ## iOS/Android: day counts vs 84
+  ## iOS/Android: days vs 84
   days_row <- \(meas, df_days) {
-    p <- elig_rg |> filter(measure == meas) |> pull(pid)
+    p_eligible <- elig_rg |> filter(measure == meas) |> pull(pid)
+    n_total    <- total_rg |> filter(measure == meas) |> distinct(pid) |> nrow()
     obs <- df_days |>
-      filter(pid %in% p) |>
+      filter(pid %in% p_eligible) |>
       count(pid, name = "obs")
-    base <- tibble(pid = p) |>
+    base <- tibble(pid = p_eligible) |>
       left_join(obs, by = "pid") |>
       mutate(obs = coalesce(obs, 0L), miss = pmax(0L, D_MOBILE - obs))
-    fmt_row(rg, "Telemetry", meas, length(p), length(p) * D_MOBILE, base$miss)
+    fmt_row(rg, "Telemetry", meas,
+            n_total = n_total,
+            n_eligible = length(p_eligible),
+            max_possible = length(p_eligible) * D_MOBILE,
+            miss_vec = base$miss)
   }
 
   r_ios <- days_row("iOS", ios)
   r_and <- days_row("Android", android)
 
-  ## Steam: hours_visible vs 2016
+  ## Steam: hours vs 2016
   r_steam <- {
-    p <- elig_rg |> filter(measure == "Steam") |> pull(pid)
+    p_eligible <- elig_rg |> filter(measure == "Steam") |> pull(pid)
+    n_total    <- total_rg |> filter(measure == "Steam") |> distinct(pid) |> nrow()
     hrs <- steam_windows |>
-      right_join(tibble(pid = p), by = "pid") |>
+      right_join(tibble(pid = p_eligible), by = "pid") |>
       mutate(hours_visible = coalesce(hours_visible, 0)) |>
       pull(hours_visible)
     miss <- pmax(0, H_STEAM - hrs)
-    fmt_row(rg, "Telemetry", "Steam", length(p), length(p) * H_STEAM, miss)
+    fmt_row(rg, "Telemetry", "Steam",
+            n_total = n_total,
+            n_eligible = length(p_eligible),
+            max_possible = length(p_eligible) * H_STEAM,
+            miss_vec = miss)
   }
 
-  ## Simon: tie to biweekly cohort (common in your prior setup)
+  ## Simon: tied to biweekly cohort
   r_simon <- {
-    obs <- simon |>
-      filter(pid %in% pids_bw) |>
-      count(pid, name = "obs")
+    obs <- simon |> filter(pid %in% pids_bw) |> count(pid, name = "obs")
     base <- tibble(pid = pids_bw) |>
       left_join(obs, by = "pid") |>
       mutate(obs = coalesce(obs, 0L), miss = E_SIMON - obs)
-    fmt_row(rg, "Task", "Simon Task", length(pids_bw),
-            length(pids_bw) * E_SIMON, base$miss)
+    n_total <- simon |>
+      inner_join(intake |> filter(country == rg), by = "pid") |>
+      distinct(pid) |>
+      nrow()
+    fmt_row(rg, "Task", "Simon Task",
+            n_total = n_total,
+            n_eligible = length(pids_bw),
+            max_possible = length(pids_bw) * E_SIMON,
+            miss_vec = base$miss)
   }
 
   bind_rows(r_daily, r_bw, r_xbox, r_ntd, r_steam, r_ios, r_and, r_simon)
@@ -1776,11 +1803,14 @@ rows <- map_dfr(regions, \(rg) {
 
 ## ---- present in identical table format -------------------------------------
 table_data <- rows |>
-  filter(!(region == "UK" & measure %in% c("Daily Diary", "Xbox"))) |> 
+  filter(!(region == "UK" & measure %in% c("Daily Diary", "Xbox"))) |>
   mutate(
-    pct_complete = (total_observed / total_expected) * 100,
-    N = n_fmt(n_participants),
-    Expected = n_fmt(total_expected),
+    pct_missing_num = if_else(maximum_possible > 0,
+                              100 * (total_missing / maximum_possible),
+                              0),
+    `N total` = n_fmt(n_total),
+    `N with survey data` = n_fmt(n_participants),
+    `Max. Possible` = n_fmt(maximum_possible),
     Observed = n_fmt(total_observed),
     `Median (Max) Missing` = if_else(
       is.na(median_missing_per_participant), "—",
@@ -1788,7 +1818,7 @@ table_data <- rows |>
               floor(median_missing_per_participant),
               floor(max_missing_per_participant))
     ),
-    `% Missing` = sprintf("%.1f%%", 100-pct_complete),
+    `% Missing` = sprintf("%.1f%%", pct_missing_num),
     Retention = ""
   ) |>
   group_by(region, data_type) |>
@@ -1799,13 +1829,13 @@ table_data <- rows |>
   ungroup() |>
   select(
     Region = region, `Data Type` = data_type, Measure = measure,
-    N, Expected, Observed, `Median (Max) Missing`, `% Missing`, Retention,
+    `N total`, `N with survey data`, `Max. Possible`, Observed,
+    `Median (Max) Missing`, `% Missing`, Retention,
     show_type, show_region
   ) |>
   mutate(
     Region = if_else(show_region, Region, ""),
-    `Data Type` = if_else(show_type, `Data Type`, ""),
-    `% Missing` = if_else(`% Missing` == "NaN%", "-", `% Missing`),
+    `Data Type` = if_else(show_type, `Data Type`, "")
   ) |>
   select(-show_type, -show_region)
 
@@ -1818,6 +1848,7 @@ data_type_starts <- table_data |>
   pull(row_num)
 
 footnote_mapping <- rows |>
+  filter(!(region == "UK" & measure %in% c("Daily Diary", "Xbox"))) |>
   mutate(
     row_num = row_number(),
     footnote = case_when(
@@ -1830,15 +1861,15 @@ footnote_mapping <- rows |>
   )
 
 expected_notes <- list(
-  "a" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "a"], j = 5,
+  "a" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "a"], j = 6,
              text = "Surveys: Number of participants × expected responses (30 for Daily Diary, 6 for Biweekly Panel)"),
-  "b" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "b"], j = 5,
+  "b" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "b"], j = 6,
              text = "Telemetry (Xbox/Nintendo): Eligible = >1 Daily or >1 Biweekly and present in the platform feed"),
-  "c" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "c"], j = 5,
+  "c" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "c"], j = 6,
              text = "Telemetry (Steam): Eligible × 2,016 hours (84 days × 24 hours)"),
-  "d" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "d"], j = 5,
+  "d" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "d"], j = 6,
              text = "Telemetry (iOS/Android): Eligible × 84 days"),
-  "e" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "e"], j = 5,
+  "e" = list(i = footnote_mapping$row_num[footnote_mapping$footnote == "e"], j = 6,
              text = "Cognitive Task: Number of participants × 3 test administrations")
 )
 
@@ -1846,7 +1877,7 @@ tt(table_data |> select(-Retention), notes = expected_notes, width = 1, escape =
   style_tt(i = 0, bold = TRUE) |>
   style_tt(i = c(us_start, uk_start), j = 1, bold = TRUE, line = "t", line_width = 0.15) |>
   style_tt(i = data_type_starts, j = 2, bold = TRUE, line = "t", line_width = 0.1) |>
-  style_tt(j = 7, align = "c") |>
+  style_tt(j = 9, align = "c") |>
   style_tt(fontsize = 0.8)
 
 ```

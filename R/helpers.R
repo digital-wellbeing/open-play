@@ -120,14 +120,20 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
   )
 }
 
-fmt_row <- \(region, type, meas, n, exp, miss_vec) tibble(
-  region = region,
-  data_type = type,
-  measure = meas,
-  n_participants = n,
-  total_expected = exp,
-  total_observed = exp - sum(miss_vec, na.rm = TRUE),
-  total_missing = sum(miss_vec, na.rm = TRUE),
-  median_missing_per_participant = suppressWarnings(median(miss_vec, na.rm = TRUE)),
-  max_missing_per_participant = suppressWarnings(max(miss_vec, na.rm = TRUE))
-)
+fmt_row <- \(region, type, meas, n_total, n_eligible, max_possible, miss_vec) {
+  tot_miss <- sum(miss_vec, na.rm = TRUE)
+  tibble(
+    region = region,
+    data_type = type,
+    measure = meas,
+    n_total = n_total,
+    n_participants = n_eligible,                # "N with survey data" later
+    maximum_possible = max_possible,
+    total_observed = max(0, max_possible - tot_miss),
+    total_missing  = tot_miss,
+    median_missing_per_participant =
+      suppressWarnings(median(miss_vec, na.rm = TRUE)),
+    max_missing_per_participant =
+      suppressWarnings(max(miss_vec, na.rm = TRUE))
+  )
+}
