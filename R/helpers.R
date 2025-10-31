@@ -12,6 +12,16 @@ offset_secs <- function(z){
   sapply(p, \(x) if (length(x)) (ifelse(x[2]=="-", -1, 1))*(as.numeric(x[3])*3600 + as.numeric(x[4])*60) else 0)
 }
 
+clip_to_window <- function(df) {
+  df |>
+    filter(end > window_start, start < window_end) |>
+    mutate(
+      start = pmax(start, window_start),
+      end   = pmin(end,   window_end)
+    ) |>
+    filter(end > start)
+}
+
 canonicalize_xbox_sessions <- function(df, tol_sec = 60) {
   df <- df |>
     filter(!is.na(session_start), !is.na(session_end), session_end > session_start) |>
@@ -109,3 +119,15 @@ summ_basic <- function(df, pid, label, avg_days = NA_real_) {
     `Median active days` = avg_days
   )
 }
+
+fmt_row <- \(region, type, meas, n, exp, miss_vec) tibble(
+  region = region,
+  data_type = type,
+  measure = meas,
+  n_participants = n,
+  total_expected = exp,
+  total_observed = exp - sum(miss_vec, na.rm = TRUE),
+  total_missing = sum(miss_vec, na.rm = TRUE),
+  median_missing_per_participant = suppressWarnings(median(miss_vec, na.rm = TRUE)),
+  max_missing_per_participant = suppressWarnings(max(miss_vec, na.rm = TRUE))
+)
