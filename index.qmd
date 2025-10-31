@@ -302,9 +302,10 @@ third_party_prop <- paste0(
 # merge with the local time zone offsets from intake
 tz_map <- intake |>
   mutate(
+    pid,
     off = offset_secs(local_timezone),
     .keep = "none"
-  ) |>
+  ) |> 
   distinct(pid, .keep_all = TRUE)
 
 # aggregate data at each level of granularity (session, hourly, daily)
@@ -1527,7 +1528,7 @@ diary_df <- time_use |>
 
 # --- SESSIONS (stored UTC → shift by offset_minutes) ---
 sessions_df <- sessions_all |>
-  filter(pid == person_id) |>
+  filter(pid == person_id) %>%
   transmute(
     platform = if ("platform" %in% names(.)) platform else "Gaming",
     start = as.POSIXct(session_start, tz = "UTC") + minutes(offset_secs(tz_str)/60),
