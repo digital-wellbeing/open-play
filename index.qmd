@@ -1545,9 +1545,9 @@ survey_df <- daily |>
   select(ts)
 
 activity_colors <- c(
-  "Sleep" = "#111111", "Personal Care" = "#555555",
-  "Video Gaming" = "#107C10", "Offline Leisure & Social Life" = "#777777",
-  "Other Digital Media Use" = "#333333"
+  "Sleep" = "#111111", "Personal Care" = "#444444",
+  "Video Gaming" = "#107C10", "Offline Leisure & Social Life" = "#999999",
+  "Other Digital Media Use" = "#666666"
 )
 platform_colors <- c("Xbox" = "#107C10", "Nintendo" = "#E60012",
                      "Steam" = "#1B2838", "iOS" = "#b43bf5",
