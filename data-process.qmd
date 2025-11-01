@@ -114,16 +114,22 @@ steam_clean <- steam |>
 # - ≥3 concurrent titles => drop that slice
 
 xbox_clean <- xbox |>
-  filter(title_placement == "Full") |>
-  filter(!genres %in% c("Shopping", "Video", "Entertainment", "Utilities & tools")) |>
+  
+  # filter non-foreground games
   filter(
+    duration >= 1,
+    title_placement == "Full", # in foreground
+    !genres %in% c("Shopping", "Video", "Entertainment", "Utilities & tools"),
+    tolower(title_id) != "e1924c10-9c91-4652-81b9-8ca0670e77a7" # home screen
+  ) |>
+  
+  # filter suspicious sessions
+  filter(
+    duration <= 480,
     !is.na(session_start),
     !is.na(session_end),
-    session_end > session_start
-  ) |>
-  mutate(title_id = tolower(title_id)) |> 
-  filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |> # home screen
-  filter(duration <= 480) |>
+    session_end > session_start,
+  ) |> 
   arrange(pid, session_start, session_end) |>
   canonicalize_xbox_sessions(tol_sec = 60)
 ```
@@ -133,29 +139,28 @@ xbox_clean <- xbox |>
 
 tol <- dseconds(60)
 
-nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
+nintendo_clean <- nintendo |>
+  
+  # filter duplicate rows and non-games 
+  distinct() |> 
   filter(
+    duration >= 1,
+  ) |> 
+  
+  # filter suspicious sessions
+  filter(
+    duration <= 480,
     !is.na(session_start),
     !is.na(session_end),
     session_end > session_start,
     session_start < time_of_pull
   ) |>
+  
+  merge_adjacent_sessions(tol_sec = tol) |>
+  
+  # clean up
   arrange(pid, title_id, session_start, session_end) |>
-  group_by(pid, title_id) |> 
-  mutate(
-    start_num = as.numeric(session_start),
-    end_num = as.numeric(session_end),
-    prev_max_end = lag(cummax(end_num), default = -Inf),
-    new_cluster = start_num > (prev_max_end + as.numeric(tol)),
-    cluster = cumsum(new_cluster),
-    dur_sec = end_num - start_num
-  ) |> 
-  group_by(pid, title_id, cluster) |>
-  slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |>
-  ungroup() |>
-  mutate(duration = dur_sec / 60) |> 
   select(pid, title_id, session_start, session_end, duration, device_type, operation_mode) |>
-  filter(duration <= 480) |>
   as_tibble()
 
 ```

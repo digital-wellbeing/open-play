@@ -22,8 +22,39 @@ clip_to_window <- function(df) {
     filter(end > start)
 }
 
-canonicalize_xbox_sessions <- function(df, tol_sec = 60) {
-  df <- df |>
+
+merge_adjacent_sessions <- function(df, tol_sec = 60) {
+  df2 <- df |>
+    filter(!is.na(session_start), !is.na(session_end), session_end > session_start) |>
+    mutate(
+      pid = as.character(pid),
+      session_start = as.POSIXct(session_start, tz = "UTC"),
+      session_end   = as.POSIXct(session_end,   tz = "UTC")
+    )
+
+  if (nrow(df2) == 0L) return(df2[0, ])  # prevents min/max warnings
+
+  df2 |>
+    arrange(pid, title_id, session_start, session_end) |>
+    group_by(pid, title_id) |>
+    mutate(
+      gap_sec = as.numeric(difftime(session_start, lag(session_end), units = "secs")),
+      grp = cumsum(if_else(is.na(gap_sec) | gap_sec > tol_sec, 1L, 0L))
+    ) |>
+    group_by(pid, title_id, grp) |>
+    summarise(
+      session_start = min(session_start),
+      session_end   = max(session_end),
+      across(everything(), first),
+      .groups = "drop"
+    ) |>
+    mutate(duration = as.numeric(difftime(session_end, session_start, units = "mins"))) |>
+    arrange(pid, session_start)
+}
+
+
+resolve_overlaps <- function(df) {
+  base <- df |>
     filter(!is.na(session_start), !is.na(session_end), session_end > session_start) |>
     mutate(
       pid = as.character(pid),
@@ -32,10 +63,15 @@ canonicalize_xbox_sessions <- function(df, tol_sec = 60) {
     ) |>
     arrange(pid, session_start, session_end)
 
-  if (nrow(df) == 0L) return(df[0, ])
+  if (nrow(base) == 0L) {
+    return(
+      base |>
+        mutate(.had_overlap = FALSE, .max_titles = 1L, .n_slices = 1L)
+    )
+  }
 
-  # 1) atomic segments
-  segs <- df |>
+  # --- atomic segments (tidyverse) ---
+  segs <- base |>
     group_by(pid) |>
     reframe(cuts = sort(unique(c(session_start, session_end)))) |>
     mutate(seg_start = cuts, seg_end = lead(cuts)) |>
@@ -43,55 +79,72 @@ canonicalize_xbox_sessions <- function(df, tol_sec = 60) {
     select(pid, seg_start, seg_end) |>
     ungroup()
 
-  # 2) overlap join (carry ALL original cols)
+  # --- non-equi overlap join (tidyverse; dtplyr doesn't translate this) ---
   olap <- inner_join(
-    segs, df,
+    segs, base,
     by = join_by(pid, seg_start < session_end, seg_end > session_start)
   )
 
-  if (nrow(olap) == 0L) return(df[0, ])
+  if (nrow(olap) == 0L) {
+    return(
+      base |>
+        mutate(.had_overlap = FALSE, .max_titles = 1L, .n_slices = 1L) |>
+        arrange(pid, session_start)
+    )
+  }
 
-  # 3) per-segment: drop ≥3 titles; choose latest-starting row
+  # --- choose rows for segments with <3 titles (dtplyr-accelerated) ---
   assigned <- olap |>
+    lazy_dt(immutable = TRUE) |>
     group_by(pid, seg_start, seg_end) |>
-    mutate(n_titles = n_distinct(title_id)) |>
-    filter(n_titles < 3L) |>
+    mutate(.n_titles_seg = n_distinct(title_id)) |>
+    filter(.n_titles_seg < 3L) |>
     slice_max(session_start, with_ties = FALSE) |>
     ungroup() |>
-    mutate(session_start = seg_start, session_end = seg_end) |>
-    select(-seg_start, -seg_end, -n_titles)
+    mutate(
+      session_start = seg_start,
+      session_end   = seg_end
+    ) |>
+    select(-seg_start, -seg_end) |>
+    as_tibble()
 
-  if (nrow(assigned) == 0L) return(df[0, ])
+  if (nrow(assigned) == 0L) {
+    return(
+      base[0, ] |>
+        tibble::add_column(.had_overlap = logical(), .max_titles = integer(), .n_slices = integer())
+    )
+  }
 
-  # columns to carry via first() when merging
-  meta_cols <- setdiff(
-    names(assigned),
-    c("pid", "title_id", "session_start", "session_end")
-  )
+  # set metadata columns once; avoid helpers in summarise
+  meta_cols <- setdiff(names(assigned), c("pid","title_id","session_start","session_end",".n_titles_seg"))
 
-  # 4) merge adjacent slices within tol_sec; keep metadata from first row
+  # --- stitch contiguous slices per pid+title_id (dtplyr-accelerated) ---
   out <- assigned |>
+    lazy_dt(immutable = TRUE) |>
     arrange(pid, title_id, session_start, session_end) |>
     group_by(pid, title_id) |>
     mutate(
-      gap_sec = as.numeric(session_start - lag(session_end), units = "secs"),
-      grp = cumsum(if_else(is.na(gap_sec) | gap_sec > tol_sec, 1L, 0L))
+      gap0 = as.numeric(session_start) - lag(as.numeric(session_end)),
+      grp  = cumsum(if_else(is.na(gap0) | gap0 > 0, 1L, 0L))
     ) |>
-    arrange(session_start, .by_group = TRUE) |>
     group_by(pid, title_id, grp) |>
     summarise(
       session_start = min(session_start),
       session_end   = max(session_end),
-      across(all_of(meta_cols), ~ dplyr::first(.)),
+      .had_overlap  = any(.n_titles_seg >= 2L),
+      .max_titles   = max(.n_titles_seg, na.rm = TRUE),
+      .n_slices     = n(),
+      across(any_of(meta_cols), first),
       .groups = "drop"
     ) |>
     mutate(duration = as.numeric(difftime(session_end, session_start, units = "mins"))) |>
-    arrange(pid, session_start)
+    arrange(pid, session_start) |>
+    as_tibble()
 
-  # align columns to original order where possible
-  out <- out |> select(any_of(names(df)), everything())
   out
 }
+
+
 
 avg_days_platform <- function(pltf, pids_filter = NULL) {
   data <- daily_all |> filter(platform == pltf)
