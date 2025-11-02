@@ -38,6 +38,7 @@ dat_cog <- read_csv("data/raw/cognitive_tasks_raw.csv.gz")
 
 # Arrange data to calculate differences correctly
 steam_clean <- steam |>
+  # get rid of idle games and non-games, see list in R/helpers.R
   filter(!title_id %in% idle_games & !title_id %in% non_games) |>
   mutate(
     steam_id = as.character(steam_id),
@@ -108,12 +109,16 @@ steam_clean <- steam |>
 #| label: preprocess-xbox
 
 # Clean Xbox data and keep only active gaming sessions
-# In particular, canonicalize overlapping Xbox sessions per pid:
+# In particular, Xbox has a handful of overlapping sessions, potentially a result of 
+# multi-device use or 
+# that we need to resolve:
 # - at most one title at any instant
 # - handoff tolerance 'tol_sec' (short overlaps => later-starting title wins)
 # - ≥3 concurrent titles => drop that slice
 
 xbox_clean <- xbox |>
+  arrange(pid, session_start, session_end) |> 
+  merge_adjacent_sessions(tol_sec = dseconds(60)) |>
   
   # filter non-foreground games
   filter(
@@ -130,8 +135,9 @@ xbox_clean <- xbox |>
     !is.na(session_end),
     session_end > session_start,
   ) |> 
-  arrange(pid, session_start, session_end) |>
-  canonicalize_xbox_sessions(tol_sec = 60)
+  resolve_overlaps() |> 
+  arrange(pid, session_start, session_end)
+
 ```
 
 ```{r}
@@ -141,11 +147,10 @@ tol <- dseconds(60)
 
 nintendo_clean <- nintendo |>
   
-  # filter duplicate rows and non-games 
+  # filter duplicate rows and merge adjacent sessions
   distinct() |> 
-  filter(
-    duration >= 1,
-  ) |> 
+  filter(duration >= 1, pid %in% intake$pid) |> 
+  merge_adjacent_sessions(tol_sec = tol) |>
   
   # filter suspicious sessions
   filter(
@@ -155,8 +160,6 @@ nintendo_clean <- nintendo |>
     session_end > session_start,
     session_start < time_of_pull
   ) |>
-  
-  merge_adjacent_sessions(tol_sec = tol) |>
   
   # clean up
   arrange(pid, title_id, session_start, session_end) |>
@@ -333,8 +336,18 @@ android <- android |>
 ```{r}
 #| label: preprocess-surveys
 
-daily <- daily |> 
+daily <- daily |>
+  # Pureprofile accidentally let through some unscreened and/or UK participants by mistake; exclude them here
+  filter(
+    pid %in% intake$pid,
+    !(pid %in% intake$pid[intake$country == "UK"])
+  ) |> 
   filter(wave <= 30)
+
+intake <- intake |> 
+  
+  # self-reported playtime over 50 hours per week is treated as NA 
+  mutate(self_reported_weekly_play = if_else(self_reported_weekly_play > 50*60, NA, self_reported_weekly_play))
 
 ```
 
