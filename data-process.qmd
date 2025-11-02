@@ -3,6 +3,8 @@ title: Clean raw data and save outputs
 ---
 
 ```{r}
+#| label: load-libraries
+
 library(data.table)
 library(dtplyr)
 library(fs)
@@ -15,9 +17,9 @@ source("R/helpers.R")
 ```{r}
 #| label: load-data-raw
 
-intake <- read_csv("data/raw/survey_intake_raw.csv.gz")
+intake <- read_csv("data/raw/survey_intake_raw.csv.gz", guess_max = 34000)
 daily <- read_csv("data/raw/survey_daily_raw.csv.gz")
-biweekly <- read_csv("data/raw/survey_biweekly_raw.csv.gz")
+biweekly <- read_csv("data/raw/survey_biweekly_raw.csv.gz", guess_max = 5000)
 
 nintendo <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
 steam <- read_csv("data/raw/telemetry_steam_raw.csv.gz")
@@ -36,6 +38,7 @@ dat_cog <- read_csv("data/raw/cognitive_tasks_raw.csv.gz")
 
 # Arrange data to calculate differences correctly
 steam_clean <- steam |>
+  # get rid of idle games and non-games, see list in R/helpers.R
   filter(!title_id %in% idle_games & !title_id %in% non_games) |>
   mutate(
     steam_id = as.character(steam_id),
@@ -94,7 +97,8 @@ steam_clean <- steam |>
     is_new_session = ifelse(is.na(hour_diff) | hour_diff > 1, 1, 0),
     session_group_id = cumsum(is_new_session),
     session_start = datetime_hour_start,
-    session_end = datetime_hour_start + hours(1) # Session ends at the end of the last hour block played
+    session_end = datetime_hour_start + hours(1), # Session ends at the end of the last hour block played
+    hour_start = floor_date(timestamp, "hour")
   ) |>
   filter(minutes > 0 & minutes < 120) |>
   ungroup()
@@ -105,23 +109,35 @@ steam_clean <- steam |>
 #| label: preprocess-xbox
 
 # Clean Xbox data and keep only active gaming sessions
-# In particular, canonicalize overlapping Xbox sessions per pid:
+# In particular, Xbox has a handful of overlapping sessions, potentially a result of 
+# multi-device use or 
+# that we need to resolve:
 # - at most one title at any instant
 # - handoff tolerance 'tol_sec' (short overlaps => later-starting title wins)
 # - ≥3 concurrent titles => drop that slice
 
 xbox_clean <- xbox |>
-  filter(title_placement == "Full") |>
-  filter(genres != "Video") |>
+  arrange(pid, session_start, session_end) |> 
+  merge_adjacent_sessions(tol_sec = dseconds(60)) |>
+  
+  # filter non-foreground games
   filter(
+    duration >= 1,
+    title_placement == "Full", # in foreground
+    !genres %in% c("Shopping", "Video", "Entertainment", "Utilities & tools"),
+    tolower(title_id) != "e1924c10-9c91-4652-81b9-8ca0670e77a7" # home screen
+  ) |>
+  
+  # filter suspicious sessions
+  filter(
+    duration <= 480,
     !is.na(session_start),
     !is.na(session_end),
-    session_end > session_start
-  ) |>
-  filter(title_id != "e1924c10-9c91-4652-81b9-8ca0670e77a7") |> # something weird with this title, almost every player has played it and it accounts for 4x the playtime of the next-highest game - and it's unrated. I suspect it's the home screen or something.
-  filter(duration <= 600) |>
-  arrange(pid, session_start, session_end) |>
-  canonicalize_xbox_sessions(tol_sec = 60)
+    session_end > session_start,
+  ) |> 
+  resolve_overlaps() |> 
+  arrange(pid, session_start, session_end)
+
 ```
 
 ```{r}
@@ -129,30 +145,27 @@ xbox_clean <- xbox |>
 
 tol <- dseconds(60)
 
-nintendo_clean <- lazy_dt(nintendo, immutable = TRUE) |>
+nintendo_clean <- nintendo |>
+  
+  # filter duplicate rows and merge adjacent sessions
+  distinct() |> 
+  filter(duration >= 1, pid %in% intake$pid) |> 
+  merge_adjacent_sessions(tol_sec = tol) |>
+  
+  # filter suspicious sessions
   filter(
+    duration <= 480,
     !is.na(session_start),
     !is.na(session_end),
     session_end > session_start,
     session_start < time_of_pull
   ) |>
+  
+  # clean up
   arrange(pid, title_id, session_start, session_end) |>
-  group_by(pid, title_id) |> 
-  mutate(
-    start_num = as.numeric(session_start),
-    end_num = as.numeric(session_end),
-    prev_max_end = lag(cummax(end_num), default = -Inf),
-    new_cluster = start_num > (prev_max_end + as.numeric(tol)),
-    cluster = cumsum(new_cluster),
-    dur_sec = end_num - start_num
-  ) |> 
-  group_by(pid, title_id, cluster) |>
-  slice_max(n = 1, order_by = dur_sec, with_ties = FALSE) |>
-  ungroup() |> 
-  mutate(duration = dur_sec / 60) |> 
   select(pid, title_id, session_start, session_end, duration, device_type, operation_mode) |>
-  filter(duration <= 600) |>
   as_tibble()
+
 ```
 
 ```{r}
@@ -203,14 +216,140 @@ ios <- ios |>
 
 ```
 
-```{r}
-#| label: preprocess-surveys
+As preregistered, we exclude days where total gaming time (across all platforms) exceeds 16 hours, as well as sessions that are more than 8 hours long or whose end time precedes their start time. The exclusions are applied to all relevant datasets.
 
-daily <- daily |> 
-  filter(wave <= 30)
+```{r}
+#| label: apply-exclusions
+
+# --- Build tz map (as in your script) ---------------------------------------
+tz_map <- intake |>
+  mutate(
+    pid = as.character(pid),
+    off = offset_secs(local_timezone),
+    .keep = "none"
+  ) |>
+  distinct(pid, .keep_all = TRUE)
+
+# --- Hourly from sessions (Nintendo + Xbox) ---------------------------------
+sessions_telemetry <- bind_rows(
+  xbox_clean |> mutate(platform = "Xbox"),
+  nintendo_clean |> mutate(platform = "Nintendo")
+) |>
+  mutate(pid = as.character(pid)) |>
+  left_join(tz_map, by = "pid") |>
+  mutate(
+    start_local = session_start + off,
+    end_local   = session_end   + off,
+    duration_min = as.numeric(difftime(session_end, session_start, units = "mins"))
+  ) |>
+  filter(
+    !is.na(session_start), !is.na(session_end),
+    session_end > session_start,
+    duration_min >= 1
+  )
+
+hourly_from_sessions <- sessions_telemetry |>
+  filter(!is.na(off)) |>
+  mutate(
+    h0_local = floor_date(start_local, "hour"),
+    h1_local = floor_date(end_local - seconds(1), "hour"),
+    n_hours = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
+  ) |>
+  tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
+  mutate(
+    hour_start_local = h0_local + hours(k - 1),
+    minutes = pmax(
+      0,
+      as.numeric(difftime(
+        pmin(end_local, hour_start_local + hours(1)),
+        pmax(start_local, hour_start_local),
+        units = "mins"
+      ))
+    ),
+    hour_start_utc = hour_start_local - off
+  ) |>
+  select(pid, platform, hour_start_local, hour_start_utc, minutes)
+
+# --- Hourly from Steam (already hourly) -------------------------------------
+hourly_from_steam <- steam_clean |>
+  select(pid, datetime_hour_start, minutes) |>
+  mutate(pid = as.character(pid)) |>
+  left_join(tz_map, by = "pid") |>
+  mutate(
+    platform = "Steam",
+    hour_start_utc   = datetime_hour_start,
+    hour_start_local = datetime_hour_start + off
+  ) |>
+  select(pid, platform, hour_start_local, hour_start_utc, minutes)
+
+hourly_telemetry <- bind_rows(hourly_from_sessions, hourly_from_steam)
+
+# --- Daily totals (local day) incl. iOS/Android ------------------------------
+daily_telemetry <- hourly_telemetry |>
+  mutate(day_local = as.Date(hour_start_local)) |>
+  group_by(pid, platform, day_local) |>
+  summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+daily_ios_android <- bind_rows(
+  ios     |> transmute(pid = as.character(pid), platform = "iOS",     day_local = as.Date(day_local), minutes),
+  android |> transmute(pid = as.character(pid), platform = "Android", day_local = as.Date(day_local), minutes)
+)
+
+daily_all <- bind_rows(daily_telemetry, daily_ios_android) |>
+  group_by(pid, day_local) |>
+  summarise(total_minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
+
+exclusion_days <- daily_all |>
+  filter(total_minutes > 16 * 60) |>
+  select(pid, day_local)
+
+# --- Apply exclusions back to each dataset ----------------------------------
+steam_clean <- steam_clean |>
+  left_join(tz_map, by = c("pid" = "pid")) |>
+  mutate(day_local = as.Date(datetime_hour_start + off)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local")) |>
+  select(-off, -day_local)
+
+xbox_clean <- xbox_clean |>
+  left_join(tz_map, by = "pid") |>
+  mutate(day_local = as.Date(session_start + off)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local")) |>
+  select(-off, -day_local)
+
+nintendo_clean <- nintendo_clean |>
+  left_join(tz_map, by = "pid") |>
+  mutate(day_local = as.Date(session_start + off)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local")) |>
+  select(-off, -day_local)
+
+ios <- ios |>
+  mutate(pid = as.character(pid), day_local = as.Date(day_local)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local"))
+
+android <- android |>
+  mutate(pid = as.character(pid), day_local = as.Date(day_local)) |>
+  anti_join(exclusion_days, by = c("pid", "day_local"))
 
 ```
 
+
+```{r}
+#| label: preprocess-surveys
+
+daily <- daily |>
+  # Pureprofile accidentally let through some unscreened and/or UK participants by mistake; exclude them here
+  filter(
+    pid %in% intake$pid,
+    !(pid %in% intake$pid[intake$country == "UK"])
+  ) |> 
+  filter(wave <= 30)
+
+intake <- intake |> 
+  
+  # self-reported playtime over 50 hours per week is treated as NA 
+  mutate(self_reported_weekly_play = if_else(self_reported_weekly_play > 50*60, NA, self_reported_weekly_play))
+
+```
 
 ## Write clean data files
 

@@ -42,7 +42,8 @@ diary_study_days <- diary %>%
     ),
     study_day = ceiling(as.numeric(
       difftime(response_datetime, enrollment_datetime, units = "days")
-    )) + 1
+    )) +
+      1
   ) %>%
   filter(!is.na(study_day), study_day >= 1) %>%
   select(pid, study_day)
@@ -63,7 +64,8 @@ panel_study_days <- panel %>%
     ),
     study_day = ceiling(as.numeric(
       difftime(response_datetime, enrollment_datetime, units = "days")
-    )) + 1
+    )) +
+      1
   ) %>%
   filter(!is.na(study_day), study_day >= 1) %>%
   select(pid, study_day)

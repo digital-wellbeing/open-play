@@ -1,6 +1,6 @@
-# Relationships Between Health and Logged Video Game Play Across Platforms
+# Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological assessments
 
-🟢️ The output from this repo can be viewed at [https://digital-wellbeing.github.io/platform-study-rr/](https://digital-wellbeing.github.io/platform-study-rr/). 🟢️
+🟢️ The output from this repo can be viewed at [https://digital-wellbeing.github.io/open-play/](https://digital-wellbeing.github.io/open-play/). 🟢️
 
 This repo hosts the data for our project on video game play and wellbeing. Its key elements are:
 - `data-process.qmd`, which processes the raw data into cleaned data

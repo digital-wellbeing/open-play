@@ -30,3 +30,4 @@ _freeze/R/stage_1_simulations/
 
 # Exclude missingness analysis script
 R/missingness_analysis.R
+R/investigate_xbox.R

@@ -1,7 +1,6 @@
 project:
   type: website
   execute-dir: project
-  # Use Actions artifact, not docs/:
   output-dir: _site
   render:
     - data-process.qmd
@@ -10,7 +9,7 @@ project:
 execute:
   freeze: auto
 
-repo-url: https://github.com/digital-wellbeing/platform-study-rr
-site-url: https://digital-wellbeing.github.io/platform-study-rr/
+repo-url: https://github.com/digital-wellbeing/open-play
+site-url: https://digital-wellbeing.github.io/open-play
 data-url: https://example.com
-data-license: CC0
+data-license: CC0 (with supplemental reidentification clause)
