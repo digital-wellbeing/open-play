@@ -691,12 +691,12 @@ sankey_data <- intake |>
       "Ineligible",
       "Linked ≥1 account"
     ),
-    Account_Validation_1 = ifelse(
+    `Account\nValidation 1` = ifelse(
       pid %in% c(xbox$pid, nintendo$pid, steam$pid),
       "Any trace data",
       "No trace data"
     ),
-    Account_Validation_2 = ifelse(
+    `Account\nValidation 2` = ifelse(
       qualified,
       "Recent trace data",
       "No recent trace data"
@@ -711,28 +711,16 @@ sankey_data <- intake |>
   make_long(
     Screening,
     Linking,
-    Account_Validation_1,
-    Account_Validation_2,
+    `Account\nValidation 1`,
+    `Account\nValidation 2`,
     Surveys
   ) |>
   left_join(node_counts, by = "node") |>
-  # map internal names to pretty labels only for display
   mutate(
-    node_pretty = recode(
-      node,
-      "Account_Validation_1" = "Account\nValidation 1",
-      "Account_Validation_2" = "Account\nValidation 2",
-      .default = node
-    ),
-    next_node_pretty = recode(
-      next_node,
-      "Account_Validation_1" = "Account\nValidation 1",
-      "Account_Validation_2" = "Account\nValidation 2",
-      .default = next_node
-    ),
-    node = factor(node_pretty, levels = rev(lvl)),
-    next_node = factor(next_node_pretty, levels = rev(lvl)),
-    node_label = sprintf("%s\n%s", as.character(node), n)
+    node = factor(node, levels = rev(lvl)),
+    next_node = factor(next_node, levels = rev(lvl)),
+    node_label = sprintf("%s\n%s", as.character(node), n), # force character + real newline
+    node_label = stringi::stri_replace_all_fixed(node_label, "\\n", "\n") # just in case
   )
 
 ggplot(
