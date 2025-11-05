@@ -233,6 +233,8 @@ time_use <- read_csv("data/clean/timeuse.csv.gz")
 
 xbox_raw <- read_csv("data/raw/telemetry_xbox_raw.csv.gz")
 nintendo_raw <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
+daily_raw <- read_csv("data/raw/survey_daily_raw.csv.gz")
+biweekly_raw <- read_csv("data/raw/survey_biweekly_raw.csv.gz")
 ```
 
 ```{r}
@@ -437,12 +439,27 @@ n_simon <- number(
   scale_cut = cut_long_scale()
 )
 
-prop_failed_daily_attn <- number(
-  sum(daily$bpnsfs_failed_att_check) / nrow(daily) * 100,
+prop_duplicate_daily <- number(
+  100 *
+    (1 - (nrow(daily) / nrow(daily_raw[!daily_raw$bpnsfs_failed_att_check, ]))),
   accuracy = .1
 )
+
+prop_duplicate_biweekly <- number(
+  100 *
+    (1 -
+      (nrow(biweekly) /
+        nrow(biweekly_raw[!biweekly_raw$bangs_failed_att_check, ]))),
+  accuracy = .1
+)
+
+prop_failed_daily_attn <- number(
+  sum(daily_raw$bpnsfs_failed_att_check) / nrow(daily_raw) * 100,
+  accuracy = .1
+)
+
 prop_failed_biweekly_attn <- number(
-  sum(biweekly$bangs_failed_att_check) / nrow(biweekly) * 100,
+  sum(biweekly_raw$bangs_failed_att_check) / nrow(biweekly_raw) * 100,
   accuracy = .1
 )
 
@@ -475,6 +492,10 @@ n_timeuse_entries_per_day <- number(
 
 ```
 
+---
+abstract: |
+  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected over 12 weeks that included thirty daily assessments, six biweekly surveys, three biweekly cognitive tests, and play telemetry for `{r} n_months` months. The data include `{r} n_hours` hours of video game play across `{r} n_games` titles, `{r} n_surveys` responses to 14 survey instruments, and `{r} n_simon` attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
+---
 
 # Introduction
 
@@ -1368,6 +1389,8 @@ ggplot(paired_summary, aes(x = hours, y = platform)) +
 ## Survey measures
 
 We collected a variety of self-report measures at different time scales. We briefly describe which constructs we collected here; for further details of the specific measures and example items, see @tbl-measures.
+
+To prepare daily and biweekly survey data, we removed duplicate entries from within the same survey wave and those that had errors in the coding of waves (e.g., administration of survey wave 31 due to technical issues), in total comprising `r prop_duplicate_daily`% of daily surveys, `r prop_duplicate_biweekly`% of biweekly surveys. We further removed failed `r prop_failed_daily_attn`% of daily surveys and `r prop_failed_biweekly_attn`% of biweekly surveys that failed an attention check (see Data Quality below), resulting in a final dataset of `r number(nrow(daily), big.mark = ",")` daily surveys and `r number(nrow(biweekly), big.mark = ",")` biweekly surveys.
 
 *Trait / traitlike (baseline).* We assessed chronotype, Big 5 personality, player trait typology, and gaming disorder symptoms at baseline. Gaming disorder symptoms were measured twice, at biweekly waves 1 and 6.
 
