@@ -2572,7 +2572,6 @@ appendix_tbl <- bind_rows(
 ) |>
   arrange(Group, Construct) |>
   select(Construct, Measure, `Example Item`, `Response format`, Frequency) |>
-  bind_rows(t_selfreport) |>
   mutate(
     Frequency = factor(
       Frequency,
