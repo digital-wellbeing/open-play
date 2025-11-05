@@ -440,9 +440,6 @@ dropped <- daily |>
   arrange(pid, date) |>
   select(pid, date, baseline_day, ideal_baseline_day, derived_wave, drop_reason)
 
-# inspect
-View(dropped)
-
 ```
 
 ```{r}
