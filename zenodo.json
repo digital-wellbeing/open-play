@@ -1,0 +1,49 @@
+{
+  "title": "Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological assessments",
+  "creators": [
+    {
+      "name": "Ballou, Nick",
+      "orcid": "0000-0003-4126-0696",
+      "affiliation": "University of Oxford, Oxford Internet Institute"
+    },
+    {
+      "name": "Földes, Tamás Andrei",
+      "orcid": "0000-0002-0623-9149",
+      "affiliation": "University of Oxford, Oxford Internet Institute"
+    },
+    {
+      "name": "Vuorre, Matti",
+      "orcid": "0000-0001-5052-066X",
+      "affiliation": "Tilburg University, Department of Social Psychology"
+    },
+    {
+      "name": "Hakman, Thomas",
+      "orcid": "0009-0009-8292-2482",
+      "affiliation": "University of Oxford, Oxford Internet Institute"
+    },
+    {
+      "name": "Magnusson, Kristoffer",
+      "orcid": "0000-0003-0713-0556",
+      "affiliation": "Karolinska Institute"
+    },
+    {
+      "name": "Przybylski, Andrew K",
+      "orcid": "0000-0001-5547-2185",
+      "affiliation": "University of Oxford, Oxford Internet Institute"
+    }
+  ],
+  "description": "A longitudinal dataset of multi-platform video game digital trace data and psychological assessments",
+  "keywords": [
+    "dataset",
+    "video games",
+    "well-being",
+    "mental health",
+    "trace data",
+    "attention",
+    "reproducible research"
+  ],
+  "license": "CC0",
+  "upload_type": "publication",
+  "publication_type": "article",
+  "access_right": "open"
+}
