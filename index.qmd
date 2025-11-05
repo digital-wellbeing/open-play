@@ -1390,7 +1390,7 @@ ggplot(paired_summary, aes(x = hours, y = platform)) +
 
 We collected a variety of self-report measures at different time scales. We briefly describe which constructs we collected here; for further details of the specific measures and example items, see @tbl-measures.
 
-To prepare daily and biweekly survey data, we removed duplicate entries from within the same survey wave and those that had errors in the coding of waves (e.g., administration of survey wave 31 due to technical issues), in total comprising `r prop_duplicate_daily`% of daily surveys, `r prop_duplicate_biweekly`% of biweekly surveys. We further removed failed `r prop_failed_daily_attn`% of daily surveys and `r prop_failed_biweekly_attn`% of biweekly surveys that failed an attention check (see Data Quality below), resulting in a final dataset of `r number(nrow(daily), big.mark = ",")` daily surveys and `r number(nrow(biweekly), big.mark = ",")` biweekly surveys.
+To prepare daily and biweekly survey data, we removed duplicate entries from within the same survey wave and those that had errors in the coding of waves (e.g., administration of survey wave 31 due to technical issues), in total comprising `r prop_duplicate_daily`% of daily surveys, `r prop_duplicate_biweekly`% of biweekly surveys. We further removed rows including failed attention checks (see Data Quality below), comprising `r prop_failed_daily_attn`% of daily surveys and `r prop_failed_biweekly_attn`% of biweekly surveys. After cleaning, the final survey dataset includes `r number(nrow(daily), big.mark = ",")` daily surveys and `r number(nrow(biweekly), big.mark = ",")` biweekly surveys.
 
 *Trait / traitlike (baseline).* We assessed chronotype, Big 5 personality, player trait typology, and gaming disorder symptoms at baseline. Gaming disorder symptoms were measured twice, at biweekly waves 1 and 6.
 
@@ -2572,7 +2572,6 @@ appendix_tbl <- bind_rows(
 ) |>
   arrange(Group, Construct) |>
   select(Construct, Measure, `Example Item`, `Response format`, Frequency) |>
-  bind_rows(t_selfreport) |>
   mutate(
     Frequency = factor(
       Frequency,
