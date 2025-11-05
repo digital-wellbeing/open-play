@@ -1,8 +1,11 @@
 # Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological assessments
 
-🟢️ The output from this repo can be viewed at [https://digital-wellbeing.github.io/open-play/](https://digital-wellbeing.github.io/open-play/). 🟢️
+🟢️ Stable releases of the data and code found in this repository are available on Zenodo ([https://doi.org/10.5281/zenodo.17536656](https://doi.org/10.5281/zenodo.17536656)). 🟢️
 
-This repo hosts the data for our project on video game play and wellbeing. Its key elements are:
+🔗 The output from this repo can be viewed at [https://digital-wellbeing.github.io/open-play/](https://digital-wellbeing.github.io/open-play/). 🔗
+
+This repo hosts the data and descriptive analysis code for our project on video game play and wellbeing. Its key elements are:
+
 - `data-process.qmd`, which processes the raw data into cleaned data
 - `index.qmd`, which generates manuscript documenting the dataset
 - `data/raw`, which contains the minimally processed, pseudonymized raw data
