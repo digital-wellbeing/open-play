@@ -545,6 +545,12 @@ overview <- bind_rows(
     avg_days = nrow(biweekly) / n_distinct(biweekly$pid)
   ),
   summ_basic(
+    simon,
+    pid,
+    "Attention tasks",
+    avg_days = nrow(simon) / n_distinct(simon$pid)
+  ),
+  summ_basic(
     steam_survey,
     pid,
     "Steam",
