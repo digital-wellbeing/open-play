@@ -8,12 +8,15 @@ author:
     email: nick@nickballou.com
     affiliations:
       - ref: 1
-    # roles:
-    #   - conceptualization
-    #   - data curation
-    #   - methodology
-    #   - formal analysis
-    #   - writing
+    roles:
+      - conceptualization
+      - data curation
+      - investigation
+      - methodology
+      - formal analysis
+      - visualization
+      - writing
+      - editing
 
   - name: Tamás Andrei Földes
     corresponding: false
@@ -21,12 +24,14 @@ author:
     email: tamas.foldes@oii.ox.ac.uk
     affiliations:
       - ref: 1
-    # roles:
-    #   - conceptualization
-    #   - data curation
-    #   - methodology
-    #   - formal analysis
-    #   - writing
+    roles:
+      - conceptualization
+      - data curation
+      - methodology
+      - formal analysis
+      - validation
+      - writing
+      - editing
 
   - name: Matti Vuorre
     corresponding: false
@@ -49,10 +54,10 @@ author:
     email: thomas.hakman@oii.ox.ac.uk
     affiliations:
       - ref: 1
-    # roles:
-    #   - data curation
-    #   - validation
-    #   - editing
+    roles:
+      - investigation
+      - data curation
+      - editing
 
   - name: Kristoffer Magnusson
     corresponding: false
@@ -60,9 +65,11 @@ author:
     affiliations:
       - ref: 3
       - ref: 1
-    # roles:
-    #   - methodology
-    #   - editing
+    roles:
+      - methodology
+      - data curation
+      - software
+      - editing
 
   - name: Andrew K Przybylski
     corresponding: false
@@ -70,11 +77,12 @@ author:
     orcid: 0000-0001-5547-2185
     affiliations:
       - ref: 1
-    # roles:
-    #   - conceptualization
-    #   - funding acquisition
-    #   - project administration
-    #   - editing
+    roles:
+      - conceptualization
+      - funding acquisition
+      - project administration
+      - supervision
+      - editing
 affiliations:
   - id: 1
     name: University of Oxford
@@ -1110,7 +1118,7 @@ This study received ethical approval from the Social Sciences and Humanities Int
 
 The data released here is pseudonymized for participant privacy. However, we recognize that the possibility of reidentification cannot be ruled out due to the detailed demographics present in the dataset alongside the digital trace data. With careful consideration of the risks [e.g., @ShawEtAl2025DECIDE], we elect to share the full data, owing to several factors: (1) participants were thoroughly briefed on the procedure and directly consented to their data being pseudonymously shared; (2) for sensitive items (e.g., political affiliation), participants could select "prefer not to share"; (3) evidence suggests even datasets with less participant information may be reidentifiable based on trace data alone [@SekaraEtAl2021Temporal]; (4) data-sharing agreements with Nintendo and Microsoft specifically prohibit the companies themselves from connecting our survey data back to their telemetry; (5) the harms associated with reidentification are moderate, and (6) the research community has a strong interest in open data for reproducibility and cumulative science.
 
-To balance openness with ethical responsibility, the dataset is released under a modified CC0 1.0 Universal license that retains full reuse rights but includes an additional No-Reidentification Clause, requiring users to follow standard research ethics and prohibiting any attempt to reidentify participants.
+To balance openness with ethical responsibility, the dataset is released under a modified CC-BY-NC license that retains full non-commercial reuse rights but includes an additional No-Reidentification Clause, requiring users to follow standard research ethics and prohibiting any attempt to reidentify participants.
 
 Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening, £2 for the 10-minute intake survey (plus £5 for linking at least one account with recent data), £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.
 
@@ -2310,23 +2318,25 @@ Spanning `r n_hours` hours, `r n_users` user-platform combinations, and `r n_gam
 
 ## Digital Trace Data Infrastructure
 
-This dataset delivers on both calls for greater collaboration between the tech industry and academics [@KingPersily2020New; @LazerEtAl2020Computational], as well as simultaneous calls for better trace data access without direct industry involvement [@Xiao2023Debate; @ValkenburgEtAl2024It; @BoeschotenEtAl2023Port]. The data-sharing agreements with Nintendo of America, Nintendo of Europe, and Microsoft are the first of their kind, enabling researchers to access telemetry data from major gaming platforms while ensuring user privacy and data security. By making this dataset openly available under a CC0 license, we aim to catalyze further research in this area, allowing other researchers to explore the rich data we have collected.
+This dataset delivers on both calls for greater collaboration between the tech industry and academics [@KingPersily2020New; @LazerEtAl2020Computational], as well as simultaneous calls for better trace data access without direct industry involvement [@Xiao2023Debate; @ValkenburgEtAl2024It; @BoeschotenEtAl2023Port]. The data-sharing agreements with Nintendo of America, Nintendo of Europe, and Microsoft are the first of their kind, enabling researchers to access telemetry data from major gaming platforms while ensuring user privacy and data security. By making this dataset openly available under a modified CC-BY-NC license, we aim to catalyze further research in this area, allowing other researchers to explore the rich data we have collected.
 
-At the same time, the Steam and smartphone data collection show the value of open trace data to study platforms that are less willing or able to participate actively. Several previous studies have collected smartphone data using screenshots, with some success in automating the extraction of these data [@ParrySewall2021How; @FeizEtAl2022Understanding; @LiuEtAl2024UserDonated]. Open trace data infrastructure remains an arms race, often relying on industry-provided APIs that can change or be deprecated at any time [@DavidsonEtAl2023Platformcontrolled; @BallouEtAl2023Four]. Nonetheless, we believe it is vital for researchers to advance both pathways for the best chance to understand the effects of technology.
+At the same time, the Steam and smartphone data collection show the value of open trace data to study platforms that are less willing or able to participate actively. Several previous studies have collected smartphone data using screenshots, with some success in automating the extraction of these data [@ParrySewall2021How; @FeizEtAl2022Understanding; @LiuEtAl2024UserDonated]. Open trace data infrastructure remains an arms race, often relying on industry-provided APIs that can change or be deprecated at any time [@DavidsonEtAl2023Platformcontrolled; @BallouEtAl2023Four]. Nonetheless, we believe it is vital for researchers to advance both pathways for the best chance to understand the effects of technology. 
 
 ## Empirical Opportunities
 
 We believe this dataset has potential to address a wide variety of pertinent research questions for the field. Some of these questions will be addressed in forthcoming registered reports: specifically, we have plans to test (1) key hypotheses from the Basic Needs in Games model [@BallouDeterding2024Basic] about how gaming relates to basic psychological needs over time, (2) the relationship between late-night gaming and sleep, and (3) the relationship between playtime in different genres and wellbeing.
 
-The richness of this data means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). To stimulate ideas, we present a few questions we think the data are well-suited to answering.
+The data's richness means that researchers can explore numerous other questions (or, indeed, conduct and compare alternative analysis approaches to the above questions). We particularly encourage work that tests explicit causal models---when assumptions about data generating processes are transparent, observational data can provide meaningful falsifying tests of causal effects. A recent paper presents 13 such potential causal effects of games on wellbeing [@BallouEtAl2025How], and several of these could tested using the data here. For example, the relationship between *action game mechanics, executive function, and stress* [@HilgardEtAl2019overestimation; @BediouEtAl2018metaanalysis] could be investigated by combining the game genre data, stress data from daily surveys, and digital trace data with genre coding. The relationship between *social experiences in games and wellbeing* [@MandrykEtAl2020how] could be investigating by coding games for single- or multiplayer features, using the self-reported social context of play, and subsequent relatedness satisfaction scores.  
+
+The dataset need not be limited to questions of wellbeing. Other questions of potential interest include:
 
 *How do neurotypical and neurodiverse players differ in their gaming behavior?* Using the neurodivergence data we collected (which includes, for example, `r table(intake$neuro_iden_asd)[1]` participants who identify as having autism and `r table(intake$neuro_iden_adhd)[1]` who identify as having ADHD), researchers can explore differences in the types of games, gaming experiences, and trajectory of play over time between neurotypical and neurodiverse players. Neurodiversity in games has regularly been studied in the context of specific games and with qualitative methods [@KilmerEtAl2023Therapeuticallya; @ZolyomiSchmalz2017Mining], with some researchers noting that research focuses on therapeutic interventions delivered through games to "cure" neurodivergent players of undesirable traits [@SpielGerling2021Purpose]. Research on neurodivergent players' naturalistic gaming behavior across platforms has to date received less attention.
 
-*How do seasons and weather impact playtime?* Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors causally influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable precise estimates of how, when, and how much people play in response to seasonal and meteorological changes. Quantifying these effects can better distinguish environmental factors driving video game play from other drivers (like work schedules or weekend routines) and improve our ability to predict regional changes to gaming behavior on a day-to-day basis [@Palomba2019Digital], or the behavioral impacts of climate change in the long term.
+*How do seasons and weather impact play?* Because we capture time-stamped play sessions alongside participants’ geographic locations, researchers can merge in high‐resolution weather and daylight data to examine how environmental factors influence gaming behavior. Causal inference techniques such as inverse probability weighting can enable estimates of how, when, and how much people play in response to seasonal and meteorological changes. Quantifying these effects can better distinguish environmental factors driving video game play from other drivers (like work schedules or weekend routines) and improve our ability to predict regional changes to gaming behavior on a day-to-day basis [@Palomba2019Digital], or the behavioral impacts of climate change in the long term.
 
 *Does irregular, extended, or overnight play predict subsequent rises in problematic play, and can telemetry provide early warning signals?* Using the data we collected about displacement---the extent to which gaming supports or interferes with other areas of life---as well as about gaming disorder (at Waves 1 and 6), telemetry can provide insights into patterns of gaming that coincide or lead to subsequent changes in the degree of problematic play. Long-term, more accurately identifying the longitudinal behavioral correlates of maladaptive gaming---beyond simple heuristics such as the average amount of weekly play in the last 6 months---can help us create personalized models and early warning systems for players and parents.
 
-We encourage researchers from a wide range of disciplines to explore these or other questions using the data we present, which is freely available for reuse under a CC0 license.
+We encourage researchers from a wide range of disciplines to explore these or other questions using the data we present.
 
 ## Limitations
 
