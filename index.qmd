@@ -1181,7 +1181,10 @@ slot_summary <- slot_per_player |>
 
 ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
   geom_tile() +
-  scale_x_continuous(breaks = 0:23) +
+  scale_x_continuous(
+    breaks = 0:23,
+    expand = expansion(0)
+  ) +
   scale_fill_viridis_c(
     option = "magma",
     labels = scales::percent_format(accuracy = .1),
