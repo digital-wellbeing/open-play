@@ -1873,7 +1873,7 @@ ggplot() +
   scale_x_datetime(
     limits = c(window_start, window_end),
     breaks = seq(window_start, window_end, by = "3 hours"),
-    date_labels = "%H:%M",
+    date_labels = "%H",
     expand = expansion(mult = c(0, 0))
   ) +
   scale_y_continuous(
@@ -1891,11 +1891,9 @@ ggplot() +
     x = "Local time",
     y = NULL,
   ) +
-  coord_cartesian(clip = "off") +
   theme(
     panel.grid.major.y = element_blank(),
     panel.grid.minor = element_blank(),
-    axis.text.x = element_text(angle = 45, hjust = 1),
     axis.title.y = element_blank(),
     legend.box = "vertical"
   )
