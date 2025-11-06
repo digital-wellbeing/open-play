@@ -2344,7 +2344,7 @@ We also see strong potential in combining digital trace data with experimental d
 
 ## Data Availability
 
-All data, materials, and code related to the dataset and this manuscript are available under {{< meta data-license >}} at {{< meta data-url >}}.
+All data, materials, and code related to the dataset and this manuscript are available under {{< meta data-license >}} at <https://doi.org/10.5281/zenodo.17536656>.
 
 # References
 
