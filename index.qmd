@@ -1779,11 +1779,10 @@ simon |>
 
 ## Time Use
 
-
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-time-use
-#| fig-cap: "Illustrative single-day overview of one study day, consisting of a participant's time use diary (top row), gaming as recorded through telemetry (middle row), and daily survey completion (bottom row)."
+#| fig-cap: "Illustrative overview of one study day (p9730913604, Apr 4 2025), consisting of a participant's time use diary (top row), gaming as recorded through telemetry (middle row), and daily survey completion (bottom row)."
 #| fig-asp: 0.35
 #| out.width: 95%
 
@@ -1900,19 +1899,19 @@ ggplot() +
   ) +
   scale_color_manual(values = platform_colors, name = "Platform") +
   guides(
-    fill  = guide_legend(title = "Diary activity",
-                         override.aes = list(alpha = 1),
-                         keywidth = unit(6, "mm"),
-                         keyheight = unit(6, "mm")),
-    color = guide_legend(title = "Platform",
-                         override.aes = list(linewidth = 6),
-                         keywidth = unit(6, "mm"),
-                         keyheight = unit(6, "mm"))
+    fill  = guide_legend(
+      title = "Diary activity",
+      override.aes = list(alpha = 1),
+      keywidth  = grid::unit(6, "mm"),
+      keyheight = grid::unit(4, "mm")
+    ),
+    color = guide_legend(
+      title = "Platform",
+      override.aes = list(linewidth = 3.5, linetype = 1),  # thinner, less "cartoony"
+      keywidth  = grid::unit(6, "mm"),
+      keyheight = grid::unit(4, "mm")
+    )
   ) +
-  theme(
-    legend.key.width  = unit(6, "mm"),
-    legend.key.height = unit(6,  "mm")
-  ) + 
   labs(
     x = "Local time",
     y = NULL,
@@ -1921,6 +1920,10 @@ ggplot() +
     panel.grid.major.y = element_blank(),
     panel.grid.minor = element_blank(),
     axis.title.y = element_blank(),
+    legend.key.width  = grid::unit(6, "mm"),
+    legend.key.height = grid::unit(4, "mm"),
+    legend.spacing.y = unit(-1, "mm"),
+    legend.box.margin = margin(0, 0, 0, 0),
     legend.box = "vertical"
   )
 
@@ -1928,7 +1931,7 @@ ggplot() +
 
 :::
 
-In each daily survey (US only), participants completed a light time use diary asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activites based on their start and end time using a custom web app ([https://github.com/andreifoldes/o-timeusediary](https://github.com/andreifoldes/o-timeusediary)). Participants could select from 11 categories: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
+In each daily survey (US only), participants completed a light time use diary asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activities based on their start and end time using a custom web app ([https://github.com/andreifoldes/o-timeusediary](https://github.com/andreifoldes/o-timeusediary)). Participants could select from 11 categories: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
 
 @fig-time-use presents an illustrative example of one participant's time use diary for a single day, alongside their gaming sessions recorded through telemetry and survey completion time.
 
