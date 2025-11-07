@@ -1,4 +1,4 @@
-# Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological assessments
+# Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological measures
 
 🟢️ Stable releases of the data and code found in this repository are available on Zenodo ([https://doi.org/10.5281/zenodo.17536656](https://doi.org/10.5281/zenodo.17536656)). 🟢️
 

@@ -1,6 +1,6 @@
 ---
 title: |
-  Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological assessments
+  Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological measures
 author:
   - name: Nick Ballou
     corresponding: true
@@ -72,7 +72,7 @@ author:
       - editing
 
   - name: Andrew K Przybylski
-    corresponding: false
+    corresponding: true
     email: andy.przybylski@oii.ox.ac.uk
     orcid: 0000-0001-5547-2185
     affiliations:
@@ -241,8 +241,8 @@ time_use <- read_csv("data/clean/timeuse.csv.gz")
 
 xbox_raw <- read_csv("data/raw/telemetry_xbox_raw.csv.gz")
 nintendo_raw <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
-daily_raw <- read_csv("data/raw/survey_daily_raw.csv.gz")
-biweekly_raw <- read_csv("data/raw/survey_biweekly_raw.csv.gz")
+daily_raw <- read_csv("data/raw/survey_daily_raw.csv.gz", guess_max = 10000)
+biweekly_raw <- read_csv("data/raw/survey_biweekly_raw.csv.gz", guess_max = 5000)
 ```
 
 ```{r}
@@ -298,7 +298,7 @@ tz_map <- intake |>
 
 # aggregate data at each level of granularity (session, hourly, daily)
 # --- 1) SESSION-LEVEL (Nintendo + Xbox) ------------------------------------
-sessions_all <- bind_rows(
+session_telemetry <- bind_rows(
   xbox |> mutate(platform = "Xbox"),
   nintendo |> mutate(platform = "Nintendo")
 ) |>
@@ -321,7 +321,7 @@ sessions_all <- bind_rows(
 
 # --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
 # expand sessions into local-hour bins, compute overlap minutes, and add UTC hour
-hourly_from_sessions <- sessions_all |>
+hourly_from_sessions <- session_telemetry |>
   filter(!is.na(off)) |>
   mutate(
     h0_local = floor_date(start_local, "hour"),
@@ -360,10 +360,10 @@ hourly_from_steam <- steam |>
   group_by(pid, platform, title_id, hour_start_local, hour_start_utc) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
-hourly_all <- bind_rows(hourly_from_sessions, hourly_from_steam)
+hourly_telemetry <- bind_rows(hourly_from_sessions, hourly_from_steam)
 
 # --- 3) DAILY (Nintendo + Xbox + Steam; collapse hourly to days) -----------
-daily_all <- hourly_all |>
+daily_telemetry <- hourly_telemetry |>
   mutate(
     day_local = as.Date(hour_start_local),
   ) |>
@@ -373,14 +373,14 @@ daily_all <- hourly_all |>
   bind_rows(android)
 
 # --- 4) weekly
-weekly_all <- daily_all |>
+weekly_all <- daily_telemetry |>
   mutate(
     week = floor_date(day_local, "week")
   ) |>
   group_by(pid, platform, week) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
-telemetry_spans <- daily_all |>
+telemetry_spans <- daily_telemetry |>
   group_by(pid, platform) |>
   summarise(
     telemetry_start = min(day_local, na.rm = TRUE),
@@ -400,7 +400,14 @@ telemetry_spans <- daily_all |>
 ```{r}
 #| label: summary-stats
 
-n_participants <- print_num(length(unique(biweekly$pid)))
+n_participants_unf <- sum(unique(c(daily$pid, biweekly$pid)) %in% intake$pid)
+n_participants <- print_num(n_participants_unf)
+participant_age <- (function(x) sprintf("%s years old (10th percentile: %s, 90th percentile: %s)", 
+                                        print_num(median(x), .1), 
+                                        print_num(quantile(x, 0.10), .1), 
+                                        print_num(quantile(x, 0.90), .1)))(na.omit(intake$age[intake$qualified]))
+
+
 n_daily <- print_num(nrow(daily))
 n_biweekly <- print_num(nrow(biweekly))
 n_sessions <- print_num(nrow(nintendo) + nrow(xbox) + nrow(steam))
@@ -426,13 +433,13 @@ third_party_prop <- paste0(
   "%"
 )
 n_hours <- number(
-  sum(daily_all$minutes / 60),
+  sum(daily_telemetry$minutes / 60),
   accuracy = 0.1,
   big.mark = ",",
   scale_cut = cut_long_scale()
 )
-n_users <- number(n_distinct(daily_all$pid), accuracy = 1, big.mark = ",")
-n_games <- number(n_distinct(hourly_all$title_id), accuracy = 1, big.mark = ",")
+n_users <- number(n_distinct(daily_telemetry$pid), accuracy = 1, big.mark = ",")
+n_games <- number(n_distinct(hourly_telemetry$title_id), accuracy = 1, big.mark = ",")
 n_months <- number(max(telemetry_spans$n_weeks) / 4.2, accuracy = 1)
 n_surveys <- number(
   nrow(daily) + nrow(biweekly),
@@ -502,7 +509,7 @@ n_timeuse_entries_per_day <- number(
 
 ---
 abstract: |
-  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological assessments across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected under a preregistered design that included 12 weeks of survey data (thirty daily assessments, six biweekly surveys, three biweekly cognitive tests), and digital trace data for `{r} n_months` months. Cleaned data include `{r} n_hours` hours of video game play across `{r} n_games` titles, `{r} n_surveys` responses to 14 survey instruments, and `{r} n_simon` attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
+  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological measures across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected under a preregistered design that included 12 weeks of survey data (thirty daily surveys, six biweekly surveys, three biweekly cognitive tests), and digital trace data for `{r} n_months` months. Cleaned data include `{r} n_hours` hours of video game play across `{r} n_games` titles, `{r} n_surveys` responses to 14 survey instruments, and `{r} n_simon` attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
 ---
 
 # Introduction
@@ -708,7 +715,7 @@ node_counts <- intake |>
     ),
     stage4 = ifelse(qualified, "Recent trace data", "No recent trace data"),
     stage5 = ifelse(
-      pid %in% biweekly$pid,
+      pid %in% c(daily$pid, biweekly$pid),
       "Began surveys",
       "Did not begin surveys"
     ),
@@ -737,7 +744,7 @@ sankey_data <- intake |>
       "No recent trace data"
     ),
     Surveys = ifelse(
-      pid %in% biweekly$pid,
+      pid %in% c(daily$pid, biweekly$pid),
       "Began surveys",
       "Did not begin surveys"
     ),
@@ -790,7 +797,7 @@ ggplot(
     axis.text.x = element_text(size = 8.5, color = "black")
   ) +
   scale_y_continuous(expand = expansion(c(0.2, 0.1))) +
-  scale_fill_grey(drop = FALSE, start = 1, end = 0)
+  scale_fill_grey(drop = FALSE, start = .85, end = 0)
 ```
 
 :::
@@ -799,7 +806,7 @@ The study consisted of four stages (@fig-sankey).
 
 ### Stage 1: Screening
 
-In the first stage, we screened participants in order to find people aged 18-40 who (1) self-report playing video games, (2) self-report that at least 50% of their total video game play takes place on the platforms included in the study, and (3) were willing to link their gaming accounts to provide digital trace data. We screened participants from two panel sources: PureProfile and Prolific.
+In the first stage, we screened participants in order to find people aged 18--40 who (1) self-report playing video games, (2) self-report that at least 50% of their total video game play takes place on the platforms included in the study, and (3) were willing to link their gaming accounts to provide digital trace data. We screened participants from two panel sources: PureProfile and Prolific.
 
 Participants were recruited under an initial set of ethnicity‐based quotas designed to mirror the general population’s demographic composition. After we reached approximately 50% of our target sample under quota constraints and found that further quota‐eligible recruits were scarce, we suspended the quotas for the remainder of data collection; all subsequent participants were enrolled on a first‐come, first‐served basis. Final sample characteristic reflect both quota‐driven and open‐enrollment phases (see below).
 
@@ -837,7 +844,7 @@ tibble(
   ),
   `Type of Data Collected` = c(
     "Session records (what game was played, at what time, for how long) for first-party games only (games published in whole or in part by Nintendo).",
-    "Session records (what game was played, at what time, for how long). Game titles were replaced with a random persistent identifier for third-party games (i.e., those not published by Xbox Game Studios), but genre(s) and age ratings are shared.",
+    "Session records (what game was played, at what time, for how long). Game titles were replaced with a random persistent identifier, but genre(s) and age ratings are shared.",
     "Hourly aggregates per game (every hour, the total time spent playing during the previous hour)",
     "Daily aggregates (e.g., 2 total hours of gaming)",
     "Daily aggregates (e.g., 2 total hours of gaming)"
@@ -902,20 +909,20 @@ Daily survey links were sent every day at 2pm local time for the participant and
 # **values are from the 18-40 population where possible
 
 GENPOP <- tibble::tribble(
-  ~Variable                                    ,
-  ~Level                                       ,
-  ~`US Gen Pop %`                              ,
-  ~`UK Gen Pop %`                              ,
+  ~Variable,
+  ~Level,
+  ~`US Gen Pop %`,
+  ~`UK Gen Pop %`,
   # --- Gender ---
-  "Gender"                                     ,
-  "Man"                                        ,
-  49.0                                         ,
-  49.6                                         ,
-  "Gender"                                     ,
-  "Woman"                                      ,
-  48.9                                         ,
-  49.5                                         ,
-  "Gender"                                     ,
+  "Gender",
+  "Man",
+  49.0,
+  49.6,
+  "Gender",
+  "Woman",
+  48.9,
+  49.5,
+  "Gender",
   "Other gender identity"                      ,
    2.1                                         ,
     .9                                         ,
@@ -957,9 +964,9 @@ GENPOP <- tibble::tribble(
   "Bachelor's degree"                          ,
   24.0                                         ,
   25.5                                         ,
-  "Education"                                  ,
-  "Postgraduate"                               ,
-  15.0                                         ,
+  "Education",
+  "Postgraduate",
+  15.0,
   14.4
 )
 
@@ -1106,7 +1113,7 @@ tt(
 
 :::
 
-Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r length(unique(biweekly$pid))` also completed at least one survey. On average, participants were. Due to errors in screening, four participants over the age of 40 were included.
+Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r n_participants_unf` also completed at least one survey. On average, participants were `r participant_age`. Due to errors in screening, four participants over the age of 40 were included.
 
 @tbl-demographics shows demographic characteristics of the final sample alongside general population benchmarks. Our participants are more likely to be male, non-binary, and bi- or multiracial than the general population. Although the demographics of the population of people who play video games are less well understood, our sample's demographics are broadly consistent with previously reported data [e.g., @EntertainmentSoftwareAssociation20242024].
 
@@ -1116,9 +1123,9 @@ Besides those appearing in @tbl-demographics, we collected various other demogra
 
 This study received ethical approval from the Social Sciences and Humanities Inter-Divisional Research Ethics Committee at the University of Oxford (OII_CIA_23_107). All participants provided informed consent at the start of the study, including consent to their data being shared openly for reanalysis.
 
-The data released here is pseudonymized for participant privacy. However, we recognize that the possibility of reidentification cannot be ruled out due to the detailed demographics present in the dataset alongside the digital trace data. With careful consideration of the risks [e.g., @ShawEtAl2025DECIDE], we elect to share the full data, owing to several factors: (1) participants were thoroughly briefed on the procedure and directly consented to their data being pseudonymously shared; (2) for sensitive items (e.g., political affiliation), participants could select "prefer not to share"; (3) evidence suggests even datasets with less participant information may be reidentifiable based on trace data alone [@SekaraEtAl2021Temporal]; (4) data-sharing agreements with Nintendo and Microsoft specifically prohibit the companies themselves from connecting our survey data back to their telemetry; (5) the harms associated with reidentification are moderate, and (6) the research community has a strong interest in open data for reproducibility and cumulative science.
+The data released here is pseudonymized for participant privacy. However, we recognize that the possibility of reidentification cannot be ruled out due to the detailed demographics present in the dataset alongside the digital trace data. With careful consideration of the risks [e.g., @ShawEtAl2025DECIDE], we elect to share the full data, owing to several factors: (1) participants were thoroughly briefed on the procedure and directly consented to their data being pseudonymously shared; (2) for sensitive items (e.g., political affiliation), participants could select "prefer not to share"; (3) evidence suggests even a pared-down version of our dataset with less participant information may be reidentifiable based on trace data alone [e.g., @SekaraEtAl2021Temporal]; (4) data-sharing agreements with Nintendo and Microsoft specifically prohibit the companies themselves from connecting our survey data back to their telemetry; (5) the harms associated with reidentification are moderate, and (6) the research community has a strong interest in open data for reproducibility and cumulative science.
 
-To balance openness with ethical responsibility, the dataset is released under a modified CC-BY-NC license that retains full non-commercial reuse rights but includes an additional No-Reidentification Clause, requiring users to follow standard research ethics and prohibiting any attempt to reidentify participants.
+To balance openness with ethical responsibility, the dataset is released under a modified CC0 license that retains full reuse rights but includes an additional No-Reidentification Clause, requiring users to follow standard research ethics and prohibiting any attempt to reidentify participants.
 
 Prolific participants were paid at a rate of £12/hour for all study components, which equates to: £0.20 for a 1-minute screening, £2 for the 10-minute intake survey (plus £5 for linking at least one account with recent data), £0.80 for each 4-minute daily survey, and £2 for each 10-minute biweekly survey. Participants received £10 bonus payments for completing at least 24 out of 30 daily surveys and/or 5 out of 6 biweekly surveys.
 
@@ -1150,7 +1157,7 @@ slot_exposure <- telemetry_spans |>
   mutate(n_occurrences = n_weeks) # each slot appears once per week
 
 # total minutes actually played per slot
-slot_play <- hourly_all |>
+slot_play <- hourly_telemetry |>
   mutate(
     dow = lubridate::wday(hour_start_local, week_start = 1),
     hour = hour(hour_start_local)
@@ -1259,7 +1266,7 @@ tele_exposure <- telemetry_spans |>
   summarise(exposure_weeks = sum(exposure_weeks), .groups = "drop")
 
 
-tele_users <- daily_all |>
+tele_users <- daily_telemetry |>
   filter(platform %in% telemetry_platforms) |>
   left_join(intake_window, by = "pid") |>
   filter(day_local >= win_start, day_local <= win_end) |>
@@ -1438,7 +1445,7 @@ biweekly_participants <- biweekly |>
 
 # Join study start dates and calculate study day
 # Only include participants who completed between 1-6 biweekly surveys
-daily_with_study_day <- daily_all |>
+daily_with_study_day <- daily_telemetry |>
   inner_join(biweekly_participants |> select(pid, study_start), by = "pid") |>
   mutate(
     study_day = as.integer(floor(as.numeric(difftime(
@@ -1567,7 +1574,7 @@ plot_data <- daily_with_study_day |>
 complete_grid <- expand_grid(
   pid = selected_pids,
   study_day = 1:84,
-  platform = unique(daily_all$platform)
+  platform = unique(daily_telemetry$platform)
 ) |>
   mutate(
     percentile = case_when(
@@ -1780,9 +1787,8 @@ simon |>
 #| fig-asp: 0.35
 #| out.width: 95%
 
-# pick a participant and a day
-person_id <- "p7710043675"
-survey_day <- as.Date("2025-06-19")
+person_id <- "p9730913604"
+survey_day <- as.Date("2025-04-04")
 window_start <- as.POSIXct(paste(survey_day - 1, "04:00:00"))
 window_end <- as.POSIXct(paste(survey_day, "04:00:00"))
 tz_str <- intake |>
@@ -1810,15 +1816,13 @@ diary_df <- time_use |>
     )
   )
 
-# --- SESSIONS (stored UTC → shift by offset_minutes) ---
-sessions_df <- sessions_all |>
-  filter(pid == person_id) %>%
+# --- SESSIONS ---
+sessions_df <- hourly_telemetry |>
+  filter(pid == person_id) |>
   transmute(
-    platform = if ("platform" %in% names(.)) platform else "Gaming",
-    start = as.POSIXct(session_start, tz = "UTC") +
-      minutes(offset_secs(tz_str) / 60),
-    end = as.POSIXct(session_end, tz = "UTC") +
-      minutes(offset_secs(tz_str) / 60)
+    platform,
+    start = as.POSIXct(hour_start_local),
+    end   = as.POSIXct(hour_start_local) + lubridate::dminutes(pmax(pmin(minutes, 60), 0))
   ) |>
   clip_to_window()
 
@@ -1836,10 +1840,11 @@ survey_df <- daily |>
 activity_colors <- c(
   "Sleep" = "#111111",
   "Personal Care" = "#666666",
-  "Video Gaming" = "#107C10",
+  "Video Gaming" = "#CA662B",
   "Offline Leisure & Social Life" = "#999999",
   "Other Digital Media Use" = "#444444"
 )
+
 platform_colors <- c(
   "Xbox" = "#107C10",
   "Nintendo" = "#E60012",
@@ -1861,7 +1866,6 @@ ggplot() +
     aes(x = start, xend = end, y = 2, yend = 2, color = platform),
     linewidth = 10.5,
     lineend = "butt",
-    show.legend = FALSE
   ) +
   geom_segment(
     data = survey_df,
@@ -1886,7 +1890,7 @@ ggplot() +
   ) +
   scale_y_continuous(
     breaks = c(1, 2, 3),
-    labels = c("Survey", "Xbox Telemetry", "Diary"),
+    labels = c("Survey", "Digital Trace Data", "Diary"),
     limits = c(0.6, 3.4),
     expand = expansion(mult = 0)
   ) +
@@ -1895,6 +1899,20 @@ ggplot() +
     guide = guide_legend(title = "Diary activity")
   ) +
   scale_color_manual(values = platform_colors, name = "Platform") +
+  guides(
+    fill  = guide_legend(title = "Diary activity",
+                         override.aes = list(alpha = 1),
+                         keywidth = unit(6, "mm"),
+                         keyheight = unit(6, "mm")),
+    color = guide_legend(title = "Platform",
+                         override.aes = list(linewidth = 6),
+                         keywidth = unit(6, "mm"),
+                         keyheight = unit(6, "mm"))
+  ) +
+  theme(
+    legend.key.width  = unit(6, "mm"),
+    legend.key.height = unit(6,  "mm")
+  ) + 
   labs(
     x = "Local time",
     y = NULL,
@@ -1910,7 +1928,7 @@ ggplot() +
 
 :::
 
-In each daily survey (US only), participants completed a light time use diary asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activites based on their start and end time using a custom web app ([https://github.com/andreifoldes/o-timeusediary](https://github.com/andreifoldes/o-timeusediary)). Participants could select from 11 categories:: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
+In each daily survey (US only), participants completed a light time use diary asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activites based on their start and end time using a custom web app ([https://github.com/andreifoldes/o-timeusediary](https://github.com/andreifoldes/o-timeusediary)). Participants could select from 11 categories: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
 
 @fig-time-use presents an illustrative example of one participant's time use diary for a single day, alongside their gaming sessions recorded through telemetry and survey completion time.
 
@@ -2318,7 +2336,7 @@ Spanning `r n_hours` hours, `r n_users` user-platform combinations, and `r n_gam
 
 ## Digital Trace Data Infrastructure
 
-This dataset delivers on both calls for greater collaboration between the tech industry and academics [@KingPersily2020New; @LazerEtAl2020Computational], as well as simultaneous calls for better trace data access without direct industry involvement [@Xiao2023Debate; @ValkenburgEtAl2024It; @BoeschotenEtAl2023Port]. The data-sharing agreements with Nintendo of America, Nintendo of Europe, and Microsoft are the first of their kind, enabling researchers to access telemetry data from major gaming platforms while ensuring user privacy and data security. By making this dataset openly available under a modified CC-BY-NC license, we aim to catalyze further research in this area, allowing other researchers to explore the rich data we have collected.
+This dataset delivers on both calls for greater collaboration between the tech industry and academics [@KingPersily2020New; @LazerEtAl2020Computational], as well as simultaneous calls for better trace data access without direct industry involvement [@Xiao2023Debate; @ValkenburgEtAl2024It; @BoeschotenEtAl2023Port]. The data-sharing agreements with Nintendo of America, Nintendo of Europe, and Microsoft are the first of their kind, enabling researchers to access telemetry data from major gaming platforms while ensuring user privacy and data security. By making this dataset openly available under a modified CC0 license, we aim to catalyze further research in this area, allowing other researchers to explore the rich data we have collected.
 
 At the same time, the Steam and smartphone data collection show the value of open trace data to study platforms that are less willing or able to participate actively. Several previous studies have collected smartphone data using screenshots, with some success in automating the extraction of these data [@ParrySewall2021How; @FeizEtAl2022Understanding; @LiuEtAl2024UserDonated]. Open trace data infrastructure remains an arms race, often relying on industry-provided APIs that can change or be deprecated at any time [@DavidsonEtAl2023Platformcontrolled; @BallouEtAl2023Four]. Nonetheless, we believe it is vital for researchers to advance both pathways for the best chance to understand the effects of technology. 
 
