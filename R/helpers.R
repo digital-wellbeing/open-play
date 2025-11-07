@@ -101,12 +101,11 @@ clip_to_window <- function(df) {
   df |>
     filter(end > window_start, start < window_end) |>
     mutate(
-      start = pmax(start, window_start),
-      end = pmin(end, window_end)
+      start = if_else(start < window_start, window_start, start),
+      end   = if_else(end   > window_end,   window_end,   end)
     ) |>
     filter(end > start)
 }
-
 
 merge_adjacent_sessions <- function(df, tol_sec = 60) {
   df2 <- df |>
@@ -270,7 +269,7 @@ resolve_overlaps <- function(df) {
 
 
 avg_days_platform <- function(pltf, pids_filter = NULL) {
-  data <- daily_all |> filter(platform == pltf)
+  data <- daily_telemetry |> filter(platform == pltf)
   if (!is.null(pids_filter)) {
     data <- data |> filter(pid %in% pids_filter)
   }
