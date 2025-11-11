@@ -2402,7 +2402,7 @@ tibble(
     "All participants sourced from PureProfile",
     "Screening sample would be nationally representative by ethnicity and gender",
     "Sample consists of participants aged 18--30 in the US and 18--75 in the UK",
-    "To qualify, ≥75% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
+    "To qualify, >=75% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
     "Qualification contingent upon valid telemetry within last 7 days",
     "Daily and biweekly surveys sent at 7pm local time",
     "Session-level Android data captured via the ActivityWatch app"
@@ -2411,7 +2411,7 @@ tibble(
     "Participants sourced from both PureProfile and Prolific",
     "Approximately 50% of screening was done using quotas for national representativeness by ethnicity and gender; all subsequent sampling used convenience sampling with no quotas",
     "Sample consists of participants aged 18-40 in both regions",
-    "To qualify, ≥50% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
+    "To qualify, >=50% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
     "Qualification contingent upon valid telemetry within last 14 days",
     "Daily and biweekly surveys sent at 2pm local time",
     "Daily-level Android data captured using screenshots of the Digital Wellbeing interface"
@@ -2592,7 +2592,7 @@ t_selfreport <- tibble(
   `Response format` = c(
     "Multiple selection from listed options",
     "Time estimates for last 24 hours, last 7 days, last 14 days",
-    "Game title, date, and start/end time for 1–3 sessions"
+    "Game title, date, and start/end time for 1-3 sessions"
   ),
   Frequency = c(
     "Daily", # last 24h context
