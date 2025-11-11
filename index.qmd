@@ -55,8 +55,11 @@ author:
     affiliations:
       - ref: 1
     roles:
+      - conceptualization
       - investigation
       - data curation
+      - formal analysis
+      - writing
       - editing
 
   - name: Kristoffer Magnusson
@@ -1668,8 +1671,8 @@ for (i in seq_along(pct_levels)) {
         "Nintendo" = "#E60012", # Nintendo red
         "Steam" = "#215e8a", # Steam dark blue
         "Xbox" = "#107C10", # Xbox green
-        "iOS" = "#b43bf5", # iOS
-        "Android" = "#f5f53b" # Android
+        "iOS" = "#b43bf5", # iOS purple
+        "Android" = "#f5f53b" # Android yellow
       ),
       name = "Platform"
     ) +
@@ -1838,20 +1841,25 @@ survey_df <- daily |>
   select(ts)
 
 activity_colors <- c(
-  "Sleep" = "#111111",
-  "Personal Care" = "#666666",
-  "Video Gaming" = "#CA662B",
-  "Offline Leisure & Social Life" = "#999999",
-  "Other Digital Media Use" = "#444444"
+  "Education" = "#2a9df4", # Education blue
+  "Exercise and Sports" = "#63b600", # Exercise and Sports green
+  "Household and Family Care" = "#fac800", # Household and Family Care yellow
+  "Offline Leisure & Social Life" = "#00897B", # Offline Leisure & Social Life teal
+  "Other Digital Media Use" = "#9C27B0", # Other Digital Media Use purple 
+  "Personal Care" = "#666666", # Personal Care grey
+  "Sleep" = "#111111", # Sleep black
+  "Travel and Transportation" = "#ffb380", # Travel and Transportation orange
+  "Video Gaming" = "#CA662B", # Video Gaming brown
+  "Work and Employment" = "#28536b", # Work and Employment blue
+  "Other" = "#d572d6" # Other pink
 )
-
+  
 platform_colors <- c(
-  "Xbox" = "#107C10",
-  "Nintendo" = "#E60012",
-  "Steam" = "#1B2838",
-  "iOS" = "#b43bf5",
-  "Android" = "#f5a142",
-  "Gaming" = "#2A9D8F"
+  "Nintendo" = "#E60012", # Nintendo red
+  "Steam" = "#215e8a", # Steam dark blue
+  "Xbox" = "#107C10", # Xbox green
+  "iOS" = "#b43bf5", # iOS purple
+  "Android" = "#f5f53b" # Android yellow
 )
 
 ggplot() +
