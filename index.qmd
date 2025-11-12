@@ -1940,7 +1940,7 @@ ggplot() +
 
 :::
 
-In each daily survey (US only), participants completed a light time use diary asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activities based on their start and end time using a custom web app ([https://github.com/Thomhak/timediary-game](https://github.com/Thomhak/timediary-game)). Participants could select from 11 categories: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
+In each daily survey (US only), participants completed a light time use diary [@hakmanLOTUDLightOnline2025] asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activities based on their start and end time using a custom web app ([https://github.com/Thomhak/timediary-game](https://github.com/Thomhak/timediary-game)). Participants could select from 11 categories: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
 
 @fig-time-use presents an illustrative example of one participant's time use diary for a single day, alongside their gaming sessions recorded through telemetry and survey completion time.
 
