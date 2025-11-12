@@ -1101,14 +1101,26 @@ demo <- intake |>
     `US Gen Pop %`,
     `UK Sample %`,
     `UK Gen Pop %`
-  )
+  ) |> 
+  group_by(Variable) |> 
+  mutate(Variable = ifelse(row_number() == 1, Variable, ""))
 
+data_type_starts <- c(1, 4, 11)
 
 tt(
   demo,
   caption = "Demographic characteristics of qualified participants alongside general population benchmarks (where available). See supplementary materials for sources of general population estimates."
 ) |>
-  style_tt(fontsize = 0.7)
+  style_tt(fontsize = 0.7) |> 
+  style_tt(
+    i = data_type_starts,
+    j = 1,
+    bold = TRUE,
+    line = "t",
+    line_width = 0.12
+  ) |> 
+  style_tt(i = 0, bold = TRUE, align = "c")
+
 ```
 
 :::
