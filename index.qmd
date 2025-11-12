@@ -638,6 +638,24 @@ overview <- overview |>
       "",
       number(`N users w/ trace data`, accuracy = 1, big.mark = ",")
     ),
+    `Observable Period` = case_match(
+      `Data type`,
+      "Intake survey"     ~ "",
+      "Daily surveys"     ~ "30 days",
+      "Biweekly surveys"  ~ "10 weeks",
+      "Attention tasks"   ~ "8 weeks",
+      "Steam"             ~ "3-12 months",
+      "Nintendo"          ~ paste0(floor(time_length(interval(min(nintendo$session_start, na.rm = TRUE),
+                                                              max(nintendo_raw$time_of_pull,  na.rm = TRUE)), 
+                                                     "months")) + 1,
+                                                     " months"),
+      "Xbox"              ~ paste0(floor(time_length(interval(min(xbox$session_start, na.rm = TRUE),
+                                                              max(xbox$time_of_pull,  na.rm = TRUE)), 
+                                                     "months")) + 1,
+                                                     " months"),
+      "iOS"               ~ "12 weeks",
+      "Android"           ~ "12 weeks"
+    ),
     Events = number(
       Events,
       accuracy = 1,
@@ -665,6 +683,7 @@ overview <- overview |>
   ) |>
   select(
     `Data type`,
+    `Observable Period`,
     `N survey\nsubj.`,
     `N users w/ trace data`,
     Events,
