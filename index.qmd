@@ -55,8 +55,11 @@ author:
     affiliations:
       - ref: 1
     roles:
+      - conceptualization
       - investigation
       - data curation
+      - formal analysis
+      - writing
       - editing
 
   - name: Kristoffer Magnusson
@@ -1668,8 +1671,8 @@ for (i in seq_along(pct_levels)) {
         "Nintendo" = "#E60012", # Nintendo red
         "Steam" = "#215e8a", # Steam dark blue
         "Xbox" = "#107C10", # Xbox green
-        "iOS" = "#b43bf5", # iOS
-        "Android" = "#f5f53b" # Android
+        "iOS" = "#b43bf5", # iOS purple
+        "Android" = "#f5f53b" # Android yellow
       ),
       name = "Platform"
     ) +
@@ -1838,20 +1841,25 @@ survey_df <- daily |>
   select(ts)
 
 activity_colors <- c(
-  "Sleep" = "#111111",
-  "Personal Care" = "#666666",
-  "Video Gaming" = "#CA662B",
-  "Offline Leisure & Social Life" = "#999999",
-  "Other Digital Media Use" = "#444444"
+  "Education" = "#2a9df4", # Education blue
+  "Exercise and Sports" = "#63b600", # Exercise and Sports green
+  "Household and Family Care" = "#fac800", # Household and Family Care yellow
+  "Offline Leisure & Social Life" = "#00897B", # Offline Leisure & Social Life teal
+  "Other Digital Media Use" = "#9C27B0", # Other Digital Media Use purple 
+  "Personal Care" = "#666666", # Personal Care grey
+  "Sleep" = "#111111", # Sleep black
+  "Travel and Transportation" = "#ffb380", # Travel and Transportation orange
+  "Video Gaming" = "#CA662B", # Video Gaming brown
+  "Work and Employment" = "#28536b", # Work and Employment blue
+  "Other" = "#d572d6" # Other pink
 )
-
+  
 platform_colors <- c(
-  "Xbox" = "#107C10",
-  "Nintendo" = "#E60012",
-  "Steam" = "#1B2838",
-  "iOS" = "#b43bf5",
-  "Android" = "#f5a142",
-  "Gaming" = "#2A9D8F"
+  "Nintendo" = "#E60012", # Nintendo red
+  "Steam" = "#215e8a", # Steam dark blue
+  "Xbox" = "#107C10", # Xbox green
+  "iOS" = "#b43bf5", # iOS purple
+  "Android" = "#f5f53b" # Android yellow
 )
 
 ggplot() +
@@ -1932,7 +1940,7 @@ ggplot() +
 
 :::
 
-In each daily survey (US only), participants completed a light time use diary asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activities based on their start and end time using a custom web app ([https://github.com/andreifoldes/o-timeusediary](https://github.com/andreifoldes/o-timeusediary)). Participants could select from 11 categories: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
+In each daily survey (US only), participants completed a light time use diary asking participants to record their daily activities from 4:00am the previous day to 4:00am the morning of survey completion. Participants provided this information by placing activities based on their start and end time using a custom web app ([https://github.com/Thomhak/timediary-game](https://github.com/Thomhak/timediary-game)). Participants could select from 11 categories: Education, Exercise and Sports, Household and Family Care, Offline Leisure & Social Life, Other Digital Media Use, Personal Care, Sleep, Travel and Transportation, Video Gaming, Work and Employment, and Other. The median number of distinct activities entered per day was `r n_timeuse_entries_per_day`.
 
 @fig-time-use presents an illustrative example of one participant's time use diary for a single day, alongside their gaming sessions recorded through telemetry and survey completion time.
 
@@ -2402,7 +2410,7 @@ tibble(
     "All participants sourced from PureProfile",
     "Screening sample would be nationally representative by ethnicity and gender",
     "Sample consists of participants aged 18--30 in the US and 18--75 in the UK",
-    "To qualify, ≥75% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
+    "To qualify, >=75% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
     "Qualification contingent upon valid telemetry within last 7 days",
     "Daily and biweekly surveys sent at 7pm local time",
     "Session-level Android data captured via the ActivityWatch app"
@@ -2411,7 +2419,7 @@ tibble(
     "Participants sourced from both PureProfile and Prolific",
     "Approximately 50% of screening was done using quotas for national representativeness by ethnicity and gender; all subsequent sampling used convenience sampling with no quotas",
     "Sample consists of participants aged 18-40 in both regions",
-    "To qualify, ≥50% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
+    "To qualify, >=50% of a participant's total gaming must take place on platforms included in the study (Xbox, Steam, Nintendo Switch)",
     "Qualification contingent upon valid telemetry within last 14 days",
     "Daily and biweekly surveys sent at 2pm local time",
     "Daily-level Android data captured using screenshots of the Digital Wellbeing interface"
@@ -2592,7 +2600,7 @@ t_selfreport <- tibble(
   `Response format` = c(
     "Multiple selection from listed options",
     "Time estimates for last 24 hours, last 7 days, last 14 days",
-    "Game title, date, and start/end time for 1–3 sessions"
+    "Game title, date, and start/end time for 1-3 sessions"
   ),
   Frequency = c(
     "Daily", # last 24h context
