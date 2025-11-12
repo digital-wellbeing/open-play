@@ -137,15 +137,15 @@ format:
       - text: Stage 1 Registered Report
         href: https://osf.io/pb5nu
         icon: file-pdf
-  preprint-typst:
-    wordcount: true
-    theme: jou
-    citeproc: true
-    mainfont: "Liberation Serif"
-    sansfont: "Liberation Sans"
-    include-before-body:
-      - text: "#show <refs>: set par(hanging-indent: 1.4em)"
-  docx: default
+  # preprint-typst:
+  #   wordcount: true
+  #   theme: jou
+  #   citeproc: true
+  #   mainfont: "Liberation Serif"
+  #   sansfont: "Liberation Sans"
+  #   include-before-body:
+  #     - text: "#show <refs>: set par(hanging-indent: 1.4em)"
+  # docx: default
 ---
 
 ```{r}
@@ -172,6 +172,9 @@ library(ggtext)
 library(svglite)
 library(data.table)
 library(dtplyr)
+library(readxl)
+library(DT)
+library(purrr)
 
 # avoid conflicts
 library(conflicted)
@@ -242,7 +245,10 @@ time_use <- read_csv("data/clean/timeuse.csv.gz")
 xbox_raw <- read_csv("data/raw/telemetry_xbox_raw.csv.gz")
 nintendo_raw <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
 daily_raw <- read_csv("data/raw/survey_daily_raw.csv.gz", guess_max = 10000)
-biweekly_raw <- read_csv("data/raw/survey_biweekly_raw.csv.gz", guess_max = 5000)
+biweekly_raw <- read_csv(
+  "data/raw/survey_biweekly_raw.csv.gz",
+  guess_max = 5000
+)
 ```
 
 ```{r}
@@ -402,10 +408,14 @@ telemetry_spans <- daily_telemetry |>
 
 n_participants_unf <- sum(unique(c(daily$pid, biweekly$pid)) %in% intake$pid)
 n_participants <- print_num(n_participants_unf)
-participant_age <- (function(x) sprintf("%s years old (10th percentile: %s, 90th percentile: %s)", 
-                                        print_num(median(x), .1), 
-                                        print_num(quantile(x, 0.10), .1), 
-                                        print_num(quantile(x, 0.90), .1)))(na.omit(intake$age[intake$qualified]))
+participant_age <- (function(x) {
+  sprintf(
+    "%s years old (10th percentile: %s, 90th percentile: %s)",
+    print_num(median(x), .1),
+    print_num(quantile(x, 0.10), .1),
+    print_num(quantile(x, 0.90), .1)
+  )
+})(na.omit(intake$age[intake$qualified]))
 
 
 n_daily <- print_num(nrow(daily))
@@ -439,7 +449,11 @@ n_hours <- number(
   scale_cut = cut_long_scale()
 )
 n_users <- number(n_distinct(daily_telemetry$pid), accuracy = 1, big.mark = ",")
-n_games <- number(n_distinct(hourly_telemetry$title_id), accuracy = 1, big.mark = ",")
+n_games <- number(
+  n_distinct(hourly_telemetry$title_id),
+  accuracy = 1,
+  big.mark = ","
+)
 n_months <- number(max(telemetry_spans$n_weeks) / 4.2, accuracy = 1)
 n_surveys <- number(
   nrow(daily) + nrow(biweekly),
@@ -505,7 +519,11 @@ n_timeuse_entries_per_day <- number(
   accuracy = 1
 )
 
-platforms_count <- str_count(replace_na(intake$linked_platforms[intake$qualified], ""), ",") + 1
+platforms_count <- str_count(
+  replace_na(intake$linked_platforms[intake$qualified], ""),
+  ","
+) +
+  1
 n_one_platform <- sum(platforms_count == 1, na.rm = TRUE)
 n_two_platforms <- sum(platforms_count == 2, na.rm = TRUE)
 n_three_platforms <- sum(platforms_count >= 3, na.rm = TRUE)
@@ -645,21 +663,35 @@ overview <- overview |>
     ),
     `Observable Period` = case_match(
       `Data type`,
-      "Intake survey"     ~ "",
-      "Daily surveys"     ~ "30 days",
-      "Biweekly surveys"  ~ "10 weeks",
-      "Attention tasks"   ~ "8 weeks",
-      "Steam"             ~ "3-12 months",
-      "Nintendo"          ~ paste0(floor(time_length(interval(min(nintendo$session_start, na.rm = TRUE),
-                                                              max(nintendo_raw$time_of_pull,  na.rm = TRUE)), 
-                                                     "months")) + 1,
-                                                     " months"),
-      "Xbox"              ~ paste0(floor(time_length(interval(min(xbox$session_start, na.rm = TRUE),
-                                                              max(xbox$time_of_pull,  na.rm = TRUE)), 
-                                                     "months")) + 1,
-                                                     " months"),
-      "iOS"               ~ "12 weeks",
-      "Android"           ~ "12 weeks"
+      "Intake survey" ~ "",
+      "Daily surveys" ~ "30 days",
+      "Biweekly surveys" ~ "10 weeks",
+      "Attention tasks" ~ "8 weeks",
+      "Steam" ~ "3-12 months",
+      "Nintendo" ~ paste0(
+        floor(time_length(
+          interval(
+            min(nintendo$session_start, na.rm = TRUE),
+            max(nintendo_raw$time_of_pull, na.rm = TRUE)
+          ),
+          "months"
+        )) +
+          1,
+        " months"
+      ),
+      "Xbox" ~ paste0(
+        floor(time_length(
+          interval(
+            min(xbox$session_start, na.rm = TRUE),
+            max(xbox$time_of_pull, na.rm = TRUE)
+          ),
+          "months"
+        )) +
+          1,
+        " months"
+      ),
+      "iOS" ~ "12 weeks",
+      "Android" ~ "12 weeks"
     ),
     Events = number(
       Events,
@@ -933,20 +965,20 @@ Daily survey links were sent every day at 2pm local time for the participant and
 # **values are from the 18-40 population where possible
 
 GENPOP <- tibble::tribble(
-  ~Variable,
-  ~Level,
-  ~`US Gen Pop %`,
-  ~`UK Gen Pop %`,
+  ~Variable                                    ,
+  ~Level                                       ,
+  ~`US Gen Pop %`                              ,
+  ~`UK Gen Pop %`                              ,
   # --- Gender ---
-  "Gender",
-  "Man",
-  49.0,
-  49.6,
-  "Gender",
-  "Woman",
-  48.9,
-  49.5,
-  "Gender",
+  "Gender"                                     ,
+  "Man"                                        ,
+  49.0                                         ,
+  49.6                                         ,
+  "Gender"                                     ,
+  "Woman"                                      ,
+  48.9                                         ,
+  49.5                                         ,
+  "Gender"                                     ,
   "Other gender identity"                      ,
    2.1                                         ,
     .9                                         ,
@@ -988,9 +1020,9 @@ GENPOP <- tibble::tribble(
   "Bachelor's degree"                          ,
   24.0                                         ,
   25.5                                         ,
-  "Education",
-  "Postgraduate",
-  15.0,
+  "Education"                                  ,
+  "Postgraduate"                               ,
+  15.0                                         ,
   14.4
 )
 
@@ -1125,8 +1157,8 @@ demo <- intake |>
     `US Gen Pop %`,
     `UK Sample %`,
     `UK Gen Pop %`
-  ) |> 
-  group_by(Variable) |> 
+  ) |>
+  group_by(Variable) |>
   mutate(Variable = ifelse(row_number() == 1, Variable, ""))
 
 data_type_starts <- c(1, 4, 11)
@@ -1135,14 +1167,14 @@ tt(
   demo,
   caption = "Demographic characteristics of qualified participants alongside general population benchmarks (where available). See supplementary materials for sources of general population estimates."
 ) |>
-  style_tt(fontsize = 0.7) |> 
+  style_tt(fontsize = 0.7) |>
   style_tt(
     i = data_type_starts,
     j = 1,
     bold = TRUE,
     line = "t",
     line_width = 0.12
-  ) |> 
+  ) |>
   style_tt(i = 0, bold = TRUE, align = "c")
 
 ```
@@ -1859,7 +1891,8 @@ sessions_df <- hourly_telemetry |>
   transmute(
     platform,
     start = as.POSIXct(hour_start_local),
-    end   = as.POSIXct(hour_start_local) + lubridate::dminutes(pmax(pmin(minutes, 60), 0))
+    end = as.POSIXct(hour_start_local) +
+      lubridate::dminutes(pmax(pmin(minutes, 60), 0))
   ) |>
   clip_to_window()
 
@@ -1937,16 +1970,16 @@ ggplot() +
   ) +
   scale_color_manual(values = platform_colors, name = "Platform") +
   guides(
-    fill  = guide_legend(
+    fill = guide_legend(
       title = "Diary activity",
       override.aes = list(alpha = 1),
-      keywidth  = grid::unit(6, "mm"),
+      keywidth = grid::unit(6, "mm"),
       keyheight = grid::unit(4, "mm")
     ),
     color = guide_legend(
       title = "Platform",
-      override.aes = list(linewidth = 3.5, linetype = 1),  # thinner, less "cartoony"
-      keywidth  = grid::unit(6, "mm"),
+      override.aes = list(linewidth = 3.5, linetype = 1), # thinner, less "cartoony"
+      keywidth = grid::unit(6, "mm"),
       keyheight = grid::unit(4, "mm")
     )
   ) +
@@ -1958,7 +1991,7 @@ ggplot() +
     panel.grid.major.y = element_blank(),
     panel.grid.minor = element_blank(),
     axis.title.y = element_blank(),
-    legend.key.width  = grid::unit(6, "mm"),
+    legend.key.width = grid::unit(6, "mm"),
     legend.key.height = grid::unit(4, "mm"),
     legend.spacing.y = unit(-1, "mm"),
     legend.box.margin = margin(0, 0, 0, 0),
@@ -2428,10 +2461,10 @@ All data, materials, and code related to the dataset and this manuscript are ava
 
 ## Deviations from Preregistration
 
-We made several deviations from our preregistration to ensure we could recruit enough high-quality participants to meet our sample size goals. In our view, none are so severe enough to threaten the validity of the study. Deviations are summarised in @tbl-trait.
+We made several deviations from our preregistration to ensure we could recruit enough high-quality participants to meet our sample size goals. In our view, none are so severe enough to threaten the validity of the study. Deviations are summarised in @tbl-deviations.
 
 ```{r}
-#| label: tbl-trait
+#| label: tbl-deviations
 #| tbl-cap: "Summary of deviations from preregistration"
 
 tibble(
@@ -2683,3 +2716,51 @@ appendix_tbl |>
   style_tt(fontsize = 0.5)
 
 ```
+
+## Codebook {#sec-codebook}
+
+::: {.content-visible when-format="html"}
+
+```{r}
+#| label: codebook-interactive
+#| echo: false
+#| warning: false
+
+# Read all sheets from the codebook
+codebook_path <- "codebook.xlsx"
+sheet_names <- excel_sheets(codebook_path)
+
+# Read all sheets and combine with sheet identifier
+codebook_all <- map_dfr(sheet_names, function(sheet) {
+  if (sheet == "Meta-info") {
+    return(NULL) # Skip meta-info sheet
+  }
+  read_excel(codebook_path, sheet = sheet) |>
+    mutate(Sheet = sheet, .before = 1)
+})
+
+# Create interactive datatable
+datatable(
+  codebook_all,
+  filter = 'top',
+  options = list(
+    pageLength = 25,
+    scrollX = TRUE,
+    autoWidth = TRUE,
+    searchHighlight = TRUE,
+    dom = 'Bfrtip',
+    buttons = c('copy', 'csv', 'excel')
+  ),
+  extensions = 'Buttons',
+  rownames = FALSE,
+  caption = "Interactive Codebook - All Variables Across All Data Sources"
+)
+```
+
+:::
+
+::: {.content-hidden when-format="html"}
+
+*Interactive codebook available in the HTML version of this document.*
+
+:::

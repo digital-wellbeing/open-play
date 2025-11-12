@@ -4,8 +4,15 @@
 
 🔗 The output from this repo can be viewed at [https://digital-wellbeing.github.io/open-play/](https://digital-wellbeing.github.io/open-play/). 🔗
 
-This repo hosts the data and descriptive analysis code for our project on video game play and wellbeing. Its key elements are:
+This repo hosts the data and descriptive analysis code for our project on video game play and wellbeing. 
 
+# Getting Started
+
+The best starting point for understanding the data presented here is to look at [codebook.xlsx](https://github.com/digital-wellbeing/open-play/raw/refs/heads/main/codebook.xlsx), which describes the variables in both the cleaned and raw dataset.
+
+Other key elements of the repo are:
+
+- `codebook.xlsx`, which describes the variables in both the cleaned and raw dataset
 - `data-process.qmd`, which processes the raw data into cleaned data
 - `index.qmd`, which generates manuscript documenting the dataset
 - `data/raw`, which contains the minimally processed, pseudonymized raw data
