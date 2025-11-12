@@ -137,15 +137,15 @@ format:
       - text: Stage 1 Registered Report
         href: https://osf.io/pb5nu
         icon: file-pdf
-  # preprint-typst:
-  #   wordcount: true
-  #   theme: jou
-  #   citeproc: true
-  #   mainfont: "Liberation Serif"
-  #   sansfont: "Liberation Sans"
-  #   include-before-body:
-  #     - text: "#show <refs>: set par(hanging-indent: 1.4em)"
-  # docx: default
+  preprint-typst:
+    wordcount: true
+    theme: jou
+    citeproc: true
+    mainfont: "Liberation Serif"
+    sansfont: "Liberation Sans"
+    include-before-body:
+      - text: "#show <refs>: set par(hanging-indent: 1.4em)"
+  docx: default
 ---
 
 ```{r}
@@ -352,6 +352,12 @@ hourly_from_sessions <- session_telemetry |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
 hourly_from_steam <- steam |>
+  mutate(
+    datetime_hour_start = ymd_hms(
+      paste0(date, " ", sprintf("%02d", hour), ":00:00"),
+      tz = "UTC"
+    )
+  ) |>
   select(pid, title_id, datetime_hour_start, minutes) |>
   left_join(tz_map, by = "pid") |>
   mutate(
@@ -2717,7 +2723,7 @@ appendix_tbl |>
 
 ```
 
-## Codebook {#sec-codebook}
+## Codebook
 
 ::: {.content-visible when-format="html"}
 
@@ -2725,6 +2731,7 @@ appendix_tbl |>
 #| label: codebook-interactive
 #| echo: false
 #| warning: false
+#| eval: !expr knitr::is_html_output()
 
 # Read all sheets from the codebook
 codebook_path <- "codebook.xlsx"
@@ -2753,14 +2760,16 @@ datatable(
   ),
   extensions = 'Buttons',
   rownames = FALSE,
-  caption = "Interactive Codebook - All Variables Across All Data Sources"
-)
+  caption = "Interactive Codebook - All Variables Across All Data Sources",
+  class = 'compact'
+) |>
+  formatStyle(columns = 1:ncol(codebook_all), fontSize = '12px')
 ```
 
 :::
 
 ::: {.content-hidden when-format="html"}
 
-*Interactive codebook available in the HTML version of this document.*
+*Interactive codebook available in the HTML version of this document: [https://digital-wellbeing.github.io/open-play/#codebook](https://digital-wellbeing.github.io/open-play/#codebook).*
 
 :::

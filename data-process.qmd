@@ -546,6 +546,7 @@ write_csv(
       steam_id,
       playtime_forever,
       playtime_2weeks,
+      minutes,
       game_ref
     ),
   path(path_out, "steam", ext = "csv.gz")
