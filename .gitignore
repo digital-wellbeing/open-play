@@ -32,3 +32,5 @@ _freeze/R/stage_1_simulations/
 R/missingness_analysis.R
 R/investigate_xbox.R
 R/talk_figures.R
+
+.claude/
