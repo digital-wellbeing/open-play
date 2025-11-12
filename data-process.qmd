@@ -373,7 +373,20 @@ intake_clean <- intake |>
       NA,
       self_reported_weekly_play
     )
-  )
+  ) |> 
+  
+  # linked platforms are exported only as console ("core") platforms - update to include whether people linked iOS as well
+  rowwise() |>
+  mutate(
+    linked_platforms = {
+      v <- unique(trimws(strsplit(coalesce(linked_platforms, ""), ",")[[1]]))
+      v <- v[v != ""]
+      if (pid %in% ios$pid)     v <- union(v, "iOS")
+      if (pid %in% android$pid) v <- union(v, "Android")
+      na_if(paste(v, collapse = ", "), "")
+    }
+  ) |>
+  ungroup()
 
 ```
 

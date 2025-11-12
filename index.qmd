@@ -505,6 +505,11 @@ n_timeuse_entries_per_day <- number(
   accuracy = 1
 )
 
+platforms_count <- str_count(replace_na(intake$linked_platforms[intake$qualified], ""), ",") + 1
+n_one_platform <- sum(platforms_count == 1, na.rm = TRUE)
+n_two_platforms <- sum(platforms_count == 2, na.rm = TRUE)
+n_three_platforms <- sum(platforms_count >= 3, na.rm = TRUE)
+
 ```
 
 ---
@@ -1144,7 +1149,9 @@ tt(
 
 :::
 
-Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r n_participants_unf` also completed at least one survey. On average, participants were `r participant_age`. Due to errors in screening, four participants over the age of 40 were included.
+Our final sample consists of `r nrow(intake[intake$qualified,])` qualified participants, selected from a pool of `r nrow(intake)` screened participants. Of the `r nrow(intake[intake$qualified,])` with recent telemetry, `r n_participants_unf` also completed at least one survey. On average, participants were `r participant_age`. Due to errors in screening, four participants over the age of 40 were included. 
+
+Among our participants, `r n_one_platform` linked digital trace data on one gaming platform, `r n_two_platforms` linked two gaming platforms, and `r n_three_platforms` linked three or more platforms. 
 
 @tbl-demographics shows demographic characteristics of the final sample alongside general population benchmarks. Our participants are more likely to be male, non-binary, and bi- or multiracial than the general population. Although the demographics of the population of people who play video games are less well understood, our sample's demographics are broadly consistent with previously reported data [e.g., @EntertainmentSoftwareAssociation20242024].
 
@@ -1153,7 +1160,6 @@ Besides those appearing in @tbl-demographics, we collected various other demogra
 ## Ethics and Compensation
 
 This study received ethical approval from the Social Sciences and Humanities Inter-Divisional Research Ethics Committee at the University of Oxford (OII_CIA_23_107). All participants provided informed consent at the start of the study, including consent to their data being shared openly for reanalysis.
-
 
 The data released here is pseudonymized for participant privacy. However, we recognize that the possibility of reidentification cannot be ruled out due to the detailed demographics present in the dataset alongside the digital trace data. With careful consideration of the risks [e.g., @ShawEtAl2025DECIDE], we elect to share the full data, owing to several factors: (1) participants were thoroughly briefed on the procedure and directly consented to their data being pseudonymously shared; (2) for sensitive items (e.g., political affiliation), participants could select "prefer not to share"; (3) evidence suggests even a pared-down version of our dataset with less participant information may be reidentifiable based on trace data alone [e.g., @SekaraEtAl2021Temporal]; (4) data-sharing agreements with Nintendo and Microsoft specifically prohibit the companies themselves from connecting our survey data back to their telemetry; (5) the harms associated with reidentification are moderate, and (6) the research community has a strong interest in open data for reproducibility and cumulative science.
 
