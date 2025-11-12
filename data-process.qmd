@@ -62,47 +62,36 @@ steam_clean <- steam |>
   # Filter out invalid calculations:
   # - First entry for each user/game (lag is NA)
   # - Negative playtime difference (data anomaly or reset?)
-  # - Large time gaps between polls (e.g., > 2 hours for hourly polling, indicates missed polls or stopped tracking)
   filter(
     !is.na(playtime_diff),
     playtime_diff >= 0,
     !is.na(time_diff_hours),
-    time_diff_hours > 0,
-    time_diff_hours < 2 # Assuming roughly hourly polls
+    time_diff_hours > 0
   ) |>
-  # If playtime_diff is large, it might span multiple hours.
-  # This calculation assumes playtime is evenly distributed over the polling interval.
-  # A more complex approach might be needed for precise hourly allocation if intervals vary widely.
-  # For simplicity here, we assign the entire playtime_diff to the hour the poll *ended*.
+  # Calculate approximate session start and end times
+  # This approximation assumes gaming occurred immediately before the poll
+  # by subtracting the playtime duration from the poll timestamp
   mutate(
     minutes = playtime_diff,
-    date = as.Date(timestamp),
-    hour = hour(timestamp),
-    datetime_hour_start = ymd_hms(
-      paste0(date, " ", sprintf("%02d", hour), ":00:00"),
-      tz = "UTC"
-    )
+    # Approximate session start: poll timestamp minus playtime duration
+    approximate_session_start = timestamp - minutes(playtime_diff),
+    # Approximate session end: the poll timestamp (when playtime change was detected)
+    approximate_session_end = timestamp,
+    # Floor to hour for hourly aggregation
+    datetime_hour_start = floor_date(approximate_session_start, "hour")
   ) |>
-  # filter out rows where 3+ games are being played simultaneously
-  group_by(pid, datetime_hour_start) |>
-  mutate(concurrent_titles = n_distinct(steam_id[minutes > 0])) |>
-  ungroup() |>
-  mutate(minutes = ifelse(concurrent_titles >= 3, 0, minutes)) |>
   group_by(pid, steam_id) |>
-  # Calculate difference from previous hour and identify new sessions
+  # Calculate difference from previous session and identify new sessions
   mutate(
-    hour_diff = as.numeric(difftime(
-      datetime_hour_start,
-      lag(datetime_hour_start),
+    time_since_last = as.numeric(difftime(
+      approximate_session_start,
+      lag(approximate_session_start),
       units = "hours"
     )),
-    is_new_session = ifelse(is.na(hour_diff) | hour_diff > 1, 1, 0),
-    session_group_id = cumsum(is_new_session),
-    session_start = datetime_hour_start,
-    session_end = datetime_hour_start + hours(1), # Session ends at the end of the last hour block played
-    hour_start = floor_date(timestamp, "hour")
+    is_new_session = ifelse(is.na(time_since_last) | time_since_last > 1, 1, 0),
+    session_group_id = cumsum(is_new_session)
   ) |>
-  filter(minutes > 0 & minutes < 120) |>
+  filter(minutes > 0, minutes <= 480) |>
   ungroup()
 
 ```
