@@ -103,7 +103,8 @@ steam_clean <- steam |>
     hour_start = floor_date(timestamp, "hour")
   ) |>
   filter(minutes > 0 & minutes < 120) |>
-  ungroup()
+  ungroup() |> 
+  select(pid, timestamp, date, hour, title_id, steam_id, playtime_forever, playtime_2weeks, game_ref)
 
 ```
 
