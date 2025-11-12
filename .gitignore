@@ -33,5 +33,4 @@ R/missingness_analysis.R
 R/investigate_xbox.R
 R/talk_figures.R
 
-# Exclude R Makevars (local system configuration)
-~/.R/Makevars
+.claude/
