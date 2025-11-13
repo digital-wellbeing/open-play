@@ -2031,9 +2031,31 @@ In each daily survey (US only), participants completed a light time use diary [@
 
 ## Data Quality
 
+```{r}
+#| label: explore-concurrency
+
+crossplatform_concurrency <- hourly_telemetry |>
+  group_by(pid, hour_start_utc) |>
+  summarise(
+    n_minutes = sum(minutes),
+    n_platforms = n_distinct(platform),
+    platforms = paste(sort(unique(platform)), collapse = ", "),
+    .groups = "drop"
+  ) |>
+  filter(n_platforms >= 2 & n_minutes > 60)
+
+prop_concurrent_sessions <- number(
+  nrow(crossplatform_concurrency) /
+    nrow(hourly_telemetry) *
+    100,
+  accuracy = 0.01
+)
+
+```
+
 While not exhaustive, the cleaned data we share implements a variety of data quality checks. Specifically, in each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r prop_failed_daily_attn`% flagged, biweekly: `r prop_failed_biweekly_attn`%).
 
-In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 10 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we removed `r prop_suspicious_xbox`% of Xbox sessions, and `r prop_suspicious_nintendo`% of Nintendo sessions based on these criteria.
+In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 10 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we removed `r prop_suspicious_xbox`% of Xbox sessions, and `r prop_suspicious_nintendo`% of Nintendo sessions based on these criteria. A further `r prop_concurrent_sessions`% of hourly telemetry records indicated concurrent gaming on multiple platforms within the same hour, suggesting potential background usage or idling on at least one platform; these records are retained but flagged for caution.
 
 ## Missingness
 
