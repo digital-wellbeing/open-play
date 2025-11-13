@@ -577,6 +577,49 @@ biweekly_clean <- biweekly |>
 
 ```
 
+```{r}
+#| label: preprocess-timeuse
+# Assign quality flags to daily time use diaries
+# 0: Good quality
+# 1: 90+ minutes missing
+# 2: No sleep
+# 3: No personal care  
+# 4: No sleep and no personal care
+
+# Calculate duration and flags
+timeuse_flags <- timeuse |>
+  mutate(
+    start_dt = ymd_hms(start_time, tz = "UTC"),
+    end_dt = ymd_hms(end_time, tz = "UTC"),
+    # Duration of each individual activity
+    duration_min = as.numeric(difftime(end_dt, start_dt, units = "mins"))
+  ) |>
+  group_by(pid, daily_wave) |>
+  summarise(
+    # Sum of all activity durations in this daily_wave
+    total_minutes = sum(duration_min, na.rm = TRUE),
+    has_sleep = any(str_to_lower(activity) == "sleep", na.rm = TRUE),
+    has_personal_care = any(str_to_lower(activity) == "personal care", na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    quality_flag = case_when(
+      !has_sleep & !has_personal_care ~ 4L,
+      !has_sleep ~ 2L,
+      !has_personal_care ~ 3L,
+      total_minutes < 1350 ~ 1L,  # 1440 - 90 = 1350
+      TRUE ~ 0L
+    )
+  ) |>
+  select(pid, daily_wave, quality_flag)
+
+# Add flags to dataset
+timeuse_clean <- timeuse |>
+  left_join(timeuse_flags, by = c("pid", "daily_wave")) |>
+  arrange(pid, daily_wave, start_time)
+
+```
+
 ## Write clean data files
 
 ```{r}
@@ -595,6 +638,6 @@ write_csv(steam_clean, path(path_out, "steam", ext = "csv.gz"))
 write_csv(xbox_clean, path(path_out, "xbox", ext = "csv.gz"))
 write_csv(ios, path(path_out, "ios", ext = "csv.gz"))
 write_csv(android, path(path_out, "android", ext = "csv.gz"))
+write_csv(timeuse_clean, path(path_out, "timeuse", ext = "csv.gz"))
 write_csv(dat_cog, path(path_out, "simon", ext = "csv.gz"))
-write_csv(timeuse, path(path_out, "timeuse", ext = "csv.gz"))
 ```
