@@ -322,3 +322,81 @@ fmt_row <- \(region, type, meas, n_total, n_eligible, max_possible, miss_vec) {
     max_missing_per_participant = suppressWarnings(max(miss_vec, na.rm = TRUE))
   )
 }
+
+# Correct impossible 60-minute play windows using fixed hourly periods
+# Ensures no player plays more than 60 minutes in any clock hour (e.g., 10:00-11:00)
+# by splitting sessions into hour-segments and scaling each hour independently
+correct_60min_windows <- function(session_start, session_end, minutes) {
+  n <- length(session_start)
+  if (n == 0) return(numeric(0))
+
+  # Step 1: Split all sessions into hour-segments
+  # Each segment represents the portion of a session within one clock hour
+  segments <- tibble(
+    session_id = integer(),
+    hour_start = as.POSIXct(character(), tz = "UTC"),
+    segment_minutes = numeric()
+  )
+
+  for (i in 1:n) {
+    # Get the hours this session spans
+    first_hour <- floor_date(session_start[i], "hour")
+    last_hour <- floor_date(session_end[i], "hour")
+
+    # Generate all hours this session touches
+    if (first_hour == last_hour) {
+      # Session within single hour
+      segments <- bind_rows(segments, tibble(
+        session_id = i,
+        hour_start = first_hour,
+        segment_minutes = minutes[i]
+      ))
+    } else {
+      # Session spans multiple hours
+      hours_spanned <- seq(first_hour, last_hour, by = "hour")
+
+      for (h in 1:(length(hours_spanned))) {
+        h_start <- as.POSIXct(hours_spanned[h], origin = "1970-01-01", tz = "UTC")
+        h_end <- h_start + hours(1)
+
+        # Calculate overlap of this session with this hour
+        overlap_start <- max(as.numeric(session_start[i]), as.numeric(h_start))
+        overlap_end <- min(as.numeric(session_end[i]), as.numeric(h_end))
+        overlap_mins <- (overlap_end - overlap_start) / 60
+
+        if (overlap_mins > 0) {
+          segments <- bind_rows(segments, tibble(
+            session_id = i,
+            hour_start = h_start,
+            segment_minutes = overlap_mins
+          ))
+        }
+      }
+    }
+  }
+
+  # Step 2: For each hour, scale segments if total exceeds 60 minutes
+  segments <- segments |>
+    group_by(hour_start) |>
+    mutate(
+      hour_total = sum(segment_minutes),
+      scale_factor = if_else(hour_total > 60, 60 / hour_total, 1.0),
+      scaled_minutes = segment_minutes * scale_factor
+    ) |>
+    ungroup()
+
+  # Step 3: Calculate total reduction for each session
+  # Sum the reduction across all segments of each session
+  session_reductions <- segments |>
+    mutate(segment_reduction = segment_minutes - scaled_minutes) |>
+    group_by(session_id) |>
+    summarise(total_reduction = sum(segment_reduction), .groups = "drop")
+
+  # Create output vector with reductions for all sessions
+  reduction <- numeric(n)
+  for (i in 1:nrow(session_reductions)) {
+    reduction[session_reductions$session_id[i]] <- session_reductions$total_reduction[i]
+  }
+
+  return(reduction)
+}
