@@ -38,9 +38,8 @@ dat_cog <- read_csv("data/raw/cognitive_tasks_raw.csv.gz")
 
 # non- and idle games lists are in helpers.R
 
-# Arrange data to calculate differences correctly
-steam_clean <- steam |>
-  # get rid of idle games and non-games, see list in R/helpers.R
+# First, create expanded dataset with scaling calculations for quality metrics
+steam_expanded_for_metrics <- steam |>
   filter(!title_id %in% idle_games & !title_id %in% non_games) |>
   mutate(
     steam_id = as.character(steam_id),
@@ -49,39 +48,27 @@ steam_clean <- steam |>
   arrange(pid, title_id, timestamp) |>
   group_by(pid, steam_id) |>
   mutate(
-    # Calculate time difference between consecutive polls for the same user/game
     time_diff_hours = as.numeric(difftime(
       timestamp,
       lag(timestamp),
       units = "hours"
     )),
-    # Calculate playtime difference
     playtime_diff = playtime_forever - lag(playtime_forever)
   ) |>
   ungroup() |>
-  # Filter out invalid calculations:
-  # - First entry for each user/game (lag is NA)
-  # - Negative playtime difference (data anomaly or reset?)
   filter(
     !is.na(playtime_diff),
     playtime_diff >= 0,
     !is.na(time_diff_hours),
     time_diff_hours > 0
   ) |>
-  # Calculate approximate session start and end times
-  # This approximation assumes gaming occurred immediately before the poll
-  # by subtracting the playtime duration from the poll timestamp
   mutate(
     minutes_original = playtime_diff,
-    # Approximate session start: poll timestamp minus playtime duration
     approximate_session_start = timestamp - minutes(playtime_diff),
-    # Approximate session end: the poll timestamp (when playtime change was detected)
     approximate_session_end = timestamp,
-    # Floor to hour for hourly aggregation
     datetime_hour_start = floor_date(approximate_session_start, "hour")
   ) |>
   group_by(pid, steam_id) |>
-  # Calculate difference from previous session and identify new sessions
   mutate(
     time_since_last = as.numeric(difftime(
       approximate_session_start,
@@ -93,8 +80,6 @@ steam_clean <- steam |>
   ) |>
   filter(minutes_original > 0, minutes_original <= 480) |>
   ungroup() |>
-  # Split sessions into hourly segments (like Xbox/Nintendo)
-  # This ensures long sessions are properly distributed across clock hours
   mutate(
     h0_utc = floor_date(approximate_session_start, "hour"),
     h1_utc = floor_date(approximate_session_end - seconds(1), "hour"),
@@ -103,7 +88,6 @@ steam_clean <- steam |>
   tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
   mutate(
     hour_start_utc = h0_utc + hours(k - 1),
-    # Calculate how many minutes of this session fall within this hour
     hour_end_utc = hour_start_utc + hours(1),
     minutes_in_hour = pmax(
       0,
@@ -114,13 +98,15 @@ steam_clean <- steam |>
       ))
     )
   ) |>
-  # For each player-hour, if total exceeds 60 min, scale proportionally
   group_by(pid, hour_start_utc) |>
   mutate(
     hour_total = sum(minutes_in_hour),
     scale_factor = if_else(hour_total > 60, 60 / hour_total, 1.0),
     minutes_in_hour_corrected = minutes_in_hour * scale_factor
-  ) |>
+  )
+
+# Continue processing to create steam_clean
+steam_clean <- steam_expanded_for_metrics |>
   ungroup() |>
   # Aggregate back to session level with corrected minutes
   group_by(pid, steam_id, session_group_id, approximate_session_start, approximate_session_end) |>
@@ -142,24 +128,44 @@ steam_clean <- steam |>
     approximate_session_end_original = approximate_session_end,
     approximate_session_end = approximate_session_start + seconds(minutes * 60)
   ) |>
-  # Select final columns for output
-  select(
-    pid,
-    datetime_hour_start,
-    timestamp,
-    date,
-    hour,
-    title_id,
-    steam_id,
-    playtime_forever,
-    playtime_2weeks,
-    approximate_session_start,
-    approximate_session_end_original,
-    approximate_session_end,
-    minutes_original,
-    minutes,
-    game_ref
+  # Remove session_group_id (only used for intermediate calculations)
+  select(-session_group_id)
+
+```
+
+```{r}
+#| label: steam-quality-metrics
+
+# Calculate Steam data quality metrics using the intermediate expanded data
+steam_quality_metrics <- steam_expanded_for_metrics |>
+  ungroup() |>
+  mutate(
+    minutes_reduced = minutes_in_hour - minutes_in_hour_corrected,
+    was_scaled = scale_factor < 1.0
+  ) |>
+  summarise(
+    # Metric 1: Player-hour combinations
+    total_player_hours = n_distinct(pid, hour_start_utc),
+    hours_exceeding_60 = n_distinct(pid[hour_total > 60], hour_start_utc[hour_total > 60]),
+
+    # Metric 2: Hour segments
+    total_segments = n(),
+    segments_scaled = sum(was_scaled),
+
+    # Metric 3: Minutes reduced (only for scaled segments)
+    mean_minutes_reduced = mean(minutes_reduced[was_scaled], na.rm = TRUE),
+    median_minutes_reduced = median(minutes_reduced[was_scaled], na.rm = TRUE),
+
+    # Calculate proportions
+    prop_hours_exceeding = hours_exceeding_60 / total_player_hours,
+    prop_segments_scaled = segments_scaled / total_segments
   )
+
+# Save metrics for use in index.qmd
+write_csv(steam_quality_metrics, "data/qc/steam_quality_metrics.csv")
+
+# Clean up temporary variable
+rm(steam_expanded_for_metrics)
 
 ```
 
