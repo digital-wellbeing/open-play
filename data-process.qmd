@@ -72,7 +72,7 @@ steam_clean <- steam |>
   # This approximation assumes gaming occurred immediately before the poll
   # by subtracting the playtime duration from the poll timestamp
   mutate(
-    minutes = playtime_diff,
+    minutes_original = playtime_diff,
     # Approximate session start: poll timestamp minus playtime duration
     approximate_session_start = timestamp - minutes(playtime_diff),
     # Approximate session end: the poll timestamp (when playtime change was detected)
@@ -91,8 +91,75 @@ steam_clean <- steam |>
     is_new_session = ifelse(is.na(time_since_last) | time_since_last > 1.5, 1, 0),
     session_group_id = cumsum(is_new_session)
   ) |>
-  filter(minutes > 0, minutes <= 480) |>
-  ungroup()
+  filter(minutes_original > 0, minutes_original <= 480) |>
+  ungroup() |>
+  # Split sessions into hourly segments (like Xbox/Nintendo)
+  # This ensures long sessions are properly distributed across clock hours
+  mutate(
+    h0_utc = floor_date(approximate_session_start, "hour"),
+    h1_utc = floor_date(approximate_session_end - seconds(1), "hour"),
+    n_hours = as.integer(difftime(h1_utc, h0_utc, units = "hours")) + 1
+  ) |>
+  tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
+  mutate(
+    hour_start_utc = h0_utc + hours(k - 1),
+    # Calculate how many minutes of this session fall within this hour
+    hour_end_utc = hour_start_utc + hours(1),
+    minutes_in_hour = pmax(
+      0,
+      as.numeric(difftime(
+        pmin(approximate_session_end, hour_end_utc),
+        pmax(approximate_session_start, hour_start_utc),
+        units = "mins"
+      ))
+    )
+  ) |>
+  # For each player-hour, if total exceeds 60 min, scale proportionally
+  group_by(pid, hour_start_utc) |>
+  mutate(
+    hour_total = sum(minutes_in_hour),
+    scale_factor = if_else(hour_total > 60, 60 / hour_total, 1.0),
+    minutes_in_hour_corrected = minutes_in_hour * scale_factor
+  ) |>
+  ungroup() |>
+  # Aggregate back to session level with corrected minutes
+  group_by(pid, steam_id, session_group_id, approximate_session_start, approximate_session_end) |>
+  summarise(
+    minutes_original = first(minutes_original),
+    minutes = sum(minutes_in_hour_corrected),
+    datetime_hour_start = first(h0_utc),
+    timestamp = first(timestamp),
+    date = first(date),
+    hour = first(hour),
+    title_id = first(title_id),
+    playtime_forever = first(playtime_forever),
+    playtime_2weeks = first(playtime_2weeks),
+    game_ref = first(game_ref),
+    .groups = "drop"
+  ) |>
+  # Calculate corrected session end time based on corrected minutes
+  mutate(
+    approximate_session_end_original = approximate_session_end,
+    approximate_session_end = approximate_session_start + seconds(minutes * 60)
+  ) |>
+  # Select final columns for output
+  select(
+    pid,
+    datetime_hour_start,
+    timestamp,
+    date,
+    hour,
+    title_id,
+    steam_id,
+    playtime_forever,
+    playtime_2weeks,
+    approximate_session_start,
+    approximate_session_end_original,
+    approximate_session_end,
+    minutes_original,
+    minutes,
+    game_ref
+  )
 
 ```
 
@@ -524,22 +591,7 @@ write_csv(intake_clean, path(path_out, "survey_intake", ext = "csv.gz"))
 write_csv(daily_clean, path(path_out, "survey_daily", ext = "csv.gz"))
 write_csv(biweekly_clean, path(path_out, "survey_biweekly", ext = "csv.gz"))
 write_csv(nintendo_clean, path(path_out, "nintendo", ext = "csv.gz"))
-write_csv(
-  steam_clean |>
-    select(
-      pid,
-      timestamp,
-      date,
-      hour,
-      title_id,
-      steam_id,
-      playtime_forever,
-      playtime_2weeks,
-      minutes,
-      game_ref
-    ),
-  path(path_out, "steam", ext = "csv.gz")
-)
+write_csv(steam_clean, path(path_out, "steam", ext = "csv.gz"))
 write_csv(xbox_clean, path(path_out, "xbox", ext = "csv.gz"))
 write_csv(ios, path(path_out, "ios", ext = "csv.gz"))
 write_csv(android, path(path_out, "android", ext = "csv.gz"))
