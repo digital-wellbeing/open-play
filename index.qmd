@@ -297,10 +297,12 @@ nintendo_valid_sessions <- nintendo_raw |>
 #| label: aggregate-session-hourly-daily
 
 # merge with the local time zone offsets from intake
+# Note: We keep country and local_timezone for DST-aware conversion
 tz_map <- intake |>
   mutate(
     pid,
-    off = offset_secs(local_timezone),
+    country,
+    local_timezone,
     .keep = "none"
   ) |>
   distinct(pid, .keep_all = TRUE)
@@ -312,9 +314,14 @@ session_telemetry <- bind_rows(
   nintendo |> mutate(platform = "Nintendo")
 ) |>
   left_join(tz_map, by = "pid") |>
+  filter(!is.na(local_timezone)) |>
   mutate(
-    start_local = session_start + off,
-    end_local = session_end + off,
+    # Calculate DST-aware offset for each timestamp
+    offset_start = get_dst_offset(session_start, country, local_timezone),
+    offset_end = get_dst_offset(session_end, country, local_timezone),
+    # Add offset to get local time values (keeping UTC label for compatibility)
+    start_local = session_start + offset_start,
+    end_local = session_end + offset_end,
     duration_min = as.numeric(difftime(
       session_end,
       session_start,
@@ -331,12 +338,13 @@ session_telemetry <- bind_rows(
 # --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
 # expand sessions into local-hour bins, compute overlap minutes, and add UTC hour
 hourly_from_sessions <- session_telemetry |>
-  filter(!is.na(off)) |>
+  filter(!is.na(start_local), !is.na(end_local)) |>
   mutate(
     h0_local = floor_date(start_local, "hour"),
     h1_local = floor_date(end_local - seconds(1), "hour"),
     n_hours = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
   ) |>
+  filter(!is.na(n_hours), n_hours > 0) |>
   tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
   mutate(
     hour_start_local = h0_local + hours(k - 1),
@@ -348,7 +356,8 @@ hourly_from_sessions <- session_telemetry |>
         units = "mins"
       ))
     ),
-    hour_start_utc = hour_start_local - off
+    # Convert back to UTC (this preserves the instant, just changes label)
+    hour_start_utc = with_tz(hour_start_local, tzone = "UTC")
   ) |>
   select(pid, platform, title_id, hour_start_local, hour_start_utc, minutes) |>
   group_by(pid, platform, title_id, hour_start_local, hour_start_utc) |>
@@ -363,15 +372,15 @@ hourly_from_steam <- steam |>
   ) |>
   select(pid, title_id, datetime_hour_start, minutes) |>
   left_join(tz_map, by = "pid") |>
+  filter(!is.na(local_timezone)) |>
   mutate(
-    pid,
     platform = "Steam",
     hour_start_utc = datetime_hour_start,
-    hour_start_local = datetime_hour_start + off,
-    minutes,
-    title_id,
-    .keep = "none"
+    offset = get_dst_offset(datetime_hour_start, country, local_timezone),
+    # Note: These are local time values with UTC labels due to R's POSIXct limitation
+    hour_start_local = datetime_hour_start + offset
   ) |>
+  select(pid, platform, title_id, hour_start_local, hour_start_utc, minutes) |>
   group_by(pid, platform, title_id, hour_start_local, hour_start_utc) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
