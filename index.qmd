@@ -592,6 +592,18 @@ overview <- bind_rows(
     avg_days = nrow(biweekly) / n_distinct(biweekly$pid)
   ),
   summ_basic(
+    time_use |>
+      distinct(pid, date) |>
+      mutate(events = 1),
+    pid,
+    "Time use diaries",
+    avg_days = time_use |>
+      group_by(pid) |>
+      summarise(n_days = n_distinct(date)) |>
+      pull(n_days) |>
+      median(na.rm = TRUE)
+  ),
+  summ_basic(
     simon,
     pid,
     "Attention tasks",
@@ -676,6 +688,7 @@ overview <- overview |>
       "Daily surveys" ~ "30 days",
       "Biweekly surveys" ~ "10 weeks",
       "Attention tasks" ~ "8 weeks",
+      "Time use diaries" ~ "30 days",
       "Steam" ~ "3-12 months",
       "Nintendo" ~ paste0(
         floor(time_length(
@@ -2023,7 +2036,7 @@ In the telemetry, we use several heuristics to identify potential unreliable ses
 
 ## Missingness
 
-As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by data type (Survey, Telemetry, and Cognitive Task).
+As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by data type (Survey, Cognitive Task, and Telemetry).
 
 The unit of observation differs across data types. For surveys and cognitive tasks, the unit is a completed survey or task. For telemetry, the unit varies by platform: Xbox and Nintendo use binary account linking, with data coverage considered maximal once linked (data provided directly by platform holders); Steam is measured hourly, with observations representing whether the participant's profile was publicly visible in each hour; iOS and Android are measured daily, with observations representing whether a valid screenshot was submitted covering that day's gaming.
 
@@ -2116,6 +2129,9 @@ pids_bw <- biweekly |>
   count(pid, name = "n_bw") |>
   filter(n_bw >= 1) |>
   pull(pid)
+pids_timeuse <- time_use |>
+  distinct(pid) |>
+  pull(pid)
 
 ## telemetry sets
 tele_sets <- list(
@@ -2145,7 +2161,7 @@ rows <- list(
 
     tibble(
       data_type = "Survey",
-      measure = "Daily Diary",
+      measure = "Daily surveys",
       n_total = daily |> distinct(pid) |> nrow(),
       n_participants = length(pids_daily),
       maximum_possible = length(pids_daily) * E_DAILY,
@@ -2170,10 +2186,39 @@ rows <- list(
 
     tibble(
       data_type = "Survey",
-      measure = "Biweekly",
+      measure = "Biweekly surveys",
       n_total = biweekly |> distinct(pid) |> nrow(),
       n_participants = length(pids_bw),
       maximum_possible = length(pids_bw) * E_BIWEEKLY,
+      total_observed = sum(base$obs),
+      total_missing = sum(base$miss),
+      median_missing_per_participant = suppressWarnings(median(
+        base$miss,
+        na.rm = TRUE
+      )),
+      max_missing_per_participant = suppressWarnings(max(
+        base$miss,
+        na.rm = TRUE
+      ))
+    )
+  },
+  {
+    # Time use diaries (among those who submitted at least one, max 30 days)
+    time_use_by_day <- time_use |>
+      distinct(pid, date) |>
+      filter(pid %in% pids_timeuse)
+
+    obs <- time_use_by_day |> count(pid, name = "obs")
+    base <- tibble(pid = pids_timeuse) |>
+      left_join(obs, by = "pid") |>
+      mutate(obs = coalesce(obs, 0L), miss = E_DAILY - obs)
+
+    tibble(
+      data_type = "Survey",
+      measure = "Time use diaries",
+      n_total = length(pids_timeuse),
+      n_participants = length(pids_timeuse),
+      maximum_possible = length(pids_timeuse) * E_DAILY,
       total_observed = sum(base$obs),
       total_missing = sum(base$miss),
       median_missing_per_participant = suppressWarnings(median(
@@ -2308,7 +2353,7 @@ rows <- list(
 
     tibble(
       data_type = "Task",
-      measure = "Simon Task",
+      measure = "Attention tasks",
       n_total = simon |> distinct(pid) |> nrow(),
       n_participants = simon |> distinct(pid) |> nrow(),
       maximum_possible = length(pids_bw) * E_SIMON,
@@ -2327,18 +2372,19 @@ rows <- list(
 ) |>
   list_rbind() |>
   arrange(
-    factor(data_type, levels = c("Survey", "Telemetry", "Task")),
+    factor(data_type, levels = c("Survey", "Task", "Telemetry")),
     factor(
       measure,
       levels = c(
-        "Daily Diary",
-        "Biweekly",
+        "Daily surveys",
+        "Biweekly surveys",
+        "Time use diaries",
+        "Attention tasks",
         "Xbox",
         "Nintendo",
         "Steam",
         "iOS",
-        "Android",
-        "Simon Task"
+        "Android"
       )
     )
   )
