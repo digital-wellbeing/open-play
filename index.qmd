@@ -1508,7 +1508,7 @@ To prepare daily and biweekly survey data, we removed duplicate entries from wit
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-case-study
-#| fig-cap: "Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (short WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior."
+#| fig-cap: !expr 'paste0("Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (short WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior. Participant IDs: ", selected_pids["p25"], " (25th percentile), ", selected_pids["p50"], " (50th percentile), ", selected_pids["p75"], " (75th percentile).")'
 #| fig-asp: .8
 #| out.width: 80%
 
@@ -1614,17 +1614,17 @@ biweekly_wellbeing <- biweekly |>
   filter(!is.na(wemwbs) & wemwbs >= 7) |> # Remove invalid/missing wellbeing scores
   mutate(
     percentile = case_when(
-      pid == selected_pids["p25"] ~ "25th Percentile",
-      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
-      pid == selected_pids["p75"] ~ "75th Percentile",
+      pid == selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
+      pid == selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
+      pid == selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
       TRUE ~ NA_character_
     ),
     percentile = factor(
       percentile,
       levels = c(
-        "25th Percentile",
-        "50th Percentile (Median)",
-        "75th Percentile"
+        "Example participant 1 (25th gaming percentile)",
+        "Example participant 2 (50th gaming percentile)",
+        "Example participant 3 (75th gaming percentile)"
       )
     )
   )
@@ -1634,17 +1634,17 @@ plot_data <- daily_with_study_day |>
   filter(pid %in% selected_pids) |>
   mutate(
     percentile = case_when(
-      pid == selected_pids["p25"] ~ "25th Percentile",
-      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
-      pid == selected_pids["p75"] ~ "75th Percentile",
+      pid == selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
+      pid == selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
+      pid == selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
       TRUE ~ NA_character_
     ),
     percentile = factor(
       percentile,
       levels = c(
-        "25th Percentile",
-        "50th Percentile (Median)",
-        "75th Percentile"
+        "Example participant 1 (25th gaming percentile)",
+        "Example participant 2 (50th gaming percentile)",
+        "Example participant 3 (75th gaming percentile)"
       )
     )
   )
@@ -1657,17 +1657,17 @@ complete_grid <- expand_grid(
 ) |>
   mutate(
     percentile = case_when(
-      pid == selected_pids["p25"] ~ "25th Percentile",
-      pid == selected_pids["p50"] ~ "50th Percentile (Median)",
-      pid == selected_pids["p75"] ~ "75th Percentile",
+      pid == selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
+      pid == selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
+      pid == selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
       TRUE ~ NA_character_
     ),
     percentile = factor(
       percentile,
       levels = c(
-        "25th Percentile",
-        "50th Percentile (Median)",
-        "75th Percentile"
+        "Example participant 1 (25th gaming percentile)",
+        "Example participant 2 (50th gaming percentile)",
+        "Example participant 3 (75th gaming percentile)"
       )
     )
   )
@@ -1770,19 +1770,14 @@ for (i in seq_along(pct_levels)) {
     theme(
       plot.background = element_blank(),
       panel.background = element_rect(fill = "white", color = NA),
-      panel.grid.major = element_line(color = "#333333", linewidth = 0.3),
-      panel.grid.minor = element_blank(),
       panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.6),
       axis.text = element_text(size = 9),
       axis.title.y.right = element_text(color = "#FF6B35"),
       axis.text.y.right = element_text(color = "#FF6B35"),
-      plot.title = ggtext::element_textbox_simple(
-        padding = margin(4, 6, 4, 6),
-        margin = margin(0, 0, 6, 0),
-        fill = "#0f0f0f", # strip fill
-        color = "white",
-        size = 10, # smaller font (pt)
-        halign = 0.5
+      plot.title = element_text(
+        color = "black",
+        size = 10,
+        hjust = 0.5
       )
     )
 
