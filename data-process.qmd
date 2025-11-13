@@ -75,7 +75,11 @@ steam_expanded_for_metrics <- steam |>
       lag(approximate_session_start),
       units = "hours"
     )),
-    is_new_session = ifelse(is.na(time_since_last) | time_since_last > 1.5, 1, 0),
+    is_new_session = ifelse(
+      is.na(time_since_last) | time_since_last > 1.5,
+      1,
+      0
+    ),
     session_group_id = cumsum(is_new_session)
   ) |>
   filter(minutes_original > 0, minutes_original <= 480) |>
@@ -109,7 +113,13 @@ steam_expanded_for_metrics <- steam |>
 steam_clean <- steam_expanded_for_metrics |>
   ungroup() |>
   # Aggregate back to session level with corrected minutes
-  group_by(pid, steam_id, session_group_id, approximate_session_start, approximate_session_end) |>
+  group_by(
+    pid,
+    steam_id,
+    session_group_id,
+    approximate_session_start,
+    approximate_session_end
+  ) |>
   summarise(
     minutes_original = first(minutes_original),
     minutes = sum(minutes_in_hour_corrected),
@@ -247,7 +257,8 @@ nintendo_clean <- nintendo |>
 dat_cog <- dat_cog |>
   filter(
     pid %in%
-      unique(intake$pid[intake$qualified & intake$cohort != "Platform Pilot"])
+      unique(intake$pid[intake$qualified & intake$cohort != "Platform Pilot"]),
+    wave %in% c(1, 3, 5) # only waves with cognitive data
   )
 
 # Take relevant variables and observations only
@@ -293,25 +304,33 @@ As preregistered, we exclude days where total gaming time (across all platforms)
 ```{r}
 #| label: apply-telemetry-exclusions
 
-# --- Build tz map (as in your script) ---------------------------------------
+# --- Build tz map with country and timezone for DST-aware conversion --------
 tz_map <- intake |>
   mutate(
     pid = as.character(pid),
-    off = offset_secs(local_timezone),
+    country,
+    local_timezone,
     .keep = "none"
   ) |>
   distinct(pid, .keep_all = TRUE)
 
 # --- Hourly from sessions (Nintendo + Xbox) ---------------------------------
+# Join with timezone map and calculate DST-aware offsets
+# Note: start_local/end_local have UTC labels but local time VALUES (for hour extraction)
 sessions_telemetry <- bind_rows(
   xbox_clean |> mutate(platform = "Xbox"),
   nintendo_clean |> mutate(platform = "Nintendo")
 ) |>
   mutate(pid = as.character(pid)) |>
   left_join(tz_map, by = "pid") |>
+  filter(!is.na(local_timezone)) |>
   mutate(
-    start_local = session_start + off,
-    end_local = session_end + off,
+    # Calculate DST-aware offset for each timestamp
+    offset_start = get_dst_offset(session_start, country, local_timezone),
+    offset_end = get_dst_offset(session_end, country, local_timezone),
+    # Add offset to get local time values (keeping UTC label for compatibility)
+    start_local = session_start + offset_start,
+    end_local = session_end + offset_end,
     duration_min = as.numeric(difftime(
       session_end,
       session_start,
@@ -326,12 +345,13 @@ sessions_telemetry <- bind_rows(
   )
 
 hourly_from_sessions <- sessions_telemetry |>
-  filter(!is.na(off)) |>
+  filter(!is.na(start_local), !is.na(end_local)) |>
   mutate(
     h0_local = floor_date(start_local, "hour"),
     h1_local = floor_date(end_local - seconds(1), "hour"),
     n_hours = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
   ) |>
+  filter(!is.na(n_hours), n_hours > 0) |>
   tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
   mutate(
     hour_start_local = h0_local + hours(k - 1),
@@ -343,7 +363,8 @@ hourly_from_sessions <- sessions_telemetry |>
         units = "mins"
       ))
     ),
-    hour_start_utc = hour_start_local - off
+    # Convert back to UTC (this preserves the instant, just changes label)
+    hour_start_utc = with_tz(hour_start_local, tzone = "UTC")
   ) |>
   select(pid, platform, hour_start_local, hour_start_utc, minutes)
 
@@ -352,10 +373,13 @@ hourly_from_steam <- steam_clean |>
   select(pid, datetime_hour_start, minutes) |>
   mutate(pid = as.character(pid)) |>
   left_join(tz_map, by = "pid") |>
+  filter(!is.na(local_timezone)) |>
   mutate(
     platform = "Steam",
     hour_start_utc = datetime_hour_start,
-    hour_start_local = datetime_hour_start + off
+    # Calculate DST-aware offset and add to get local time values
+    offset = get_dst_offset(datetime_hour_start, country, local_timezone),
+    hour_start_local = datetime_hour_start + offset
   ) |>
   select(pid, platform, hour_start_local, hour_start_utc, minutes)
 
@@ -395,21 +419,33 @@ exclusion_days <- daily_all |>
 # --- Apply exclusions back to each dataset ----------------------------------
 steam_clean <- steam_clean |>
   left_join(tz_map, by = c("pid" = "pid")) |>
-  mutate(day_local = as.Date(datetime_hour_start + off)) |>
+  filter(!is.na(local_timezone)) |>
+  mutate(
+    offset = get_dst_offset(datetime_hour_start, country, local_timezone),
+    day_local = as.Date(datetime_hour_start + offset)
+  ) |>
   anti_join(exclusion_days, by = c("pid", "day_local")) |>
-  select(-off, -day_local)
+  select(-country, -local_timezone, -offset, -day_local)
 
 xbox_clean <- xbox_clean |>
   left_join(tz_map, by = "pid") |>
-  mutate(day_local = as.Date(session_start + off)) |>
+  filter(!is.na(local_timezone)) |>
+  mutate(
+    offset = get_dst_offset(session_start, country, local_timezone),
+    day_local = as.Date(session_start + offset)
+  ) |>
   anti_join(exclusion_days, by = c("pid", "day_local")) |>
-  select(-off, -day_local)
+  select(-country, -local_timezone, -offset, -day_local)
 
 nintendo_clean <- nintendo_clean |>
   left_join(tz_map, by = "pid") |>
-  mutate(day_local = as.Date(session_start + off)) |>
+  filter(!is.na(local_timezone)) |>
+  mutate(
+    offset = get_dst_offset(session_start, country, local_timezone),
+    day_local = as.Date(session_start + offset)
+  ) |>
   anti_join(exclusion_days, by = c("pid", "day_local")) |>
-  select(-off, -day_local)
+  select(-country, -local_timezone, -offset, -day_local)
 
 ios <- ios |>
   mutate(pid = as.character(pid), day_local = as.Date(day_local)) |>
@@ -475,7 +511,7 @@ daily_clean <- daily |>
         relationship = "many-to-many"
       ) |>
       mutate(dw = 1L + as.integer(baseline_day - ideal_baseline_day)) |>
-      filter(between(dw, 1L, 30L)) |>
+      filter(dplyr::between(dw, 1L, 30L)) |>
       group_by(pid, ideal_baseline_day, dw) |>
       slice_min(date, n = 1, with_ties = FALSE) |> # one per (pid, candidate, wave)
       ungroup() |>
@@ -491,7 +527,7 @@ daily_clean <- daily |>
         original_wave = wave,
         wave = 1L + as.integer(baseline_day - ideal_baseline_day)
       ) |>
-      filter(between(wave, 1L, 30L)) |>
+      filter(dplyr::between(wave, 1L, 30L)) |>
       group_by(pid, wave) |>
       slice_min(date, n = 1, with_ties = FALSE) |>
       ungroup()
@@ -512,7 +548,11 @@ dropped <- daily |>
     ),
     drop_reason = case_when(
       is.na(ideal_baseline_day) ~ "no ideal baseline (check pid)",
-      !between(derived_wave, 1L, 30L) ~ "outside 1..30 after reassignment",
+      !dplyr::between(
+        derived_wave,
+        1L,
+        30L
+      ) ~ "outside 1..30 after reassignment",
       TRUE ~ "duplicate within (pid, wave) — later submission dropped"
     )
   ) |>
@@ -543,7 +583,7 @@ biweekly_clean <- biweekly |>
         dpw = 1L + as.integer(round(delta_days / 14)) # derived panel wave (nearest 14d)
       ) |>
       filter(
-        between(dpw, 1L, 30L),
+        dplyr::between(dpw, 1L, 30L),
         abs(delta_days - 14L * (dpw - 1L)) <= 7L # within ±7 days of 14d grid
       ) |>
       group_by(pid, ideal_baseline_day, dpw) |>
@@ -564,7 +604,7 @@ biweekly_clean <- biweekly |>
         wave = derived_wave
       ) |>
       filter(
-        between(wave, 1L, 30L),
+        dplyr::between(wave, 1L, 30L),
         abs(delta_days_final - 14L * (wave - 1L)) <= 7L # enforce validity post-assign
       ) |>
       group_by(pid, wave) |>
