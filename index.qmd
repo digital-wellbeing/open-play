@@ -415,6 +415,7 @@ telemetry_spans <- daily_telemetry |>
 ```{r}
 #| label: summary-stats
 
+n_baseline <- nrow(intake[intake$qualified,])
 n_participants_unf <- sum(unique(c(daily$pid, biweekly$pid)) %in% intake$pid)
 n_participants <- print_num(n_participants_unf)
 participant_age <- (function(x) {
@@ -961,7 +962,7 @@ After players completed the account linking process, we checked each account for
 
 ```{r}
 #| label: fig-design
-#| fig-cap: "Survey administration schedule across the 12-week study period. Participants completed biweekly surveys (orange) every two weeks, with US participants additionally completing daily surveys (blue) for the first 30 days. Cognitive tests (green) were administered during biweekly surveys at weeks 1, 5, and 9. Gray circles indicate days with no scheduled surveys. Retention percentages show the proportion of baseline participants (N=1,980) who were still active at each measurement week (defined as having completed either a daily diary or biweekly survey at any time after that week)."
+#| fig-cap: !expr paste0("Survey administration schedule across the 12-week study period. Participants completed biweekly surveys (orange) every two weeks, with US participants additionally completing daily surveys (blue) for the first 30 days. Cognitive tests (green) were administered during biweekly surveys at weeks 1, 5, and 9. Gray circles indicate days with no scheduled surveys. Retention percentages show the proportion of baseline participants (N=", n_participants_unf, ") who were still active at each measurement week (defined as having completed either a daily diary or biweekly survey at any time after that week).")
 
 knitr::include_graphics("figures/design.svg")
 ```
