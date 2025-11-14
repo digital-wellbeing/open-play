@@ -608,6 +608,7 @@ timeuse_flags <- timeuse |>
   ) |>
   group_by(pid, daily_wave) |>
   summarise(
+    n_activities = n(),
     # Sum of all activity durations in this daily_wave
     total_minutes = sum(duration_min, na.rm = TRUE),
     has_sleep = any(str_to_lower(activity) == "sleep", na.rm = TRUE),
@@ -624,6 +625,7 @@ timeuse_flags <- timeuse |>
       !has_sleep ~ "Low quality: no sleep",
       !has_personal_care ~ "Low quality: no personal care",
       total_minutes < 1350 ~ "Low quality: >90 minutes unaccounted for", # 1440 - 90 = 1350
+      n_activities < 5 ~ "Low quality: fewer than 5 activities logged",
       TRUE ~ "Good quality"
     )
   ) |>
