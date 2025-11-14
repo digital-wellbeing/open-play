@@ -156,7 +156,10 @@ steam_quality_metrics <- steam_expanded_for_metrics |>
   summarise(
     # Metric 1: Player-hour combinations
     total_player_hours = n_distinct(pid, hour_start_utc),
-    hours_exceeding_60 = n_distinct(pid[hour_total > 60], hour_start_utc[hour_total > 60]),
+    hours_exceeding_60 = n_distinct(
+      pid[hour_total > 60],
+      hour_start_utc[hour_total > 60]
+    ),
 
     # Metric 2: Hour segments
     total_segments = n(),
@@ -248,37 +251,6 @@ nintendo_clean <- nintendo |>
   ) |>
   as_tibble()
 
-```
-
-```{r}
-#| label: preprocess-simon
-
-# Only include non-pilot-study participants who qualified at intake
-dat_cog <- dat_cog |>
-  filter(
-    pid %in%
-      unique(intake$pid[intake$qualified & intake$cohort != "Platform Pilot"]),
-    wave %in% c(1, 3, 5) # only waves with cognitive data
-  )
-
-# Take relevant variables and observations only
-# `score_final` is automatically added to all rows so distinct works here
-dat_cog <- dat_cog |>
-  filter(practice == 0, task == "simon") |>
-  add_count(pid, wave, name = "n_trials") |>
-  distinct(
-    pid,
-    wave,
-    datetime,
-    device_type,
-    n_trials,
-    score_final,
-    meanrt_final
-  )
-
-dat_cog <- dat_cog |>
-  mutate(wave = factor(wave)) |>
-  arrange(wave, pid)
 ```
 
 ```{r}
@@ -623,6 +595,80 @@ biweekly_clean <- biweekly |>
 
 ```
 
+```{r}
+#| label: preprocess-timeuse
+# Assign quality flags to daily time use diaries
+
+# Calculate duration and flags
+timeuse_flags <- timeuse |>
+  mutate(
+    # Use already-parsed POSIXct columns directly (read_csv handles ISO 8601)
+    # Duration of each individual activity
+    duration_min = as.numeric(difftime(end_time, start_time, units = "mins"))
+  ) |>
+  group_by(pid, daily_wave) |>
+  summarise(
+    # Sum of all activity durations in this daily_wave
+    total_minutes = sum(duration_min, na.rm = TRUE),
+    has_sleep = any(str_to_lower(activity) == "sleep", na.rm = TRUE),
+    has_personal_care = any(
+      str_to_lower(activity) == "personal care",
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) |>
+  mutate(
+    quality_flag = case_when(
+      !has_sleep &
+        !has_personal_care ~ "Low quality: no sleep and no personal care",
+      !has_sleep ~ "Low quality: no sleep",
+      !has_personal_care ~ "Low quality: no personal care",
+      total_minutes < 1350 ~ "Low quality: >90 minutes unaccounted for", # 1440 - 90 = 1350
+      TRUE ~ "Good quality"
+    )
+  ) |>
+  select(pid, daily_wave, quality_flag)
+
+# Add flags to dataset
+timeuse_clean <- timeuse |>
+  left_join(timeuse_flags, by = c("pid", "daily_wave")) |>
+  arrange(pid, daily_wave, start_time)
+
+```
+
+
+```{r}
+#| label: preprocess-simon
+
+# Only include non-pilot-study participants who qualified at intake
+dat_cog <- dat_cog |>
+  filter(
+    pid %in%
+      unique(intake$pid[intake$qualified & intake$cohort != "Platform Pilot"]),
+    wave %in% c(1, 3, 5) # only waves with cognitive data
+  )
+
+# Take relevant variables and observations only
+# `score_final` is automatically added to all rows so distinct works here
+dat_cog <- dat_cog |>
+  filter(practice == 0, task == "simon") |>
+  add_count(pid, wave, name = "n_trials") |>
+  distinct(
+    pid,
+    wave,
+    datetime,
+    device_type,
+    n_trials,
+    score_final,
+    meanrt_final
+  )
+
+dat_cog <- dat_cog |>
+  mutate(wave = factor(wave)) |>
+  arrange(wave, pid)
+```
+
+
 ## Write clean data files
 
 ```{r}
@@ -641,6 +687,6 @@ write_csv(steam_clean, path(path_out, "steam", ext = "csv.gz"))
 write_csv(xbox_clean, path(path_out, "xbox", ext = "csv.gz"))
 write_csv(ios, path(path_out, "ios", ext = "csv.gz"))
 write_csv(android, path(path_out, "android", ext = "csv.gz"))
+write_csv(timeuse_clean, path(path_out, "timeuse", ext = "csv.gz"))
 write_csv(dat_cog, path(path_out, "simon", ext = "csv.gz"))
-write_csv(timeuse, path(path_out, "timeuse", ext = "csv.gz"))
 ```
