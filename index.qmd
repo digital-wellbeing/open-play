@@ -297,10 +297,12 @@ nintendo_valid_sessions <- nintendo_raw |>
 #| label: aggregate-session-hourly-daily
 
 # merge with the local time zone offsets from intake
+# Note: We keep country and local_timezone for DST-aware conversion
 tz_map <- intake |>
   mutate(
     pid,
-    off = offset_secs(local_timezone),
+    country,
+    local_timezone,
     .keep = "none"
   ) |>
   distinct(pid, .keep_all = TRUE)
@@ -312,9 +314,14 @@ session_telemetry <- bind_rows(
   nintendo |> mutate(platform = "Nintendo")
 ) |>
   left_join(tz_map, by = "pid") |>
+  filter(!is.na(local_timezone)) |>
   mutate(
-    start_local = session_start + off,
-    end_local = session_end + off,
+    # Calculate DST-aware offset for each timestamp
+    offset_start = get_dst_offset(session_start, country, local_timezone),
+    offset_end = get_dst_offset(session_end, country, local_timezone),
+    # Add offset to get local time values (keeping UTC label for compatibility)
+    start_local = session_start + offset_start,
+    end_local = session_end + offset_end,
     duration_min = as.numeric(difftime(
       session_end,
       session_start,
@@ -331,12 +338,13 @@ session_telemetry <- bind_rows(
 # --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
 # expand sessions into local-hour bins, compute overlap minutes, and add UTC hour
 hourly_from_sessions <- session_telemetry |>
-  filter(!is.na(off)) |>
+  filter(!is.na(start_local), !is.na(end_local)) |>
   mutate(
     h0_local = floor_date(start_local, "hour"),
     h1_local = floor_date(end_local - seconds(1), "hour"),
     n_hours = as.integer(difftime(h1_local, h0_local, units = "hours")) + 1
   ) |>
+  filter(!is.na(n_hours), n_hours > 0) |>
   tidyr::uncount(n_hours, .remove = FALSE, .id = "k") |>
   mutate(
     hour_start_local = h0_local + hours(k - 1),
@@ -348,7 +356,8 @@ hourly_from_sessions <- session_telemetry |>
         units = "mins"
       ))
     ),
-    hour_start_utc = hour_start_local - off
+    # Convert back to UTC (this preserves the instant, just changes label)
+    hour_start_utc = with_tz(hour_start_local, tzone = "UTC")
   ) |>
   select(pid, platform, title_id, hour_start_local, hour_start_utc, minutes) |>
   group_by(pid, platform, title_id, hour_start_local, hour_start_utc) |>
@@ -363,15 +372,15 @@ hourly_from_steam <- steam |>
   ) |>
   select(pid, title_id, datetime_hour_start, minutes) |>
   left_join(tz_map, by = "pid") |>
+  filter(!is.na(local_timezone)) |>
   mutate(
-    pid,
     platform = "Steam",
     hour_start_utc = datetime_hour_start,
-    hour_start_local = datetime_hour_start + off,
-    minutes,
-    title_id,
-    .keep = "none"
+    offset = get_dst_offset(datetime_hour_start, country, local_timezone),
+    # Note: These are local time values with UTC labels due to R's POSIXct limitation
+    hour_start_local = datetime_hour_start + offset
   ) |>
+  select(pid, platform, title_id, hour_start_local, hour_start_utc, minutes) |>
   group_by(pid, platform, title_id, hour_start_local, hour_start_utc) |>
   summarise(minutes = sum(minutes, na.rm = TRUE), .groups = "drop")
 
@@ -415,7 +424,7 @@ telemetry_spans <- daily_telemetry |>
 ```{r}
 #| label: summary-stats
 
-n_baseline <- nrow(intake[intake$qualified,])
+n_baseline <- nrow(intake[intake$qualified, ])
 n_participants_unf <- sum(unique(c(daily$pid, biweekly$pid)) %in% intake$pid)
 n_participants <- print_num(n_participants_unf)
 participant_age <- (function(x) {
@@ -519,6 +528,9 @@ prop_suspicious_nintendo <- number(
   (1 - (nrow(nintendo) / nrow(nintendo_valid_sessions))) * 100,
   accuracy = 0.1
 )
+
+prop_overlapping_steam <- "TODO"
+
 n_timeuse_entries_per_day <- number(
   time_use |>
     group_by(pid, date) |>
@@ -537,6 +549,25 @@ platforms_count <- str_count(
 n_one_platform <- sum(platforms_count == 1, na.rm = TRUE)
 n_two_platforms <- sum(platforms_count == 2, na.rm = TRUE)
 n_three_platforms <- sum(platforms_count >= 3, na.rm = TRUE)
+
+# Steam quality metrics
+steam_qc <- read_csv(
+  "data/qc/steam_quality_metrics.csv",
+  show_col_types = FALSE
+)
+prop_steam_hours_exceeding <- number(
+  steam_qc$prop_hours_exceeding * 100,
+  accuracy = 0.1
+)
+prop_steam_segments_scaled <- number(
+  steam_qc$prop_segments_scaled * 100,
+  accuracy = 0.1
+)
+mean_minutes_reduced <- number(steam_qc$mean_minutes_reduced, accuracy = 0.1)
+median_minutes_reduced <- number(
+  steam_qc$median_minutes_reduced,
+  accuracy = 0.1
+)
 
 ```
 
@@ -754,7 +785,8 @@ overview <- overview |>
 
 tt(overview) |>
   style_tt(fontsize = 0.7) |>
-  format_tt(replace = "")
+  format_tt(replace = "") |>
+  style_tt(i = 0, bold = TRUE, align = "c")
 
 ```
 
@@ -949,7 +981,8 @@ tibble(
       )
     )
   ) |>
-  style_tt(fontsize = 0.7)
+  style_tt(fontsize = 0.7) |>
+  style_tt(i = 0, bold = TRUE, align = "c")
 ```
 
 :::
@@ -1296,8 +1329,8 @@ ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
   scale_fill_viridis_c(
     option = "magma",
     labels = scales::percent_format(accuracy = .1),
-    limits = c(0, .08),
-    breaks = seq(0, .08, .02),
+    limits = c(0, .10),
+    breaks = seq(0, .10, .02),
     name = "Probability of\nactive play"
   ) +
   labs(
@@ -1522,7 +1555,7 @@ To prepare daily and biweekly survey data, we removed duplicate entries from wit
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: fig-case-study
-#| fig-cap: !expr 'paste0("Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms (Nintendo in red, Steam in dark blue, Xbox in green, iOS in grey, Android in light green). Orange line shows biweekly mental wellbeing scores (short WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior. Participant IDs: ", selected_pids["p25"], " (25th percentile), ", selected_pids["p50"], " (50th percentile), ", selected_pids["p75"], " (75th percentile).")'
+#| fig-cap: !expr 'paste0("Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms. Orange line shows biweekly mental wellbeing scores (short WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior. Participant IDs: ", selected_pids["p25"], " (25th percentile), ", selected_pids["p50"], " (50th percentile), ", selected_pids["p75"], " (75th percentile).")'
 #| fig-asp: .8
 #| out.width: 80%
 
@@ -1601,7 +1634,8 @@ selected_pids <- c(
     percentiles[2],
     total_playtime
   ),
-  "p75" = find_closest_multiplatform_participant(percentiles[3], total_playtime)
+  # "p75" = find_closest_multiplatform_participant(percentiles[3], total_playtime)
+  "p75" = "p7162729307" # Manually selected for more varied platform usage
 )
 
 # Process biweekly data to get wellbeing scores
@@ -1628,9 +1662,12 @@ biweekly_wellbeing <- biweekly |>
   filter(!is.na(wemwbs) & wemwbs >= 7) |> # Remove invalid/missing wellbeing scores
   mutate(
     percentile = case_when(
-      pid == selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
-      pid == selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
-      pid == selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
+      pid ==
+        selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
+      pid ==
+        selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
+      pid ==
+        selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
       TRUE ~ NA_character_
     ),
     percentile = factor(
@@ -1648,9 +1685,12 @@ plot_data <- daily_with_study_day |>
   filter(pid %in% selected_pids) |>
   mutate(
     percentile = case_when(
-      pid == selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
-      pid == selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
-      pid == selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
+      pid ==
+        selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
+      pid ==
+        selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
+      pid ==
+        selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
       TRUE ~ NA_character_
     ),
     percentile = factor(
@@ -1671,9 +1711,12 @@ complete_grid <- expand_grid(
 ) |>
   mutate(
     percentile = case_when(
-      pid == selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
-      pid == selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
-      pid == selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
+      pid ==
+        selected_pids["p25"] ~ "Example participant 1 (25th gaming percentile)",
+      pid ==
+        selected_pids["p50"] ~ "Example participant 2 (50th gaming percentile)",
+      pid ==
+        selected_pids["p75"] ~ "Example participant 3 (75th gaming percentile)",
       TRUE ~ NA_character_
     ),
     percentile = factor(
@@ -1930,7 +1973,7 @@ activity_colors <- c(
   "Exercise and Sports" = "#63b600", # Exercise and Sports green
   "Household and Family Care" = "#fac800", # Household and Family Care yellow
   "Offline Leisure & Social Life" = "#00897B", # Offline Leisure & Social Life teal
-  "Other Digital Media Use" = "#9C27B0", # Other Digital Media Use purple 
+  "Other Digital Media Use" = "#9C27B0", # Other Digital Media Use purple
   "Personal Care" = "#666666", # Personal Care grey
   "Sleep" = "#111111", # Sleep black
   "Travel and Transportation" = "#ffb380", # Travel and Transportation orange
@@ -1938,7 +1981,7 @@ activity_colors <- c(
   "Work and Employment" = "#28536b", # Work and Employment blue
   "Other" = "#d572d6" # Other pink
 )
-  
+
 platform_colors <- c(
   "Nintendo" = "#E60012", # Nintendo red
   "Steam" = "#215e8a", # Steam dark blue
@@ -2031,9 +2074,33 @@ In each daily survey (US only), participants completed a light time use diary [@
 
 ## Data Quality
 
+```{r}
+#| label: explore-concurrency
+
+crossplatform_concurrency <- hourly_telemetry |>
+  group_by(pid, hour_start_utc) |>
+  summarise(
+    n_minutes = sum(minutes),
+    n_platforms = n_distinct(platform),
+    platforms = paste(sort(unique(platform)), collapse = ", "),
+    .groups = "drop"
+  ) |>
+  filter(n_platforms >= 2 & n_minutes > 60)
+
+prop_concurrent_sessions <- number(
+  nrow(crossplatform_concurrency) /
+    nrow(hourly_telemetry) *
+    100,
+  accuracy = 0.01
+)
+
+```
+
 While not exhaustive, the cleaned data we share implements a variety of data quality checks. Specifically, in each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r prop_failed_daily_attn`% flagged, biweekly: `r prop_failed_biweekly_attn`%).
 
-In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 10 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we removed `r prop_suspicious_xbox`% of Xbox sessions, and `r prop_suspicious_nintendo`% of Nintendo sessions based on these criteria.
+In the telemetry, we use several heuristics to identify potential unreliable sessions: (a) sessions beginning or ending in the future (indicative of clock manipulation or other errors), (b) sessions longer than 8 hours (indicative of substantial idle time or background usage), (c) 3 or more games played simultaneously (indicative of inactivity on multiple games or data corruption). In total, we removed `r prop_suspicious_xbox`% of Xbox sessions, and `r prop_suspicious_nintendo`% of Nintendo sessions based on these criteria. 
+
+Concurrency was a key data quality factor, and particularly affected Steam data: players sometimes ran multiple games simultaneously, resulting in hourly intervals where total recorded playtime exceeded 60 minutes. This occurred because Steam's API reports cumulative playtime for each game independently, and our reconstruction of approximate session times from polling intervals could overlap when multiple games were active. In the raw data, `r prop_steam_hours_exceeding`% of player-hour combinations exceeded 60 minutes. To address this, we implemented proportional scaling at the hourly level. For any hour where the sum of playtime across all games exceeded 60 minutes, we scaled each game's contribution proportionally such that the total equaled 60 minutes, preserving the relative distribution of play across titles while ensuring temporal plausibility. Overall, `r prop_steam_segments_scaled`% of session segments required scaling, with a median reduction of `r median_minutes_reduced` minutes per scaled segment. A further `r prop_concurrent_sessions`% of hourly telemetry records indicated concurrent gaming across multiple platforms within the same hour, suggesting potential background usage or idling on at least one platform; these records are retained but flagged for caution.
 
 ## Missingness
 
@@ -2215,7 +2282,7 @@ rows <- list(
       mutate(obs = coalesce(obs, 0L), miss = E_DAILY - obs)
 
     tibble(
-      data_type = "Survey",
+      data_type = "Task",
       measure = "Time use diaries",
       n_total = length(pids_timeuse),
       n_participants = length(pids_timeuse),
@@ -2449,7 +2516,7 @@ tt(
   width = 1,
   escape = TRUE
 ) |>
-  style_tt(i = 0, bold = TRUE) |>
+  style_tt(i = 0, bold = TRUE, align = "c") |>
   style_tt(
     i = data_type_starts,
     j = 1,
@@ -2553,7 +2620,8 @@ tibble(
   )
 ) |>
   tt() |>
-  style_tt(fontsize = 0.8)
+  style_tt(fontsize = 0.8) |>
+  style_tt(i = 0, bold = TRUE, align = "c")
 ```
 
 
@@ -2769,7 +2837,8 @@ appendix_tbl |>
   ) |>
   # keep markdown/quarto processing for non-Typst runs too
   format_tt(escape = FALSE, markdown = TRUE, quarto = TRUE) |>
-  style_tt(fontsize = 0.5)
+  style_tt(fontsize = 0.5) |>
+  style_tt(i = 0, bold = TRUE, align = "c")
 
 ```
 

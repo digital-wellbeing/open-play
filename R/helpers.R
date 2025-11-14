@@ -97,6 +97,81 @@ offset_secs <- function(z) {
   )
 }
 
+# Map country and standard time offset to IANA timezone
+get_iana_timezone <- function(country, local_timezone) {
+  # Parse the base offset from GMT strings
+  base_offset <- offset_secs(local_timezone)
+
+  # Map to IANA timezone
+  iana_tz <- case_when(
+    # US timezones
+    country == "US" & base_offset == -18000 ~ "America/New_York",
+    country == "US" & base_offset == -21600 ~ "America/Chicago",
+    country == "US" & base_offset == -25200 ~ "America/Denver",
+    country == "US" & base_offset == -28800 ~ "America/Los_Angeles",
+    country == "US" & base_offset == -32400 ~ "America/Anchorage",
+    country == "US" & base_offset == -36000 ~ "Pacific/Honolulu",
+
+    # UK timezone
+    country == "UK" & base_offset == 0 ~ "Europe/London",
+
+    # UK residents in other timezones
+    country == "UK" & base_offset == -18000 ~ "America/New_York",
+    country == "UK" & base_offset == -21600 ~ "America/Chicago",
+    country == "UK" & base_offset == -25200 ~ "America/Denver",
+    country == "UK" & base_offset == -28800 ~ "America/Los_Angeles",
+    country == "UK" & base_offset == -32400 ~ "America/Anchorage",
+    country == "UK" & base_offset == -36000 ~ "Pacific/Honolulu",
+
+    # OTHER country
+    country == "OTHER" & base_offset == -18000 ~ "America/New_York",
+    country == "OTHER" & base_offset == -21600 ~ "America/Chicago",
+    country == "OTHER" & base_offset == -25200 ~ "America/Denver",
+    country == "OTHER" & base_offset == -28800 ~ "America/Los_Angeles",
+    country == "OTHER" & base_offset == -36000 ~ "Pacific/Honolulu",
+    country == "OTHER" & base_offset == 0 ~ "Europe/London",
+
+    TRUE ~ NA_character_
+  )
+
+  return(iana_tz)
+}
+
+# Vectorized DST-aware offset calculation
+# Returns the number of seconds to ADD to UTC to get local time
+# (accounts for daylight saving time)
+#
+# Note: R's POSIXct can only have ONE timezone attribute per vector,
+# so we cannot create a properly-labeled mixed-timezone column.
+# Instead, we return the offset in seconds, and callers should:
+#   - Use (utc_timestamp + offset) for hour/date extraction
+#   - Be explicit that these are "local time values with UTC labels"
+get_dst_offset <- function(utc_timestamp, country, local_timezone) {
+  # Get IANA timezone for each row
+  iana_tz <- get_iana_timezone(country, local_timezone)
+
+  # Initialize offset vector
+  offset <- numeric(length(utc_timestamp))
+
+  # Process each unique timezone
+  unique_tzs <- unique(iana_tz[!is.na(iana_tz)])
+
+  for (tz in unique_tzs) {
+    mask <- !is.na(iana_tz) & iana_tz == tz
+    # Get the UTC timestamps for this timezone
+    utc_subset <- utc_timestamp[mask]
+    # Convert to local timezone
+    local_times <- with_tz(utc_subset, tzone = tz)
+    # Extract the time components as if they were in UTC
+    # This gives us the "local time value" we want
+    local_as_utc <- force_tz(local_times, tzone = "UTC")
+    # Calculate offset needed to shift UTC to these values
+    offset[mask] <- as.numeric(difftime(local_as_utc, utc_subset, units = "secs"))
+  }
+
+  return(offset)
+}
+
 clip_to_window <- function(df) {
   df |>
     filter(end > window_start, start < window_end) |>
