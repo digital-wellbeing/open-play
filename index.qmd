@@ -243,7 +243,8 @@ xbox <- read_csv("data/clean/xbox.csv.gz")
 simon <- read_csv("data/clean/simon.csv.gz")
 ios <- read_csv("data/clean/ios.csv.gz")
 android <- read_csv("data/clean/android.csv.gz")
-time_use <- read_csv("data/clean/timeuse.csv.gz")
+time_use <- read_csv("data/clean/timeuse.csv.gz") |>
+  filter(quality_flag == "Good quality")
 
 xbox_raw <- read_csv("data/raw/telemetry_xbox_raw.csv.gz")
 nintendo_raw <- read_csv("data/raw/telemetry_nintendo_raw.csv.gz")
