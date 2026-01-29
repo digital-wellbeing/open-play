@@ -577,7 +577,7 @@ median_minutes_reduced <- number(
 
 ---
 abstract: |
-  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play telemetry data from Nintendo Switch, Steam, and Xbox, paired with psychological measures across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected under a preregistered design that included 12 weeks of survey data (thirty daily surveys, six biweekly surveys, three biweekly cognitive tests), and digital trace data for `{r} n_months` months. Cleaned data include `{r} n_hours` hours of video game play across `{r} n_games` titles, `{r} n_surveys` responses to 14 survey instruments, and `{r} n_simon` attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
+  A major limitation to understanding digital technology use, and its potential psychological consequences, is the lack of sufficiently detailed, multidimensional, and accurate data. We present a dataset of `{r} n_participants` individuals' video game play digital trace data (telemetry) from Nintendo Switch, Steam, Xbox, iOS and Android paired with psychological measures across multiple dimensions of mental health, motivations, well-being, and cognitive ability. The data were collected under a preregistered design that included 12 weeks of survey data (thirty daily surveys, six biweekly surveys, three biweekly cognitive tests), and digital trace data for `{r} n_months` months. Cleaned data include `{r} n_hours` hours of video game play across `{r} n_games` titles, `{r} n_surveys` responses to 14 survey instruments, and `{r} n_simon` attention ability measures to facilitate examining longitudinal associations between play behaviors and psychological functioning. Data and codebook are available under a {{< meta data-license >}} license at {{< meta data-url >}}.
 ---
 
 # Introduction
@@ -849,7 +849,7 @@ sankey_data <- intake |>
       "Linked ≥1 account"
     ),
     `Account\nValidation 1` = ifelse(
-      pid %in% c(xbox$pid, nintendo$pid, steam$pid),
+      pid %in% c(xbox$pid, nintendo$pid, steam$pid) | qualified,
       "Any trace data",
       "No trace data"
     ),
@@ -2114,7 +2114,7 @@ The unit of observation differs across data types. For surveys and cognitive tas
 
 ```{r}
 #| label: tbl-missingness
-#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of participants (N), maximum possible observations, median number of missing observations per participant (with maximum in parentheses), and percentage of data completeness for each measure."
+#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of qualified participants (N), maximum possible observations, median number of missing observations per participant (with maximum in parentheses), and percentage of data completeness for each measure."
 
 ## ---- constants -------------------------------------------------------------
 export_end <- as.POSIXct("2025-09-30 23:59:59", tz = "UTC")
@@ -2574,6 +2574,20 @@ We also see strong potential in combining digital trace data with experimental d
 ## Data Availability
 
 All data, materials, and code related to the dataset and this manuscript are available under {{< meta data-license >}} at <https://doi.org/10.5281/zenodo.17536656>.
+
+## Funding
+
+This research was supported by the UK Economic and Social Research Council (ES/W012626/1 and ES/Y010736/1). AP was supported by the Huo Family Foundation. 
+
+## Conflicts of Interest
+
+The authors declare no competing financial, intellectual, or institutional interests relevant to this research. The disclosures below are provided in the interest of full transparency.
+
+All members of the research team have worked on scientific projects funded by government and charitable grants that used data from tech companies provided under a data-sharing agreement. No authors have received funding or compensation from the tech companies or other industries connected to the work presented here. 
+
+MV has provided in-kind consultations and served as a nonpaid panel member for Meta and K-Games. AKP has served in advisory or expert roles for the Sync Digital Wellbeing Program (2022–2024), the Google Expert Advisory on Youth and Technology (2025), the OpenAI Expert Council on Well-Being and AI (2025), and UK Department for Science, Innovation and Technology–funded research on children’s smartphone and social media use (University of Cambridge, 2025). He is a member of the UK Department for Culture, Media & Sport College of Experts. Any industry fees are directly donated to charity, and his research is conducted in accordance with University of Oxford academic integrity policies.
+
+Data-sharing partners had no role in the design, analysis, or publication of results. 
 
 # References
 
