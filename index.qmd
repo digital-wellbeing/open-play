@@ -2112,9 +2112,10 @@ As with most longitudinal studies, attrition and missing data present important 
 
 The unit of observation differs across data types. For surveys and cognitive tasks, the unit is a completed survey or task. For telemetry, the unit varies by platform: Xbox and Nintendo use binary account linking, with data coverage considered maximal once linked (data provided directly by platform holders); Steam is measured hourly, with observations representing whether the participant's profile was publicly visible in each hour; iOS and Android are measured daily, with observations representing whether a valid screenshot was submitted covering that day's gaming.
 
+::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}
 #| label: tbl-missingness
-#| tbl-cap: "Missingness patterns across survey, telemetry, and cognitive task data by region. The table shows the number of qualified participants (N), maximum possible observations, median number of missing observations per participant (with maximum in parentheses), and percentage of data completeness for each measure."
+#| tbl-cap: "Data availability and missingness. Left columns show qualified participants (with recent telemetry + self-reported platform), total with data, and drop-off. Right columns show active participants (1+ surveys), observations, and missingness among active participants."
 
 ## ---- constants -------------------------------------------------------------
 export_end <- as.POSIXct("2025-09-30 23:59:59", tz = "UTC")
@@ -2124,8 +2125,38 @@ E_DAILY <- 30L
 E_BIWEEKLY <- 6L
 E_SIMON <- 3L
 
+## ---- qualified counts (measure-specific) -----------------------------------
+n_qualified <- c(
+  "Daily surveys" = sum(intake$qualified & intake$country == "US"),
+  "Biweekly surveys" = sum(intake$qualified),
+  "Time use diaries" = sum(intake$qualified & intake$country == "US"),
+  "Attention tasks" = sum(intake$qualified),
+  "Xbox" = sum(
+    intake$qualified & str_detect(intake$used_platforms, "Xbox"),
+    na.rm = TRUE
+  ),
+  "Nintendo" = sum(
+    intake$qualified & str_detect(intake$used_platforms, "Nintendo"),
+    na.rm = TRUE
+  ),
+  "Steam" = sum(
+    intake$qualified & str_detect(intake$used_platforms, "Steam"),
+    na.rm = TRUE
+  ),
+  "iOS" = sum(
+    intake$qualified & str_detect(intake$used_platforms, "iOS"),
+    na.rm = TRUE
+  ),
+  "Android" = sum(
+    intake$qualified & str_detect(intake$used_platforms, "Android"),
+    na.rm = TRUE
+  )
+)
+
 ## ---- helpers ---------------------------------------------------------------
 n_fmt <- \(x) format(x, big.mark = ",")
+qualified_pids <- intake$pid[intake$qualified]
+intake_pids <- intake$pid
 
 ## ---- Steam visibility window (unchanged logic) -----------------------------
 steam_windows <- steam_visibility |>
@@ -2202,6 +2233,7 @@ pids_bw <- biweekly |>
   filter(n_bw >= 1) |>
   pull(pid)
 pids_timeuse <- time_use |>
+  filter(pid %in% qualified_pids) |>
   distinct(pid) |>
   pull(pid)
 
@@ -2234,7 +2266,15 @@ rows <- list(
     tibble(
       data_type = "Survey",
       measure = "Daily surveys",
-      n_total = daily |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["Daily surveys"],
+      n_total_all = daily |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = daily |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = length(pids_daily),
       maximum_possible = length(pids_daily) * E_DAILY,
       total_observed = sum(base$obs),
@@ -2259,7 +2299,15 @@ rows <- list(
     tibble(
       data_type = "Survey",
       measure = "Biweekly surveys",
-      n_total = biweekly |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["Biweekly surveys"],
+      n_total_all = biweekly |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = biweekly |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = length(pids_bw),
       maximum_possible = length(pids_bw) * E_BIWEEKLY,
       total_observed = sum(base$obs),
@@ -2288,7 +2336,12 @@ rows <- list(
     tibble(
       data_type = "Task",
       measure = "Time use diaries",
-      n_total = length(pids_timeuse),
+      n_qualified = n_qualified["Time use diaries"],
+      n_total_all = time_use |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = length(pids_timeuse),
       n_participants = length(pids_timeuse),
       maximum_possible = length(pids_timeuse) * E_DAILY,
       total_observed = sum(base$obs),
@@ -2311,7 +2364,15 @@ rows <- list(
     tibble(
       data_type = "Telemetry",
       measure = "Xbox",
-      n_total = xbox |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["Xbox"],
+      n_total_all = xbox |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = xbox |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = length(p_elig),
       maximum_possible = length(p_elig), # binary: ≥1 session
       total_observed = length(p_elig), # eligible implies ≥1 session present
@@ -2326,7 +2387,15 @@ rows <- list(
     tibble(
       data_type = "Telemetry",
       measure = "Nintendo",
-      n_total = nintendo |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["Nintendo"],
+      n_total_all = nintendo |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = nintendo |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = length(p_elig),
       maximum_possible = length(p_elig),
       total_observed = length(p_elig),
@@ -2348,7 +2417,15 @@ rows <- list(
     tibble(
       data_type = "Telemetry",
       measure = "iOS",
-      n_total = ios |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["iOS"],
+      n_total_all = ios |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = ios |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = length(p_elig),
       maximum_possible = length(p_elig) * D_MOBILE,
       total_observed = sum(base$obs),
@@ -2374,7 +2451,15 @@ rows <- list(
     tibble(
       data_type = "Telemetry",
       measure = "Android",
-      n_total = android |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["Android"],
+      n_total_all = android |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = android |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = length(p_elig),
       maximum_possible = length(p_elig) * D_MOBILE,
       total_observed = sum(base$obs),
@@ -2402,7 +2487,15 @@ rows <- list(
     tibble(
       data_type = "Telemetry",
       measure = "Steam",
-      n_total = steam |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["Steam"],
+      n_total_all = steam |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = steam |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = length(p_elig),
       maximum_possible = length(p_elig) * H_STEAM,
       total_observed = as.integer(sum(H_STEAM - miss)), # total “visible hours”
@@ -2426,7 +2519,15 @@ rows <- list(
     tibble(
       data_type = "Task",
       measure = "Attention tasks",
-      n_total = simon |> distinct(pid) |> nrow(),
+      n_qualified = n_qualified["Attention tasks"],
+      n_total_all = simon |>
+        filter(pid %in% intake_pids) |>
+        distinct(pid) |>
+        nrow(),
+      n_total_qual = simon |>
+        filter(pid %in% qualified_pids) |>
+        distinct(pid) |>
+        nrow(),
       n_participants = simon |> distinct(pid) |> nrow(),
       maximum_possible = length(pids_bw) * E_SIMON,
       total_observed = sum(base$obs),
@@ -2444,7 +2545,7 @@ rows <- list(
 ) |>
   list_rbind() |>
   arrange(
-    factor(data_type, levels = c("Survey", "Task", "Telemetry")),
+    factor(data_type, levels = c("Survey", "Task", "Digital Trace Data")),
     factor(
       measure,
       levels = c(
@@ -2469,53 +2570,51 @@ table_data <- rows |>
       100 * (total_missing / maximum_possible),
       0
     ),
-    `N subj.` = n_fmt(n_total),
-    `N survey\nsubj.` = n_fmt(n_participants),
-    `Max. possible obs.` = n_fmt(maximum_possible),
+    pct_dropoff_num = 100 * (1 - n_total_qual / n_qualified),
+    `N qual.` = n_fmt(n_qualified),
+    `N data` = n_fmt(n_total_all),
+    `% Drop` = sprintf("%.1f%%", pct_dropoff_num),
+    `N active` = n_fmt(n_participants),
     `N obs.` = n_fmt(total_observed),
-    `Median (Max) Missing` = if_else(
-      is.na(median_missing_per_participant),
-      "—",
-      sprintf(
-        "%.0f (%.0f)",
-        floor(median_missing_per_participant),
-        floor(max_missing_per_participant)
-      )
-    ),
-    `% Missing` = sprintf("%.1f%%", pct_missing_num)
+    `Max obs.` = n_fmt(maximum_possible),
+    `% Miss.` = sprintf("%.1f%%", pct_missing_num)
   ) |>
   group_by(data_type) |>
   mutate(show_type = row_number() == 1L) |>
   ungroup() |>
   select(
-    `Data Type` = data_type,
+    Type = data_type,
     Measure = measure,
-    `N subj.`,
-    `N survey\nsubj.`,
+    `N qual.`,
+    `N data`,
+    `% Drop`,
+    `N active`,
     `N obs.`,
-    `Max. possible obs.`,
-    # `Median (Max) Missing`,  # compute but hide
-    `% Missing`,
+    `Max obs.`,
+    `% Miss.`,
     show_type
   ) |>
-  mutate(`Data Type` = if_else(show_type, `Data Type`, "")) |>
+  mutate(Type = if_else(show_type, Type, "")) |>
   select(-show_type)
 
 ## for band headers
 data_type_starts <- table_data |>
   mutate(row_num = row_number()) |>
-  filter(`Data Type` != "") |>
+  filter(Type != "") |>
   pull(row_num)
 
-max_possible_text <- "Max. possible obs.: Daily survey = N × 30; Biweekly survey = N × 6: Xbox/Nintendo = N participants with ≥1 session; Steam = N × 84 days × 24 hours (visibility hours); iOS/Android = N × 84 days; Simon Task = N × 3 administrations."
-
-n_total_text <- "N subjects can exceed N survey subjects because some participants (1) provided digital trace data that was not recent enough to qualify, or (2) provided recent digital trace data but did not return for subsequent surveys."
+n_qual_text <- "N qual. = qualified participants. For digital trace data, qualified participants who self-reported using that platform."
+n_data_text <- "N data = all participants with data (may include non-qualified)."
+drop_text <- "% Drop = percentage of qualified participants without data."
+max_obs_text <- "Max obs.: Daily survey = N × 30 days; Biweekly survey = N × 6 waves; Time use = N × 30 days; Attention tasks = N × 3 administrations; Xbox/Nintendo = N participants with ≥1 session; Steam = N × 84 days × 24 hours (visibility hours); iOS/Android = N × 84 days."
 
 tt(
   table_data,
   notes = list(
-    "a" = list(i = 0, j = 3, text = n_total_text),
-    "b" = list(i = 0, j = 6, text = max_possible_text)
+    "a" = list(i = 0, j = 3, text = n_qual_text),
+    "b" = list(i = 0, j = 4, text = n_data_text),
+    "c" = list(i = 0, j = 5, text = drop_text),
+    "d" = list(i = 0, j = 8, text = max_obs_text)
   ),
   width = 1,
   escape = TRUE
@@ -2528,8 +2627,10 @@ tt(
     line = "t",
     line_width = 0.12
   ) |>
+  style_tt(j = 5, line = "r", line_width = 0.08) |>
   style_tt(fontsize = 0.7)
 ```
+:::
 
 # Discussion
 
