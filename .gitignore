@@ -32,6 +32,9 @@ _freeze/R/stage_1_simulations/
 R/missingness_analysis.R
 R/investigate_xbox.R
 R/talk_figures.R
+R/xbox_friends_check.R
 
 .claude/
 steam_preproc_test.R
+data/qc/xbox_friends_check_summary.csv
+data/qc/game_metadata_progress.rds
