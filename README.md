@@ -2,7 +2,9 @@
 
 🟢️ Stable releases of the data and code found in this repository are available on Zenodo ([https://doi.org/10.5281/zenodo.17536656](https://doi.org/10.5281/zenodo.17536656)). 🟢️
 
-🔗 The output from this repo can be viewed at [https://digital-wellbeing.github.io/open-play/](https://digital-wellbeing.github.io/open-play/). 🔗
+Preprint: <https://doi.org/10.31234/osf.io/nz96c_v1>.
+
+The output from this repo can be viewed at [https://digital-wellbeing.github.io/open-play/](https://digital-wellbeing.github.io/open-play/).
 
 This repo hosts the data and descriptive analysis code for our project on video game play and wellbeing. 
 
