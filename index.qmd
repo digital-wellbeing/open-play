@@ -154,7 +154,6 @@ format:
 ```{r}
 #| label: libraries
 #| cache: false
-
 library(tidyverse)
 library(lubridate)
 library(jsonlite)
@@ -223,12 +222,10 @@ theme_update(
     linewidth = 1
   ),
 )
-
 ```
 
 ```{r}
 #| label: data-read
-
 intake <- read_csv("data/clean/survey_intake.csv.gz", guess_max = 34000)
 daily <- read_csv("data/clean/survey_daily.csv.gz")
 biweekly <- read_csv("data/clean/survey_biweekly.csv.gz", guess_max = 5000)
@@ -257,7 +254,6 @@ biweekly_raw <- read_csv(
 
 ```{r}
 #| label: data-prepare
-
 intake <- intake |>
   mutate(
     enrollment_datetime = as_datetime(date, tz = "UTC"),
@@ -291,12 +287,10 @@ nintendo_valid_sessions <- nintendo_raw |>
     duration >= 1
   ) |>
   merge_adjacent_sessions(tol_sec = 60)
-
 ```
 
 ```{r}
 #| label: aggregate-session-hourly-daily
-
 # merge with the local time zone offsets from intake
 # Note: We keep country and local_timezone for DST-aware conversion
 tz_map <- intake |>
@@ -419,12 +413,10 @@ telemetry_spans <- daily_telemetry |>
       1,
     .groups = "drop"
   )
-
 ```
 
 ```{r}
 #| label: summary-stats
-
 n_baseline <- nrow(intake[intake$qualified, ])
 n_participants_unf <- sum(unique(c(daily$pid, biweekly$pid)) %in% intake$pid)
 n_participants <- print_num(n_participants_unf)
@@ -572,7 +564,6 @@ median_minutes_reduced <- number(
   steam_qc$median_minutes_reduced,
   accuracy = 0.1
 )
-
 ```
 
 ---
@@ -604,7 +595,6 @@ The dataset is openly available under a {{< meta data-license >}} license at <ht
 ```{r}
 #| label: tbl-overview
 #| tbl-cap: "Overview of the dataset and sources."
-
 survey_pids <- unique(c(biweekly$pid, daily$pid))
 
 steam_survey <- steam |> filter(pid %in% survey_pids)
@@ -791,7 +781,6 @@ tt(overview) |>
   style_tt(fontsize = 0.7) |>
   format_tt(replace = "") |>
   style_tt(i = 0, bold = TRUE, align = "c")
-
 ```
 
 :::
@@ -804,12 +793,12 @@ tt(overview) |>
 ```{r}
 #| label: fig-sankey
 #| fig-cap: Participant flow during study intake.
-#| fig-asp: 0.37
+#| fig-asp: 0.45
 #| out-width: 95%
-
 lvl <- c(
   "Screened",
-  "Ineligible",
+  "Ineligible platforms",
+  "Elected not to link",
   "No trace data",
   "No recent trace data",
   "Did not begin surveys",
@@ -822,7 +811,13 @@ lvl <- c(
 node_counts <- intake |>
   mutate(
     stage1 = "Screened",
-    stage2 = ifelse(is.na(linked_platforms), "Ineligible", "Linked ≥1 account"),
+    stage2 = case_when(
+      is.na(linked_platforms) &
+        is.na(eligible_platforms) ~ "Ineligible platforms",
+      is.na(linked_platforms) &
+        !is.na(eligible_platforms) ~ "Elected not to link",
+      TRUE ~ "Linked ≥1 account"
+    ),
     stage3 = ifelse(
       pid %in% c(xbox$pid, nintendo$pid, steam$pid),
       "Any trace data",
@@ -843,10 +838,12 @@ node_counts <- intake |>
 sankey_data <- intake |>
   mutate(
     Screening = "Screened",
-    Linking = ifelse(
-      is.na(linked_platforms),
-      "Ineligible",
-      "Linked ≥1 account"
+    Eligibility = case_when(
+      is.na(linked_platforms) &
+        is.na(eligible_platforms) ~ "Ineligible platforms",
+      is.na(linked_platforms) &
+        !is.na(eligible_platforms) ~ "Elected not to link",
+      TRUE ~ "Linked ≥1 account"
     ),
     `Account\nValidation 1` = ifelse(
       pid %in% c(xbox$pid, nintendo$pid, steam$pid) | qualified,
@@ -867,7 +864,7 @@ sankey_data <- intake |>
   ) |>
   make_long(
     Screening,
-    Linking,
+    Eligibility,
     `Account\nValidation 1`,
     `Account\nValidation 2`,
     Surveys
@@ -934,7 +931,6 @@ Participants who were deemed eligible during screening proceeded directly to an 
 ```{r}
 #| label: tbl-platforms
 #| tbl-cap: "Platform Details"
-
 tibble(
   Platform = c(
     "Nintendo",
@@ -1000,7 +996,6 @@ After players completed the account linking process, we checked each account for
 ```{r}
 #| label: fig-design
 #| fig-cap: !expr paste0("Survey administration schedule across the 12-week study period. Participants completed biweekly surveys (orange) every two weeks, with US participants additionally completing daily surveys (blue) for the first 30 days. Cognitive tests (green) were administered during biweekly surveys at weeks 1, 5, and 9. Gray circles indicate days with no scheduled surveys. Retention percentages show the proportion of baseline participants (N=", n_participants_unf, ") who were still active at each measurement week (defined as having completed either a daily or biweekly survey at any time after that week).")
-
 knitr::include_graphics("figures/design.svg")
 ```
 
@@ -1014,7 +1009,6 @@ Daily survey links were sent every day at 2pm local time for the participant and
 ```{r}
 #| label: tbl-demographics
 #| tbl-cap: "Sample demographics for qualified participants with general-population benchmarks (where available)."
-
 # programmatically getting the census figures was a nightmare, and this isn't the purpose of the manuscript
 # US ethnicity: https://usafacts.org/data/topics/people-society/population-and-demographics/our-changing-population/
 # US gender**: https://williamsinstitute.law.ucla.edu/wp-content/uploads/Trans-Pop-Update-Aug-2025.pdf
@@ -1236,7 +1230,6 @@ tt(
     line_width = 0.12
   ) |>
   style_tt(i = 0, bold = TRUE, align = "c")
-
 ```
 
 :::
@@ -1277,7 +1270,6 @@ In @fig-heatmap, we visualize the distribution of play across days and times. As
 #| fig-asp: 0.35
 #| out-width: 80%
 #| dev: svglite
-
 # expected number of occurrences of each slot in telemetry span
 slot_exposure <- telemetry_spans |>
   rowwise() |>
@@ -1345,7 +1337,6 @@ ggplot(slot_summary, aes(x = hour, y = dow, fill = prob_playing)) +
     panel.grid.major.y = element_blank(),
     axis.text.x = element_text(size = 8.5)
   )
-
 ```
 
 :::
@@ -1362,7 +1353,6 @@ We also collected self-reported gaming data in each biweekly survey. Participant
 #| fig-cap: "Average weekly playtime (minutes) by platform, self-reported vs telemetry (among users with telemetry). Lines connect estimates for the same platform. Telemetry calculated per user-platform, based only on the period between their first and last recorded session."
 #| fig-asp: 0.4
 #| out.width: 95%
-
 # Paired dot plot: self-report vs telemetry (normalized by exposure)
 
 intake_window <- intake |>
@@ -1535,7 +1525,6 @@ ggplot(paired_summary, aes(x = hours, y = platform)) +
   theme(
     legend.position = "bottom",
   )
-
 ```
 
 :::
@@ -1562,7 +1551,6 @@ To prepare daily and biweekly survey data, we removed duplicate entries from wit
 #| fig-cap: !expr 'paste0("Sample of daily gaming patterns and mental wellbeing for three representative participants. Stacked bars represent total daily playtime across platforms. Orange line shows biweekly mental wellbeing scores (short WEMWBS) measured at six study waves. Participants were selected from those closest to the 25th, 50th, and 75th percentiles of total playtime, prioritizing those with the most varied multi-platform gaming behavior. Participant IDs: ", selected_pids["p25"], " (25th percentile), ", selected_pids["p50"], " (50th percentile), ", selected_pids["p75"], " (75th percentile).")'
 #| fig-asp: .8
 #| out.width: 80%
-
 # Identify participants who completed between 1 and 6 biweekly surveys
 biweekly_participants <- biweekly |>
   group_by(pid) |>
@@ -1870,7 +1858,6 @@ After reading the instructions, participants practice for 30 seconds with audito
 
 ```{r}
 #| label: simon-calculate-summary
-
 simon_n <- simon |>
   reframe(n = n(), .by = wave)
 simon_sdl <- simon |>
@@ -1887,7 +1874,6 @@ Overall, `r knitr::combine_words(simon_n$n)` participants completed the Simon ta
 #| fig-cap: Histograms of participants' Simon Squared task scores across study waves. Points and bars indicate means ±1 standard deviation.
 #| fig-asp: 0.5
 #| out.width: 90%
-
 simon |>
   ggplot() +
   aes(score_final) +
@@ -1920,7 +1906,6 @@ simon |>
 #| fig-cap: "Illustrative overview of one study day (p9730913604, Apr 4 2025), consisting of a participant's time use diary (top row), gaming as recorded through telemetry (middle row), and daily survey completion (bottom row)."
 #| fig-asp: 0.35
 #| out.width: 95%
-
 person_id <- "p9730913604"
 survey_day <- as.Date("2025-04-04")
 window_start <- as.POSIXct(paste(survey_day - 1, "04:00:00"))
@@ -2067,7 +2052,6 @@ ggplot() +
     legend.box.margin = margin(0, 0, 0, 0),
     legend.box = "vertical"
   )
-
 ```
 
 :::
@@ -2080,7 +2064,6 @@ In each daily survey (US only), participants completed a light time use diary [@
 
 ```{r}
 #| label: explore-concurrency
-
 crossplatform_concurrency <- hourly_telemetry |>
   group_by(pid, hour_start_utc) |>
   summarise(
@@ -2097,7 +2080,6 @@ prop_concurrent_sessions <- number(
     100,
   accuracy = 0.01
 )
-
 ```
 
 While not exhaustive, the cleaned data we share implements a variety of data quality checks. Specifically, in each daily and biweekly survey, one item from the BANGS (daily) and BPNSFS (biweekly) was duplicated to assess response consistency [@MeadeCraig2012identifying]; participants whose responses to the two identical items differed by more than one scale point were flagged for potential careless responding (daily surveys: `r prop_failed_daily_attn`% flagged, biweekly: `r prop_failed_biweekly_attn`%). We flagged `r prop_dropped_timeuse`% of time use diary entries as low quality based on excessive unaccounted-for time (>90 minutes) or missing key activities (sleep and/or eating).
@@ -2116,7 +2098,6 @@ The unit of observation differs across data types. For surveys and cognitive tas
 ```{r}
 #| label: tbl-missingness
 #| tbl-cap: "Data availability and missingness. Left columns show qualified participants (with recent telemetry + self-reported platform), total with data, and drop-off. Right columns show active participants (1+ surveys), observations, and missingness among active participants."
-
 ## ---- constants -------------------------------------------------------------
 export_end <- as.POSIXct("2025-09-30 23:59:59", tz = "UTC")
 H_STEAM <- 84L * 24L
@@ -2708,7 +2689,6 @@ We made several deviations from our preregistration to ensure we could recruit e
 ```{r}
 #| label: tbl-deviations
 #| tbl-cap: "Summary of deviations from preregistration"
-
 tibble(
   Preregistered = c(
     "All participants sourced from PureProfile",
@@ -2747,7 +2727,6 @@ tibble(
 ```{r}
 #| label: tbl-measures
 #| tbl-cap: "Summary of survey measures used in the study"
-
 t_trait <- tibble(
   Construct = c(
     "Chronotype",
@@ -2958,7 +2937,6 @@ appendix_tbl |>
   format_tt(escape = FALSE, markdown = TRUE, quarto = TRUE) |>
   style_tt(fontsize = 0.5) |>
   style_tt(i = 0, bold = TRUE, align = "c")
-
 ```
 
 ## Codebook
@@ -2970,7 +2948,6 @@ appendix_tbl |>
 #| echo: false
 #| warning: false
 #| eval: !expr knitr::is_html_output()
-
 # Read all sheets from the codebook
 codebook_path <- "codebook.xlsx"
 sheet_names <- excel_sheets(codebook_path)

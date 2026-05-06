@@ -8,6 +8,20 @@ The output from this repo can be viewed at [https://digital-wellbeing.github.io/
 
 This repo hosts the data and descriptive analysis code for our project on video game play and wellbeing. 
 
+# Getting the Data
+
+Data files are located in `data/raw` (minimally processed) and `data/clean` (analysis-ready). There are three ways to access them:
+
+1. **Download from Zenodo** (recommended): Download the latest stable archive from [https://doi.org/10.5281/zenodo.17536656](https://doi.org/10.5281/zenodo.17536656). This includes all data files without needing git.
+
+2. **Clone this repository**: `git clone https://github.com/digital-wellbeing/open-play.git`, then find data files under `data/`.
+
+3. **Download a ZIP**: On the GitHub page, click **Code → Download ZIP**, then extract and navigate to `data/`.
+
+4. **Download individual files**: Navigate to a file on GitHub and click **Download raw file**, or use the command line with `wget https://github.com/digital-wellbeing/open-play/raw/main/data/clean/survey_daily.csv.gz` (replacing the filename as needed).
+
+All data files are `.csv.gz` (gzip-compressed CSVs). They can be unzipped and opened in a spreadsheet program, or read directly into R with `readr::read_csv("file.csv.gz")` or Python with `pandas.read_csv("file.csv.gz")`.
+
 # Getting Started
 
 The best starting point for understanding the data presented here is to look at [codebook.xlsx](https://github.com/digital-wellbeing/open-play/raw/refs/heads/main/codebook.xlsx), which describes the variables in both the cleaned and raw dataset.
@@ -22,9 +36,7 @@ Other key elements of the repo are:
 
 # Reproducing
 
-To reproduce the primary data manuscript, run `quarto render`. To reproduce the data manuscript and the simulations, run `quarto render --profile sim`. 
-
-Data files are saved as .csv.gz for size. These can either be unzipped and opened in a spreadsheet program, or read directly into R using `readr::read_csv()` or Python using `pandas.read_csv()`.
+To reproduce the primary data manuscript, run `quarto render`. To reproduce the data manuscript and the simulations, run `quarto render --profile sim`.
 
 # Contributing
 
