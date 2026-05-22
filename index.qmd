@@ -316,18 +316,7 @@ session_telemetry <- bind_rows(
     offset_end = get_dst_offset(session_end, country, local_timezone),
     # Add offset to get local time values (keeping UTC label for compatibility)
     start_local = session_start + offset_start,
-    end_local = session_end + offset_end,
-    duration_min = as.numeric(difftime(
-      session_end,
-      session_start,
-      units = "mins"
-    ))
-  ) |>
-  filter(
-    !is.na(session_start),
-    !is.na(session_end),
-    session_end > session_start,
-    duration_min >= 1
+    end_local = session_end + offset_end
   )
 
 # --- 2) HOURLY (Nintendo + Xbox expanded) ----------------------------------
