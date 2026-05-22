@@ -10,7 +10,11 @@ This repo hosts the data and descriptive analysis code for our project on video 
 
 # Getting the Data
 
-Data files are located in `data/raw` (minimally processed) and `data/clean` (analysis-ready). There are three ways to access them:
+Data files are located in `data/raw` (pseudonymized, minimally processed outputs from each data source) and `data/clean` (validated, exclusions applied, consistent formats across platforms). 
+
+The clean files can be read and used directly for most analyses — but note that `index.qmd` performs additional manuscript-specific steps (e.g., local timezone mapping, multi-platform session aggregation) on top of them. If your analysis requires these derived outputs, you may wish to run or step through `index.qmd` interactively to inspect and adapt the intermediate objects it produces.
+
+There are four ways to access the data:
 
 1. **Download from Zenodo** (recommended): Download the latest stable archive from [https://doi.org/10.5281/zenodo.17536656](https://doi.org/10.5281/zenodo.17536656). This includes all data files without needing git.
 
@@ -32,7 +36,7 @@ Other key elements of the repo are:
 - `data-process.qmd`, which processes the raw data into cleaned data
 - `index.qmd`, which generates manuscript documenting the dataset
 - `data/raw`, which contains the minimally processed, pseudonymized raw data
-- `data/clean`, which contains cleaned data ready for analysis
+- `data/clean`, which contains validated, exclusion-applied data suitable for direct use in most analyses
 
 # Reproducing
 
