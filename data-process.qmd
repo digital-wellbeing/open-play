@@ -460,7 +460,8 @@ intake_clean <- intake |>
       na_if(paste(v, collapse = ", "), "")
     }
   ) |>
-  ungroup()
+  ungroup() |>
+  select(pid:edu_level, marital_status, political_party, employment, everything())
 
 ```
 
@@ -531,6 +532,10 @@ dropped <- daily |>
   arrange(pid, date) |>
   select(pid, date, baseline_day, ideal_baseline_day, derived_wave, drop_reason)
 
+daily_clean <- daily_clean |>
+  select(-baseline_day, -ideal_baseline_day, -n_valid, -original_wave) |>
+  select(pid, wave, date, everything())
+
 ```
 
 ```{r}
@@ -583,14 +588,11 @@ biweekly_clean <- biweekly |>
       slice_min(date, n = 1, with_ties = FALSE) |>
       ungroup() |>
       select(
-        ideal_baseline_day,
-        baseline_day,
-        date,
-        original_wave,
-        derived_wave,
-        wave,
-        everything()
-      )
+        -ideal_baseline_day, -baseline_day,
+        -original_wave, -derived_wave,
+        -n_valid, -delta_days_final
+      ) |>
+      select(pid, wave, date, everything())
   }
 
 ```
