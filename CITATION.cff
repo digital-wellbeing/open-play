@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+title: "Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological measures"
+version: 1.2.7
+license: CC0-1.0
+type: dataset
+abstract: |
+  Open Play is a longitudinal dataset combining multi-platform video game digital trace data with psychological assessments from participants in the US and UK. It includes behavioral telemetry from Xbox, Nintendo Switch, Steam, iOS, and Android, and daily/biweekly survey measures of wellbeing, sleep, stress, and basic psychological needs, and task-based measures of attention control.
+message: |
+  If you use this data, please cite it as indicated.
+authors:
+  - family-names: Ballou
+    given-names: Nick
+    orcid: https://orcid.org/0000-0003-4126-0696
+    affiliation: University of Oxford
+  - family-names: Földes
+    given-names: Tamás Andrei
+    orcid: https://orcid.org/0000-0002-0623-9149
+    affiliation: University of Oxford
+  - family-names: Vuorre
+    given-names: Matti
+    orcid: https://orcid.org/0000-0001-5052-066X
+    affiliation: Tilburg University
+  - family-names: Hakman
+    given-names: Thomas
+    orcid: https://orcid.org/0009-0009-8292-2482
+    affiliation: University of Oxford
+  - family-names: Magnusson
+    given-names: Kristoffer
+    orcid: https://orcid.org/0000-0003-0713-0556
+    affiliation: Karolinska Institutet
+  - family-names: Przybylski
+    given-names: Andrew
+    orcid: https://orcid.org/0000-0001-5547-2185
+    affiliation: University of Oxford
+keywords:
+  - psychology
+  - dataset
+  - video games
+  - well-being
+  - mental health
+  - trace data
+  - attention
+  - reproducible research
