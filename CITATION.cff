@@ -9,8 +9,8 @@ abstract: |
 message: |
   If you use this data, please cite it as indicated.
 authors:
-  - family-names: Nick
-    given-names: Ballou
+  - family-names: Ballou
+    given-names: Nick
     orcid: https://orcid.org/0000-0003-4126-0696
     affiliation: University of Oxford
   - family-names: Földes
