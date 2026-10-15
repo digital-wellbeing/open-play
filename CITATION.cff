@@ -1,6 +1,5 @@
 cff-version: 1.2.0
-title: |
-  Open play: a longitudinal dataset of multi-platform video game digital trace data and psychological measures
+title: "Open Play: A longitudinal dataset of multi-platform video game digital trace data and psychological measures"
 version: 1.2.7
 license: CC0-1.0
 type: dataset
@@ -35,3 +34,10 @@ authors:
     affiliation: University of Oxford
 keywords:
   - psychology
+  - dataset
+  - video games
+  - well-being
+  - mental health
+  - trace data
+  - attention
+  - reproducible research
