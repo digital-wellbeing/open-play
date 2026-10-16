@@ -1,13 +1,26 @@
 project:
-  type: website
+  type: book
   execute-dir: project
   output-dir: _site
-  render:
-    - data-process.qmd
-    - index.qmd
 
 execute:
   freeze: auto
+
+book:
+  # keep the manuscript first, then add one chapter that *contains* all sims
+  chapters:
+    - part: "Data Descriptor Manuscript"
+    - index.qmd
+    - part: "Data Processing"
+      chapters:
+        - data-process.qmd
+    - part: "Stage 1 Simulations"
+      chapters:
+        - R/stage_1_simulations/0_generateSyntheticData.qmd
+        - R/stage_1_simulations/1_preprocess.qmd
+        - R/stage_1_simulations/2_basicNeeds.qmd
+        - R/stage_1_simulations/3_sleep.qmd
+        - R/stage_1_simulations/4_genres.qmd
 
 repo-url: https://github.com/digital-wellbeing/open-play
 site-url: https://digital-wellbeing.github.io/open-play
