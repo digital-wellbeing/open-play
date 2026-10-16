@@ -140,6 +140,12 @@ format:
       - text: Stage 1 Registered Report
         href: https://osf.io/pb5nu
         icon: file-pdf
+      - text: Download Manuscript (PDF)
+        href: index.pdf
+        icon: file-pdf
+      - text: Download Manuscript (Word)
+        href: index.docx
+        icon: file-word
   preprint-typst:
     wordcount: true
     theme: jou
@@ -2081,7 +2087,7 @@ Concurrency was a key quality factor for trace data, and particularly affected S
 
 As with most longitudinal studies, attrition and missing data present important challenges for data quality and statistical inference. @tbl-missingness presents a comprehensive overview of missingness patterns across all data sources in our study, broken down by data type (Survey, Cognitive Task, and Telemetry).
 
-The unit of observation differs across data types. For surveys and cognitive tasks, the unit is a completed survey or task. For telemetry, the unit varies by platform: Xbox and Nintendo use binary account linking, with data coverage considered maximal once linked (data provided directly by platform holders); Steam is measured hourly, with observations representing whether the participant's profile was publicly visible in each hour; iOS and Android are measured daily, with observations representing whether a valid screenshot was submitted covering that day's gaming.
+The unit of observation differs across data types. For surveys and cognitive tasks, the unit is a completed survey or task. For telemetry, the unit varies by platform: Xbox and Nintendo use binary account linking, with data coverage considered maximal once linked (i.e., we expect no unobserved play, as data are provided directly by platform holders under the terms of the data-sharing agreement, with the aforementioned exception of  third-party play on Nintendo Switch). Steam is measured hourly, with observations representing whether the participant's profile was publicly visible in each hour; iOS and Android are measured daily, with observations representing whether a valid screenshot was submitted covering that day's gaming.
 
 ::: {.place arguments='top, scope: "parent", float: true'}
 ```{r}

@@ -21,7 +21,6 @@ deprecated/
 tinytable_assets/
 docs/
 _site/
-_freeze/R/stage_1_simulations/
 
 **/*.quarto_ipynb
 *.knit.md
@@ -39,3 +38,12 @@ R/xbox_friends_check.R
 steam_preproc_test.R
 data/qc/xbox_friends_check_summary.csv
 data/qc/game_metadata_progress.rds
+
+# Raw per-game API caches for the Steam metadata enrichment pipeline -
+# reproducible by rerunning R/fetch_steam_*.R, not worth versioning
+data/raw/steam_appdetails/
+data/raw/steam_appdetails_failed.txt
+data/raw/steam_reviews/
+data/raw/steam_reviews_failed.txt
+data/raw/steamspy/
+data/raw/steamspy_failed.txt
