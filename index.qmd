@@ -140,6 +140,12 @@ format:
       - text: Stage 1 Registered Report
         href: https://osf.io/pb5nu
         icon: file-pdf
+      - text: Download Manuscript (PDF)
+        href: index.pdf
+        icon: file-pdf
+      - text: Download Manuscript (Word)
+        href: index.docx
+        icon: file-word
   preprint-typst:
     wordcount: true
     theme: jou
