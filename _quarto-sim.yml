@@ -4,6 +4,7 @@ project:
   type: book
   render:
     - index.qmd
+    - data-process.qmd
     - R/stage_1_simulations/*.qmd
 
 book:
@@ -11,6 +12,9 @@ book:
   chapters:
     - part: "Data Descriptor Manuscript"
     - index.qmd
+    - part: "Data Processing"
+      chapters:
+        - data-process.qmd
     - part: "Stage 1 Simulations"
       chapters:
         - R/stage_1_simulations/0_generateSyntheticData.qmd
