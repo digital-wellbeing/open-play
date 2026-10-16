@@ -28,6 +28,10 @@ jobs:
         with:
           args: |
             --no-execute
+      - name: Add standalone manuscript PDF/Word (book render can't produce single-chapter formats)
+        run: |
+          cp manuscript/index.pdf _site/index.pdf
+          cp manuscript/index.docx _site/index.docx
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

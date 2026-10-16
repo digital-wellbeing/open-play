@@ -1,0 +1,17 @@
+# Regenerates manuscript/index.pdf and manuscript/index.docx - the
+# standalone, manuscript-only downloads linked from index.qmd's "Other
+# Links" sidebar. Run locally and commit the output whenever index.qmd
+# changes; CI never invokes this profile, it just copies the committed
+# files into _site/ (see .github/workflows/quarto-pages.yml) - a
+# `type: book` project always assembles the WHOLE book for any
+# non-html format, so there's no way to get a single-chapter PDF/DOCX
+# from the main book config, and this profile's own freeze cache lives
+# under the gitignored .quarto/, so CI can't render it either.
+#
+#   quarto render index.qmd --profile manuscript --to docx,preprint-typst
+#   cp _site/index.pdf _site/index.docx manuscript/
+project:
+  type: default
+  output-dir: _site
+  render:
+    - index.qmd
