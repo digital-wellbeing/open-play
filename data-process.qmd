@@ -12,6 +12,7 @@ library(tidyverse)
 
 # Load custom functions
 source("R/helpers.R")
+source("R/diary_dates.R")
 ```
 
 ```{r}
@@ -599,6 +600,52 @@ biweekly_clean <- biweekly |>
 
 ```{r}
 #| label: preprocess-timeuse
+# Repair the diary's two dating defects (R/diary_dates.R) before the flags.
+# A diary as it reached the server is identified by participant, wave label
+# and `date`, the UTC date of arrival: some wave labels hold diaries that
+# arrived on different dates.
+diary_key <- c("pid", "daily_wave", "date")
+
+# The day in which each diary was filled in. The diary followed the daily
+# survey and reached the server a few minutes after it, so each diary takes the
+# raw survey row of the same participant and wave label (the platform's label,
+# before the recoding above) dated on the diary's date or the day before, the
+# latest such row. Its local time, less four hours, gives the 04:00-to-04:00
+# day of filling. Diaries without a linked survey or a usable time zone get NA
+# and are left as dated.
+diary_filled <- timeuse |>
+  distinct(across(all_of(diary_key))) |>
+  filter(!is.na(daily_wave)) |>
+  inner_join(
+    daily |>
+      filter(!is.na(wave)) |>
+      transmute(pid = as.character(pid), daily_wave = wave, survey_utc = date),
+    by = c("pid", "daily_wave"),
+    relationship = "many-to-many"
+  ) |>
+  mutate(lag_days = as.numeric(date - as_date(survey_utc))) |>
+  filter(lag_days %in% c(0, 1)) |>
+  arrange(across(all_of(diary_key)), lag_days, desc(survey_utc)) |>
+  distinct(across(all_of(diary_key)), .keep_all = TRUE) |>
+  left_join(
+    intake |>
+      transmute(pid = as.character(pid), country, local_timezone) |>
+      distinct(pid, .keep_all = TRUE),
+    by = "pid"
+  ) |>
+  mutate(
+    survey_local = to_local_clock(survey_utc, country, local_timezone),
+    filled_day = as_date(survey_local - hours(4))
+  ) |>
+  select(all_of(diary_key), filled_day)
+
+timeuse <- timeuse |>
+  repair_rollover(by = diary_key) |>
+  left_join(diary_filled, by = diary_key) |>
+  repair_midnight() |>
+  select(-filled_day) |>
+  rename(repaired_rollover = rollover, repaired_midnight = moved_midnight)
+
 # Assign quality flags to daily time use diaries
 
 # Calculate duration and flags
